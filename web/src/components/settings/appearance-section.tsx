@@ -21,8 +21,8 @@ function getCurrentTheme(): Theme {
  * light/dark 是该配色在两种深浅下的 accent 主色，用于卡片双色预览（与 theme.css 里定义的值保持一致）。
  */
 const ACCENTS: { id: Accent; name: string; desc: string; light: string; dark: string }[] = [
-  { id: 'terracotta', name: '赤陶', desc: '默认', light: '#c1513f', dark: '#ca6b5c' },
-  { id: 'gold', name: '暗金', desc: '奢华典雅', light: '#9a7b3f', dark: '#c2a55c' },
+  { id: 'gold', name: '暗金', desc: '默认', light: '#9a7b3f', dark: '#c2a55c' },
+  { id: 'terracotta', name: '赤陶', desc: '复古暖调', light: '#c1513f', dark: '#ca6b5c' },
   { id: 'burgundy', name: '勃艮第', desc: '浓郁典雅', light: '#9f1239', dark: '#f43f5e' },
   { id: 'orange', name: '琥珀橙', desc: '温暖明亮', light: '#d97706', dark: '#ffa344' },
   { id: 'indigo', name: '靛蓝', desc: '深邃冷静', light: '#635bff', dark: '#8183ff' },
@@ -40,7 +40,7 @@ export function AppearanceSection() {
   const [accent, setAccent] = useState<Accent>(() => {
     const saved = getSavedAccent()
     // 兜底：若 saved 不在 ACCENTS 里（删配色后的 localStorage 僵尸值 / 外部污染），回退橙色选中
-    return ACCENTS.some((a) => a.id === saved) ? saved : 'terracotta'
+    return ACCENTS.some((a) => a.id === saved) ? saved : 'gold'
   })
   const [theme, setTheme] = useState<Theme>(() => getCurrentTheme())
 

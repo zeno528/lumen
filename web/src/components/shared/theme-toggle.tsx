@@ -20,7 +20,7 @@ export function applyTheme(theme: Theme) {
 }
 
 /**
- * 配色方案：橙色为默认，蓝色为新增。加新配色 = 在此联合类型加值 + theme.css 加 [data-accent] 块 + AppearanceSection 加卡片。
+ * 配色方案：暗金为默认，蓝色为新增。加新配色 = 在此联合类型加值 + theme.css 加 [data-accent] 块 + AppearanceSection 加卡片。
  * 与主题深浅（data-theme）是两个独立维度：导航栏按钮只切 data-theme，配色由设置中心「外观」页切 data-accent。
  */
 export type Accent = 'orange' | 'blue' | 'terracotta' | 'indigo' | 'burgundy' | 'gold'
@@ -31,9 +31,9 @@ export function applyAccent(accent: Accent) {
   localStorage.setItem('accent', accent)
 }
 
-/** 读取已保存的配色：直接用 localStorage 存值，CSS [data-accent] 块未定义该值时 --accent 回退 :root 默认橙。加新配色无需改这里。 */
+/** 读取已保存的配色：直接用 localStorage 存值，CSS [data-accent] 块未定义该值时 --accent 回退 :root 默认暗金。加新配色无需改这里。 */
 export function getSavedAccent(): Accent {
-  return (localStorage.getItem('accent') as Accent) ?? 'terracotta'
+  return (localStorage.getItem('accent') as Accent) ?? 'gold'
 }
 
 /**

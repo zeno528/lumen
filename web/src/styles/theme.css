@@ -22,7 +22,7 @@
   --text-primary: #2c2a25; /* 暖深灰文字 */
   --text-secondary: rgba(55, 53, 47, 0.75);
   --text-muted: #a8a29e;
-  --accent: #c1513f; /* 赤陶（默认配色 light 版；切换配色见文末 [data-accent] 块）*/
+  --accent: #9a7b3f; /* 暗金（默认配色 light 版；切换配色见文末 [data-accent] 块）*/
   --destructive: #ef4444; /* 错误 / 危险文字色（field error 反馈） */
   --success: #22c55e; /* 成功反馈色（复制完成对号、toast.success 图标）-- 与 effects.css .toast.success .toast-icon 保持一致 */
   /* 侧栏分类图标容器底色：固定主题相关色，不随分类 color 变化（颜色选择器只改图标色）。
@@ -94,7 +94,7 @@
   --text-primary: rgba(255, 255, 255, 0.9);
   --text-secondary: rgba(151, 154, 155, 0.95);
   --text-muted: rgba(151, 154, 155, 0.6);
-  --accent: #ca6b5c; /* 赤陶 dark 版（默认配色，提亮以适配深底）*/
+  --accent: #c2a55c; /* 暗金 dark 版（默认配色，提亮以适配深底）*/
   --destructive: #ef4444; /* dark 主题与 light 主题统一：danger 色跨主题一致，不分主题提亮 */
   --success: #22c55e; /* dark 主题与 light 主题同 #22c55e：success 是状态色（非背景色），保持跨主题视觉强度一致 */
   /* 侧栏分类图标容器底色 dark 版：同源暖色 8% 透明，自动跟随主题反相（暖深灰 -> 暖浅灰）。 */
@@ -142,7 +142,7 @@
    --accent-soft-bg / --accent-hover-bg 6 个派生色在 light/dark 块各硬编码一份 rgba，
    加新配色要写十几行。抽到 :root 用 color-mix 派生，加配色只需覆盖 --accent
    （见下方 [data-accent] 块），派生色自动跟着新 --accent 重算。
-   --accent 由上方 light(#d97706)/dark(#ffa344) 块或下方 [data-accent] 块提供。 */
+   --accent 由上方 light(#9a7b3f)/dark(#c2a55c) 块或下方 [data-accent] 块提供。 */
 :root {
   --accent-hover: color-mix(in srgb, var(--accent), #000 15%); /* 比 accent 暗 15% */
   --copy-btn-bg: color-mix(in srgb, var(--accent), transparent 85%); /* accent 15% 透明 */
@@ -154,7 +154,7 @@
 
 /* ===== 配色方案：只覆盖 --accent，派生色自动跟 =====
    两个独立维度：data-theme 控制深浅（导航栏按钮切），data-accent 控制配色（设置中心「外观」页选）。
-   赤陶为默认，--accent 已在上方 light/dark 块定义，无需单独 [data-accent='terracotta'] 块。
+   暗金为默认，--accent 已在上方 light/dark 块定义，无需单独 [data-accent='gold'] 块。
    加新配色 = 加一组 [data-accent='xxx'](light 主色) + [data-theme='notion-dark'][data-accent='xxx'](dark 主色)。 */
 [data-accent='blue'] {
   --accent: #007aff; /* 海洋蓝 light（对齐 --ios-blue）*/
@@ -180,9 +180,9 @@
 [data-theme='notion-dark'][data-accent='burgundy'] {
   --accent: #f43f5e; /* dark 提亮，保证深底对比度 */
 }
-[data-accent='gold'] {
-  --accent: #9a7b3f; /* 暗金 light（香槟金降饱和压暗，避免太跳）*/
+[data-accent='terracotta'] {
+  --accent: #c1513f; /* 赤陶 light（原默认色，降为可选配色）*/
 }
-[data-theme='notion-dark'][data-accent='gold'] {
-  --accent: #c2a55c; /* 暗金 dark */
+[data-theme='notion-dark'][data-accent='terracotta'] {
+  --accent: #ca6b5c; /* 赤陶 dark */
 }

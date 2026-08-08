@@ -13,7 +13,7 @@ import { router } from './router'
 const savedTheme = localStorage.getItem('theme') || 'light'
 document.documentElement.dataset.theme =
   savedTheme === 'dark' ? 'notion-dark' : savedTheme
-document.documentElement.dataset.accent = localStorage.getItem('accent') || 'terracotta'
+document.documentElement.dataset.accent = localStorage.getItem('accent') || 'gold'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('#root not found')
