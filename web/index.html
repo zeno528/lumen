@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="notion-dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Lumen</title>
+    <link rel="icon" type="image/svg+xml" href="/logo_color.svg" />
+    <!-- 预加载品牌标题字体：H3 "Lumen" 等 logo 文字依赖 Poppins，preload 让字体与 index.js/CSS 并行下载，
+         避免 LCP 被字体串行加载阻塞（实测登录页 LCP 2252ms，字体排链路最末端 1946ms 才请求）。
+         crossorigin 必填：字体默认匿名 CORS，不加则 preload 不被复用。 -->
+    <link rel="preload" href="/webfonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- 防闪屏：首帧渲染前根据 localStorage.theme / 系统偏好设定 data-theme，并读 localStorage.accent 设定 data-accent（配色与深浅独立，避免首帧配色闪烁）-->
+    <script>
+      ;(() => {
+        const stored = localStorage.getItem('theme') || 'light'
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        const dark = stored === 'notion-dark' || (stored === 'system' && prefersDark)
+        document.documentElement.dataset.theme = dark ? 'notion-dark' : 'light'
+        document.documentElement.dataset.accent = localStorage.getItem('accent') || 'orange'
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,213 @@
+# ============================================================================
+# PR CI：拉取请求打开/同步时自动跑验证
+# ============================================================================
+# 用途：拦截坏代码在合并前。
+#
+# 设计要点：
+#   - PR 打开/同步：跑质量门禁（typecheck + go build + go vet）+ 部署 jp-2 验证
+#   - 手动 workflow_dispatch：只跑 CI（debug 用），不部署
+#   - 主分支 push 部署走 deploy.yml（3 台 VPS 全量）—— 本 workflow 与之平行
+#
+# 触发：
+#   - PR 打开 / 同步 / 重开时自动跑
+#   - workflow_dispatch 也可手动触发（debug 用）
+# ============================================================================
+
+name: PR CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR 同时多条 push 时只跑最新的（同一 PR 反复 push 时取消上一次的 CI）
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────── 前端验证：typecheck + 生产构建 ───────────
+  verify-frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      # pull_request 默认检出 GitHub 生成的 merge commit，验证合并后实际会进入 main 的代码。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # CLAUDE.md 质量把关：pnpm -C web typecheck 零错误
+      - name: Install frontend dependencies
+        run: pnpm -C web install --frozen-lockfile
+      - name: Frontend typecheck
+        run: pnpm -C web typecheck
+      - name: Frontend production build
+        run: pnpm -C web build
+
+  # ─────────── 后端验证：vet + test + Linux 构建 + 健康检查 ───────────
+  verify-backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Go vet
+        run: go vet ./...
+      - name: Go test
+        run: go test -count=1 ./...
+      - name: Build production backend
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen-ci ./server/
+      - name: Backend health smoke test
+        shell: bash
+        run: |
+          # APP_ENV=development：冒烟用全新临时库，dev 模式让空 APP_PASSWORD 回退 admin（生产模式会拒空密码启动）
+          APP_ENV=development PORT=18081 DB_PATH="$RUNNER_TEMP/lumen-ci.db" JWT_SECRET=ci-test-secret ./lumen-ci > "$RUNNER_TEMP/lumen-ci.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          for _ in {1..10}; do
+            if curl -fsS http://127.0.0.1:18081/api/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/lumen-ci.log"
+          exit 1
+
+  # ─────────── 汇总（让 GitHub 顶层 checks 一次性给出整体状态） ───────────
+  # 避免 reviewer 看到「前/后端各一个 check」分两个红勾而误以为二者独立、
+  # 必须分别点开。本 job 单一 status，便于在 PR 页一眼看穿。
+  pr-checks:
+    name: PR checks
+    runs-on: ubuntu-latest
+    needs: [verify-frontend, verify-backend]
+    if: always()
+    steps:
+      - name: Aggregate PR status
+        run: |
+          if [ "${{ needs.verify-frontend.result }}" = "success" ] && \
+             [ "${{ needs.verify-backend.result }}" = "success" ]; then
+            echo "✅ PR CI 全绿：前端 typecheck + 后端 build/vet 通过，可合并"
+            exit 0
+          fi
+          echo "❌ PR CI 失败："
+          echo "  verify-frontend = ${{ needs.verify-frontend.result }}"
+          echo "  verify-backend  = ${{ needs.verify-backend.result }}"
+          exit 1
+
+  # ─────────── 部署：PR 打开时「构建 + 部署」jp-2 验证（独立于 deploy.yml）───────────
+  deploy:
+    name: Deploy to ${{ matrix.server.name }}
+    needs: [pr-checks]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # 同服务器串行（跨 PR），避免并发部署覆盖；不同服务器并行
+    concurrency:
+      group: pr-deploy-${{ matrix.server.name }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        server:
+          # 服务器名（非敏感）进 matrix；IP/域名在 DEPLOY_SERVERS secret 里，见 deploy.yml
+          - jp-2
+    steps:
+      # pull_request 默认检出 GitHub 生成的 merge commit，验证合并后实际会进入 main 的代码。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Resolve server endpoints
+        env:
+          DEPLOY_SERVERS: ${{ secrets.DEPLOY_SERVERS }}
+        run: |
+          SERVER_HOST=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].host')
+          SERVER_DOMAIN=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].domain')
+          if [ -z "$SERVER_HOST" ] || [ "$SERVER_HOST" = "null" ] || [ -z "$SERVER_DOMAIN" ] || [ "$SERVER_DOMAIN" = "null" ]; then
+            echo "Deployment target is incomplete" >&2
+            exit 1
+          fi
+          echo "::add-mask::$SERVER_HOST"
+          echo "::add-mask::$SERVER_DOMAIN"
+          echo "SERVER_HOST=$SERVER_HOST" >> "$GITHUB_ENV"
+          echo "SERVER_DOMAIN=$SERVER_DOMAIN" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Build frontend
+        run: pnpm -C web install --frozen-lockfile && pnpm -C web build
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Build backend
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen ./server/
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Trust host
+        run: ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
+
+      - name: Ensure rsync is installed
+        run: ssh root@$SERVER_HOST "command -v rsync || (DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync)"
+
+      - name: Stop service
+        run: ssh root@$SERVER_HOST "systemctl stop lumen || true"
+
+      - name: Upload backend binary
+        run: scp lumen root@$SERVER_HOST:/opt/lumen/lumen
+
+      - name: Sync frontend assets
+        run: rsync -az --delete web/dist/ root@$SERVER_HOST:/opt/lumen/static/
+
+      - name: Start service
+        run: ssh root@$SERVER_HOST "chmod +x /opt/lumen/lumen && systemctl start lumen"
+
+      - name: Health check
+        run: |
+          ssh root@$SERVER_HOST 'for i in 1 2 3 4 5; do
+            if curl -fsS http://127.0.0.1:8080/api/health | grep -q ok; then
+              echo "✅ 健康检查通过"; exit 0
+            fi
+            echo "等待服务就绪... ($i/5)"; sleep 2
+          done
+          echo "❌ 健康检查失败，服务日志："; journalctl -u lumen -n 30 --no-pager; exit 1'
+
+      - name: WebSocket upgrade check
+        run: |
+          WS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --http1.1 \
+            -H "Connection: Upgrade" -H "Upgrade: websocket" \
+            -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+            "https://$SERVER_DOMAIN/api/ws")
+          case "$WS_CODE" in
+            401|101) echo "✅ ${{ matrix.server.name }} /api/ws upgrade 正常 ($WS_CODE)";;
+            *) echo "⚠️ ${{ matrix.server.name }} /api/ws 异常 ($WS_CODE) - nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;
+          esac

@@ -1,0 +1,59 @@
+# ===== Node / 前端 =====
+node_modules/
+web/dist/
+dist/
+*.local
+.vite/
+# pnpm store 实际在全局(D:\.pnpm-store)，项目根的 .pnpm-store 是历史误建，忽略防再生
+.pnpm-store/
+
+# ===== Go =====
+# 本地运行时数据（含真实书签 SQLite，隐私 + 体积，勿提交）
+server/data/
+server/logs/
+# 前端开发期 SQLite 数据（同上，勿提交）
+data/
+data/*
+# 编译产物（*.exe 兼容 Windows，lumen-server 为 WSL/Linux 产物）
+*.exe
+*.exe~
+lumen-server
+server/lumen-server
+server/server
+server/lumen
+# air 热重载编译产物目录（.air.toml 的 tmp_dir）
+tmp/
+
+# ===== 通用 =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.log
+# 运行时日志目录（.err 等非 .log 后缀文件不被 *.log 覆盖）
+logs/
+
+# ===== 环境变量 =====
+.env
+.env.*
+!.env.example
+
+# ===== TanStack Router 自动生成 =====
+# routeTree.gen.ts 纳入版本控制：CI fresh checkout 需要，否则 tsc -b 报 TS2307
+# 改路由后跑 dev/build 会自动重新生成，记得顺手提交更新
+web/.tanstack/
+
+# ===== Playwright MCP =====
+.playwright-mcp/
+
+# ===== 临时调试 / 本地二进制 =====
+work/
+lumen-linux
+# go build -o lumen ./server/ 部署交叉编译产物（项目根，12M Linux 二进制，勿提交）
+/lumen
+
+# ===== AI 工具配置（本地环境导向，不上传避免跨环境冲突） =====
+/CLAUDE.md
+/AGENTS.md
+/.claude/*

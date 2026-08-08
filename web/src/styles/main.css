@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+@import './theme.css';
+@import './effects.css';
+@import './modal.css';
+@import './fonts.css';
+@import './auth.css';
+@import './layout.css';
+@import './help.css';
+
+/* ===== Tailwind v4 token 桥接到 CSS 变量 =====
+   把项目自有变量（--bg-primary / --bg-secondary / --accent 等，定义于 theme.css）
+   桥接成 Tailwind v4 工具类用的 --color-* / --radius-* token。
+   在 :root 顶层声明，不依赖 @theme inline 解析器（4.3.x 在 dev HMR 下 token 偶发不注入）。
+   副作用：data-theme 切换主题时，工具类（如 bg-secondary）会跟随，因为底层 --bg-secondary
+   在不同主题下是不同值。 */
+:root {
+  --color-canvas: var(--bg-primary);
+  --color-secondary: var(--bg-secondary);
+  --color-card: var(--bg-card);
+  --color-fg: var(--text-primary);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-border: var(--border);
+  --radius-card: 20px;
+  --radius-modal: 16px;
+  --radius-btn: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.15);
+  --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-logo: Poppins, 'Inter Variable', sans-serif;
+  --color-background: var(--bg-secondary);
+  --color-foreground: var(--text-primary);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-muted: var(--bg-primary);
+  --color-muted-foreground: var(--text-muted);
+  --color-ring: var(--accent);
+  --color-input: var(--bg-input);
+}
+
+/* @theme block 让 Tailwind v4 把这些 token 当配置（占位防止编辑器/工具误报）
+   —— 实际值已在上面的 :root 设置；@theme {} 不带声明可避免解析器污染 */
+@theme {}

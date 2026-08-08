@@ -1,0 +1,1534 @@
+/* ===== 桌面布局 ===== */
+
+/* html 用 panel 色兜整个视口：保证视口任何角落都是 sidebar 色，
+   main 圆角塌角透下来在 viewport 任何位置都跟 sidebar 同色，无 layout / body 维度兜底 */
+html {
+  height: 100%;
+  background: var(--sidebar-panel);
+}
+/* 全局禁用文本选中（避免双击误选蓝色选区），输入框/可编辑区域例外 */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  height: 100%;
+  background: transparent;
+}
+input,
+textarea,
+select,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  /* 100vh fallback：不支持 dvh 的老浏览器 */
+  height: 100vh;
+  /* 100dvh 动态视口高度：iOS Safari 地址栏可见时 100vh > 可视区会撑出 body 滚动条，
+     dvh 随工具栏伸缩——修复移动端切到少书签分类时 body 出现滚动条、顶栏跟着滚的 bug。 */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* 顶部栏 */
+.header {
+  position: relative;
+  z-index: 100;
+  padding: 10px 12px 0;
+  flex-shrink: 0;
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  position: relative;
+  user-select: none;
+}
+/* ===== 顶栏搜索：input 自身既是收起态按钮又是展开态输入框 =====
+   收起：40×40 圆，背景 50% 半透 + 1px 边框 + cursor:pointer（视觉上是个圆按钮，但本质是 input）
+   展开：width 260 + padding 显现 + bg 实色 + accent focus 环
+   icon 绝对定位，pointer-events:none，自己随 state 滑向左侧（left:50%→16px, transform 去掉 translateX）
+   placeholder 延迟 0.15s 后再显色（让 input 先变宽再露文字）
+   clear-btn 0.25s cubic-bezier 入场 */
+.main-top .search-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* input 常驻展开态：始终 300px（= 一张书签卡片宽度 .bookmarks-grid 列宽）。
+   左缘对齐第一列卡片左缘由 useGridInset（marginLeft）保证，
+   右缘向中间延伸，吃掉部分中间空白（不改右缘锚定）。icon 固定左侧，无收起态 */
+.search-box input {
+  width: 300px;
+  height: 40px;
+  /* left padding 44 容纳左侧可点击搜索图标按钮（28px + 左右各 8px 间隙）
+     right padding 88 容纳右侧两件：search-count(右 40) + clear-btn(右 8, 22px) */
+  padding: 11px 88px 11px 44px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-hover);
+  border-radius: 20px;
+  color: var(--text-primary);
+  font-size: 16px;
+  outline: none;
+  cursor: text;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.search-box:hover input {
+  border-color: var(--text-muted);
+}
+.search-box input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* 顶栏图标按钮 hover / menu 展开态描边：对齐搜索框 focus 样式（border accent + 4px 半透明光环）。
+   hover 和 menu-open 共用同一套样式 -- AI/头像 hover 即触发 menu 打开，两者需一致避免视觉跳变。*/
+.topbar-icon-btn:hover,
+.topbar-icon-btn.menu-open {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* placeholder 默认显色（无收起态，无需延迟）*/
+.search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+/* 搜索图标按钮：固定在 input 框内左侧，可点击切换 ID 搜索模式，
+   默认有背景填充，激活时 accent 高亮。*/
+.search-icon-btn {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+  z-index: 1;
+}
+.search-icon-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.search-icon-btn:active {
+  transform: translateY(-50%) scale(0.92);
+}
+.search-icon-btn.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.search-icon-btn.active:hover {
+  background: color-mix(in srgb, var(--accent) 90%, black 10%);
+}
+[data-theme='notion-dark'] .search-icon-btn {
+  color: rgba(255, 255, 255, 0.6);
+}
+[data-theme='notion-dark'] .search-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+[data-theme='notion-dark'] .search-icon-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* clear-btn（× 关闭按钮 —— expanded 时一直显示，含 input 空的情形）*/
+.search-box .clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.search-box .clear-btn.visible {
+  display: flex;
+}
+.search-box .clear-btn:hover {
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--text-primary);
+}
+/* 搜索结果计数胶囊：absolute 漂浮，right=40 不与 clear-btn 重叠 */
+.search-box .search-count {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.68rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* 搜索框快捷键徽标（Ctrl K）：空闲时占 count 同位置（right 40），有输入自动隐藏不冲突 */
+.search-box .search-kbd {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Logo */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+  /* 作为可点击按钮，reset <button> 默认外观（背景/边框/内边距/字体）*/
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+.logo img {
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 10px 1px rgba(255, 255, 255, 0.15);
+}
+.logo h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+/* ===== 通用按钮 ===== */
+.btn {
+  /* 链接型按钮（<a class="btn">，如侧栏「设置」入口）去掉默认下划线；
+     <button> 默认无下划线，不受影响 */
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 400;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  height: 36px;
+}
+.btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+/* 图标按钮：固定 40×40，内部 padding:0 由 flex 居中 */
+.btn-icon {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 输入框内图标按钮（清空 / 粘贴 / 清空描述）：ghost 无边框，hover 变主色 */
+.input-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 1;
+  transition: color 0.15s;
+}
+.input-icon-btn:hover {
+  color: var(--text-primary);
+}
+
+/* 主题切换按钮*/
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.theme-toggle .theme-icon {
+  pointer-events: none;
+}
+.theme-toggle:hover {
+  background: var(--bg-primary);
+  color: var(--accent);
+}
+
+/* 主题切换胶囊按钮（桌面端顶栏：图标 + 当前主题文本）
+   与批量按钮做区分：使用浅色/半透明填充 + 主文字色，而非深色实心。 */
+.theme-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.theme-toggle-pill:hover {
+  background: var(--bg-primary);
+  border-color: var(--border-hover);
+}
+.theme-toggle-pill .theme-icon {
+  pointer-events: none;
+}
+.theme-toggle-pill .theme-label {
+  line-height: 1;
+}
+
+/* 图标过渡 */
+.theme-icon {
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
+}
+.theme-toggle:hover .theme-icon {
+  transform: rotate(30deg);
+}
+.theme-rays line {
+  transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: 12px 12px;
+}
+.theme-moon,
+.theme-sun {
+  transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+/* 亮色模式：太阳 */
+[data-theme='light'] .theme-rays line {
+  opacity: 1;
+  transform: scale(1);
+}
+[data-theme='light'] .theme-sun {
+  opacity: 1;
+  transform: scale(1);
+}
+[data-theme='light'] .theme-moon {
+  opacity: 0;
+  transform: scale(0.5) rotate(-30deg);
+}
+
+/* Notion 深色模式：月亮 */
+[data-theme='notion-dark'] .theme-rays line {
+  opacity: 0;
+  transform: scale(0.5);
+}
+[data-theme='notion-dark'] .theme-sun {
+  opacity: 0;
+  transform: scale(0.5);
+}
+[data-theme='notion-dark'] .theme-moon {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+/* 移动端顶栏图标按钮（搜索等，保持视觉一致） */
+.mobile-header-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mobile-header-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--accent);
+}
+
+/* 触摸设备：禁用 hover 粘滞 */
+@media (hover: none) {
+  .theme-toggle:hover {
+    background: transparent;
+    color: inherit;
+  }
+  .theme-toggle:hover .theme-icon {
+    transform: none;
+  }
+}
+
+/* 整体布局：grid 贴边占满，侧栏与主内容无缝隙。
+   layout 自身 transparent——背景靠 body 的 panel 色（main 圆角塌角透出 body
+   自动跟 sidebar 同色填满，无需 layout 兜底）。 */
+.layout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+  /* 供批量操作栏等 fixed 元素计算主内容区中心用 */
+  --sidebar-width: 260px;
+}
+/* 设置页/帮助页（新窗口独立打开）：无侧边栏、无顶栏，main 全宽。
+   顶栏（搜索/批量/头像）是主应用导航，独立帮助页不需要，CSS 隐藏。 */
+.layout-full {
+  grid-template-columns: 1fr;
+}
+.layout-full .main-top {
+  display: none;
+}
+.layout-full .main {
+  border-radius: 0;
+}
+.layout-full .main-top {
+  border-top-left-radius: 0;
+}
+/* 顶栏跟随独立页内容收窄（与 use-grid-metrics.ts SINGLE_PAGE_MAX_WIDTH 同步），
+   让搜索框/按钮组与下方 960 宽内容左右对齐。 */
+.layout-full .main-top-inner {
+  max-width: 960px;
+}
+/* 移动端设置模态框底部 tab bar：贴底毛玻璃操作栏（只写标准 backdrop-filter，
+   lightningcss 自动补 -webkit 前缀，见 CLAUDE.md 玻璃效果约定）*/
+.settings-tabbar {
+  background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border-top: 1px solid var(--border);
+}
+
+/* 侧边栏：260px 直角贴满，背景用 var(--sidebar-panel)（比 body 略深，
+   让 main 卡片化"亮起来"形成明显层次，配套见 .layout 跟 .main）。
+   不再用 inline theme 规则（变量随主题自动切换，避免色板双写）。*/
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  padding: 8px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  background: var(--sidebar-panel);
+}
+/* Logo 区域下方留白，分类栏下沉，Logo 不挤 */
+.sidebar .logo {
+  margin: 4px 4px 10px;
+}
+.sidebar-title {
+  padding: 8px 10px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+/* 标题“新建分类”按钮 */
+.sidebar-add-btn {
+  width: auto;
+  height: 24px;
+  padding: 0 10px;
+  gap: 3px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  transition: all 0.15s ease;
+}
+.sidebar-add-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.sidebar-add-btn:active {
+  transform: scale(0.92);
+}
+.sidebar-categories {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scrollbar-width: none;
+}
+.sidebar-categories::-webkit-scrollbar {
+  display: none;
+}
+
+/* 分类项 —— 双层 flex 结构：
+   outer (.sidebar-item) flex row 让 .sidebar-icon 和 .sidebar-item-inner 横向排；
+   inner (.sidebar-item-inner) flex row 让 name 和 count 横向排。
+   transform 只施加在内层，hover 时外层背景块尺寸保持不变 */
+
+/* 分类项 —— 双层 flex 结构：
+   outer (.sidebar-item) flex row 让 .sidebar-icon 和 .sidebar-item-inner 横向排；
+   inner (.sidebar-item-inner) flex row 让 name 和 count 横向排。
+   transform 只施加在 .sidebar-icon 上，hover 时外层高亮块尺寸不变（图标"被点亮"—— Notion/Linear/Arc 同款） */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  /* color secondary + font-size 0.92rem +
+     font-weight 400（默认）。上一轮迭代后改到 primary 50% 不透度反馈仍不对，恢复参数。 */
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  /* 与右侧 .sidebar-item-inner 的 padding-right 对齐：图标左缘到高亮块左边 = 数字胶囊右缘到高亮块右边 */
+  padding-left: 11px;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-item-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10.5px 11px;
+  flex: 1;
+  /* 跟 .sidebar-item-name 同样的 min-width:0 修复：默认 flex item min-width:auto 会让 inner 按内容尺寸撑开，
+     推出 item 边界 → name 永远收不到可用宽度，ellipsis 不触发 → count 胶囊被推挤出 sidebar。
+     修这一处 + name 那处 = 链路两端都能缩。 */
+  min-width: 0;
+}
+.sidebar-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+.sidebar-item:hover .sidebar-icon {
+  transform: scale(1.12);
+}
+
+[data-theme='notion-dark'] .sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+[data-theme='notion-dark'] .sidebar-item:hover .sidebar-icon {
+  transform: scale(1.12);
+}
+.sidebar-item.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+/* 批量模式选中（区别 active：加 inset 边框，对齐书签批量选中视觉）*/
+.sidebar-item.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+/* 分类批量操作栏（批量模式时显示在分类列表下方）
+   参考书签 .batch-action-bar 的图标/颜色逻辑，但不透明背景（书签那套走毛玻璃透明，侧栏不适用）*/
+.category-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 11px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.category-batch-bar .batch-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 50px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.category-batch-bar .batch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 50px;
+  border: none;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.category-batch-bar .batch-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.category-batch-bar .batch-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.category-batch-bar .batch-btn.btn-batch-delete {
+  background: var(--destructive);
+  color: #fff;
+}
+.category-batch-bar .batch-btn.btn-batch-delete:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+/* ===== 分类拖拽 =====
+   - sidebar-icon[draggable] 抓取手型
+   - cat-dragging：被拖分类半透明
+   - cat-drag-over + cat-drag-over-before/after：分类排序目标，顶/底 inset 竖条指示插前/插后
+   - cat-drag-over-bookmark：书签拖入目标，绿色调区别用途
+   虚拟分类（all/favorites/uncategorized）在 JS 层拒绝拖入。*/
+.sidebar-icon[draggable="true"] {
+  cursor: grab;
+}
+.sidebar-icon[draggable="true"]:active {
+  cursor: grabbing;
+}
+.sidebar-item.cat-dragging {
+  opacity: 0.4;
+}
+.sidebar-item.cat-drag-over {
+  /* 排序落点公共：accent 背景 + 文字色；插入线由 before/after 变体分别给顶部/底部 */
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.sidebar-item.cat-drag-over .sidebar-item-count {
+  color: var(--accent);
+}
+/* 插到目标前面：顶部粗插入线 + 内边框（鼠标在 target 上半区） */
+.sidebar-item.cat-drag-over-before {
+  box-shadow:
+    inset 0 3px 0 var(--accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* 插到目标后面：底部粗插入线 + 内边框（鼠标在 target 下半区） */
+.sidebar-item.cat-drag-over-after {
+  box-shadow:
+    inset 0 -3px 0 var(--accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.sidebar-item.cat-drag-over-bookmark {
+  box-shadow: inset 3px 0 0 #10b981, inset 0 2px 0 #10b981;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
+}
+.sidebar-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s ease-out;
+}
+/* 设置页 tab 标签（variant="pill"）：复用批量模式按钮配色（--top-pill-bg 容器 + --top-pill-text 图标），
+   与顶栏批量按钮视觉语言一致。背景由 SidebarItem inline style 用 var(--top-pill-bg) 设置。 */
+.sidebar-icon.sidebar-icon-pill svg {
+  color: var(--top-pill-text);
+}
+
+.sidebar-item-name {
+  flex: 1;
+  /* 关键：min-width:0 才能让 flex item 缩到内容尺寸以下，让 overflow:hidden + text-overflow:ellipsis 真正生效
+     （flex item 默认 min-width: auto = 不缩，把 count 推出 sidebar 右边界） */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分类项计数徽章 */
+.sidebar-item-count {
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.25s ease;
+}
+
+/* 侧边栏底部：导入/导出图标按钮（设置入口已移到顶栏头像下拉） */
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  margin-top: auto;
+  position: relative;
+}
+.sidebar-bottom::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border) 40%, transparent) 8%,
+    color-mix(in srgb, var(--border) 40%, transparent) 92%,
+    transparent
+  );
+}
+/* 导入/导出 图标按钮组（独立一行，2 等宽，图标 + 文本）*/
+.sidebar-bottom-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+.sidebar-bottom-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 32px;
+  padding: 0 4px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  /* 之前用 --text-muted（最浅）默认状态下"灰掉"看不清，导入导出虽不是核心操作但也不该隐藏，
+     用 --text-secondary 中等深度更合适；hover 仍加深到 --text-primary 保留反馈。 */
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.sidebar-bottom-icon:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+
+[data-theme='notion-dark'] .sidebar-bottom-icon:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+/* 侧边栏按钮 focus 轮廓统一隐藏
+   根因：按钮点击后保持 :focus，按 ESC 时浏览器切到 :focus-visible 显示黑框
+   */
+.sidebar-item:focus,
+.sidebar-item:focus-visible,
+.sidebar-add-btn:focus,
+.sidebar-add-btn:focus-visible {
+  outline: none;
+}
+
+/* ===== 书签卡片 favicon 容器 =====
+   原实现用 .bookmark-icon 类 + 内嵌 img/i。
+   新项目在 bookmark-card.tsx 用 Tailwind utility，但 .rounded-btn / .bg-secondary
+   都依赖 Tailwind v4 token 桥接（main.css 的 --radius-btn / --color-secondary），
+   一旦 token 没生成 utility 类名就失效。
+   这里**用 CSS 显式固定 46×46 + 10px 圆角**（按用户要求放大），避开 Tailwind 暗坑，并覆盖底色。
+   —— 合并现代化写法。 */
+.bookmark-icon-bg {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden; /* 切掉内部 img 圆角外的溢出（兼容部分 favicon 是方图）*/
+  transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    background-color 0.2s ease;
+}
+/* 暗色主题：用亮米色 #FAF9F7 凸显 favicon */
+[data-theme='notion-dark'] .bookmark-icon-bg {
+  background: #faf9f7;
+}
+/* 卡片 hover 时 logo 容器轻微抬起 —— 新架构升级：给视觉层次不喧宾夺主 */
+.bookmark-card:hover .bookmark-icon-bg {
+  transform: scale(1.05);
+  background-color: var(--bg-card-hover);
+}
+[data-theme='notion-dark'] .bookmark-card:hover .bookmark-icon-bg {
+  background-color: #f0eee9; /* 暗色主题 hover 时背景略暗一档 */
+}
+/* 内嵌 img：38×38 + 4px 圆角（按用户要求放大）*/
+.bookmark-icon-bg > img {
+  width: 38px;
+  height: 38px;
+  border-radius: 4px;
+  display: block;
+}
+/* fallback Globe icon（lucide 渲染，1.4rem ≈ 22.4px）*/
+.bookmark-icon-bg > svg {
+  color: var(--accent);
+}
+
+/* 刷新图标中：favicon-pulse + favicon-glow 1s 闪烁反馈。
+   书签卡片通过 .favicon-refreshing 类名挂载（bookmark-card.tsx:148）但 CSS 缺失，
+   这里补回 —— 否则用户点"刷新图标"无任何视觉反馈。 */
+.bookmark-icon-bg.favicon-refreshing {
+  border-radius: 8px;
+  animation: favicon-glow 1s ease-in-out infinite;
+}
+.bookmark-icon-bg.favicon-refreshing > img,
+.bookmark-icon-bg.favicon-refreshing > svg {
+  animation: favicon-pulse 1s ease-in-out infinite;
+}
+@keyframes favicon-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+@keyframes favicon-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(99, 102, 241, 0.3); }
+  50%      { box-shadow: 0 0 12px rgba(99, 102, 241, 0.6), 0 0 4px rgba(99, 102, 241, 0.4); }
+}
+
+/* 主内容区：三档亮度层次（用户原话：浅色模式底色太白）。
+   浅色色阶：sidebar #f4f2ee（深米）→ main var(--bg-secondary) #faf9f7（亮米）→ card var(--bg-card) ~#fff（纯白）
+   主区不再是死白，跟卡片有色差；卡片浮起形成"卡 in 主区"层次。
+   深色色阶（反转对称）：sidebar #2c3034（较亮）→ card mixed（mid）→ main #15181a（更暗），
+   让深色下卡片明显从 main 浮起。
+   - border-radius 16px 0 0 16px（左上/左下圆角）
+   - box-shadow 0 0 0 1px 极细描边让圆角边缘可见 */
+.main {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 16px 0 0 16px;
+  box-shadow: 0 0 0 1px var(--border);
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior-y: contain;
+}
+/* 主内容顶部：main-top 撑满 main 宽度（保留左上圆角 + 滚动条 gutter 对齐 main-content），
+   内部 main-top-inner 用 max-width:1680 margin:auto 居中 —— 让搜索框/批量/主题的右缘
+   与下方 .bookmarks-grid 的右缘自适应对齐（视口变化时一起居中、一起收缩）。
+   overflow-y:auto + scrollbar-gutter:stable：与 .main-content 预留相同的右侧滚动条空间，
+   保证 main-top-inner 与网格的居中基准宽度一致（否则顶栏会比卡片多出 gutter 宽度）。
+   border-top-left-radius: 继承 main 左上 16px 圆角，让 topbar 顶边跟随大圆角（默认透明看不出）。*/
+.main-top {
+  padding: 0 12px;
+  border-top-left-radius: 16px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.main-top-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 12px 0;  /* 上下 12 给顶栏高度；左右 0 让容器右缘严格对齐网格右缘 */
+}
+.main-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  /* margin-right 由 app-shell.tsx 的 useGridInset 动态注入，
+     让按钮组右缘与最后一列卡片右缘对齐并随窗口自适应。*/
+}
+/* 主内容主体：滚动区。滚动条视觉（hover 显示 + gutter 预留）统一用 .scrollbar-hover 类，见 effects.css */
+.main-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* 切断 main 滚动到边界时向 body 的链式传递（与 html/body 的 overscroll-behavior
+     双保险）：移动端在书签列表里滑到顶/底继续拉时，弹性不再传到 body，顶栏不会被下拉。
+     桌面端不触发橡皮筋，无副作用。*/
+  overscroll-behavior-y: contain;
+  padding: 10px 12px 12px;
+}
+
+/* 卡片网格 */
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 300px);
+  gap: 18px;
+  justify-content: center;
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+/* ===== 书签卡片 =====
+   覆盖 bookmark-card.tsx 里的内联 Tailwind 样式，让描述/URL 显示更宽。
+   关键约束：hover 视觉必须**完全等价** scale(1.04) —— 用户明说
+   "微微放大"就是 1.04 倍，禁自定义增强（如 translateY）。 */
+.bookmark-card {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 16px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 150px;
+  overflow: hidden;
+  /* hairline：1px 阴影环代替硬边框，边缘融入阴影层次 */
+  box-shadow: 0 0 0 1px var(--border), 0 6px 20px rgba(0, 0, 0, 0.15);
+  /* transform-origin 默认就是 center；显式声明避免渲染器差异 */
+  transform-origin: center center;
+  transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    box-shadow 0.25s ease, background 0.2s ease;
+}
+.bookmark-card:hover {
+  transform: scale(1.04);
+  background: var(--bg-card-hover);
+  box-shadow: 0 0 0 1px var(--border-hover), 0 14px 32px rgba(0, 0, 0, 0.22),
+    0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== 批量模式选中态 =====
+   语义类 selected 由 bookmark-card.tsx 在 selected 时挂载。
+   边框变 accent + 双层阴影（1px 实色描边 + 16px 柔和外发光）。*/
+.bookmark-card.selected {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* hover 时重申选中样式，防止 .bookmark-card:hover 覆盖选中态*/
+.bookmark-card.selected:hover {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* 批量模式：禁用文本选中 + 取消 hover 上浮 / 背景变化
+   */
+.bookmark-card.batch-mode-card {
+  cursor: pointer;
+  user-select: none; /* 批量模式下禁用文本选中，避免双击/连点误触发蓝色选区 */
+}
+.bookmark-card.batch-mode-card:hover {
+  transform: none;
+  background: var(--bg-card);
+}
+
+/* ===== 拖拽排序 =====
+   仅桌面端：移动端 mobile-shell 不渲染 BookmarkCard，天然不触发。*/
+.bookmark-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.96) rotate(1deg);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+}
+.bookmark-card.drag-over {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent) 3%, transparent));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.bookmark-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+}
+.bookmark-info {
+  flex: 1;
+  min-width: 0;
+}
+.bookmark-title {
+  font-size: 0.98rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* padding-right 避开右上角 absolute 元素：
+     - 桌面无汉堡：未收藏 0；收藏 1.75rem 避 Star (right-0 w-4)
+     - 移动有汉堡：未收藏 1.25rem 避汉堡；收藏 3rem 避 Star (right-7) + 汉堡 */
+  padding-right: 0;
+}
+.bookmark-title[data-favorite='true'] {
+  padding-right: 1.75rem;
+}
+@media (max-width: 767px) {
+  .bookmark-title { padding-right: 1.25rem; }
+  .bookmark-title[data-favorite='true'] { padding-right: 3rem; }
+}
+.bookmark-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 1.4em;
+  margin-top: 6px;
+  width: 100%;
+}
+.bookmark-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  min-height: 20px;
+  gap: 8px;
+}
+.bookmark-url {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.bookmark-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* ID 复制胶囊 + URL 复制胶囊：默认桌面 hidden，hover / focus-within 显；
+   移动端在 @media (max-width: 768px) 强制常驻显示（移动端无 hover 概念）。
+   走语义类不用 Tailwind 的 hidden group-hover:flex 是为了让移动端媒体查询能 !important 覆盖。*/
+.id-badge,
+.copy-btn {
+  display: none;
+}
+.bookmark-card:hover .id-badge,
+.bookmark-card:hover .copy-btn,
+.bookmark-card:focus-within .id-badge,
+.bookmark-card:focus-within .copy-btn {
+  display: flex;
+}
+
+/* 书签标签
+   普通标签橙色、分类标签蓝色，两种颜色区分。*/
+.bookmark-tag {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+.bookmark-tag.category-tag {
+  background: rgba(59, 130, 246, 0.1);
+  color: #4B8BD4;
+  max-width: none;
+  overflow: visible;
+}
+[data-theme="notion-dark"] .bookmark-tag.category-tag {
+  background: rgba(68, 122, 203, 0.15);
+  color: #447ACB;
+}
+
+/* ===== 移动端（≤768px）===== */
+@media (max-width: 768px) {
+  .layout {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+    background: transparent;
+  }
+
+  /* 侧边栏抽屉：贴边左 0，默认 -100% 隐藏，open 时滑入*/
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 300;
+    border-radius: 0 16px 16px 0;
+    margin: 0;
+    padding: 12px 8px 16px;
+    overflow: hidden;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-secondary);
+    border: none;
+    backdrop-filter: none;
+    box-shadow: 6px 0 32px var(--shadow);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* 遮罩 */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    /* 对齐 modal-overlay 的全屏模糊（添加按钮激活态契约）：抽屉打开时主内容/顶栏/Dock
+       该模糊的模糊，抽屉本身(z-index:300)在遮罩之上保持清晰。*/
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+  .sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  /* 顶栏压缩：隐藏 logo 文字/搜索框/版本徽章*/
+  .header {
+    padding: 0 12px;
+    background: transparent;
+  }
+  .header-top {
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
+    border: none;
+    border-radius: 12px;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  /* 移动端顶栏分类快捷选择（适配 lucide svg）*/
+  .mobile-category-badge {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    gap: 6px;
+    margin-left: auto;
+    margin-right: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  .mobile-category-badge > svg {
+    flex-shrink: 0;
+  }
+  .mobile-category-name {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 15px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-category-count {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .mobile-category-arrow {
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .mobile-category-badge.open .mobile-category-arrow {
+    transform: rotate(180deg);
+  }
+  .logo img {
+    width: 32px;
+    height: 32px;
+  }
+  .logo h3 {
+    display: none;
+  }
+  .search-box {
+    display: none;
+  }
+
+  /* 单列 + 底部留 80px 给 Dock*/
+  .bookmarks-grid {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+    max-width: 100%;
+    margin: 0;
+    padding: 0 8px;
+  }
+  .main,
+  [data-theme='notion-dark'] .main {
+    display: block;
+    overflow-y: auto;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 10px 8px 80px 8px;
+  }
+
+  /* 移动端复制胶囊常驻显示（无 hover 概念）；
+     card-menu-btn（汉堡菜单）也保留显示。*/
+  .card-menu-btn {
+    display: flex !important;
+  }
+  .copy-btn,
+  .id-badge {
+    display: inline-flex !important;
+  }
+  /* 底部 Dock：iOS 风格浮动胶囊 + 图标 + 标签（按钮数和顺序保留，
+     宽度占屏幕 ~84%：4 列 grid 等宽分配，左右各留约 30px 边距对齐图示视觉节奏。
+     形状语言：容器是大 pill，按钮 height:100% 撑满 grid cell + 999px 圆角 =
+     「胶囊里嵌胶囊」，按钮圆角 = 容器圆角 - padding = 同心缩比 ~6px，
+     容器 padding 提供四周间距让两者不贴合内壁。*/
+  /* iOS 26 Liquid Glass：渐变 + 220% saturate blur + 5 层阴影 + bottom 14px 紧凑悬浮。
+     no border：液态玻璃边缘靠 inset 0 0 0 0.5px 描边代替。*/
+  .mobile-fab-menu {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 150;
+    width: 84%;
+    max-width: calc(100vw - 32px);
+    padding: 6px 6px;
+    align-items: stretch;
+    border-radius: 999px;
+    border: none;
+    background:
+      linear-gradient(
+        155deg,
+        rgba(255, 255, 255, 0.55) 0%,
+        rgba(255, 255, 255, 0.15) 60%,
+        rgba(255, 255, 255, 0.05) 100%
+      );
+    backdrop-filter: blur(32px) saturate(220%);
+    box-shadow:
+      0 16px 48px rgba(0, 0, 0, 0.18),
+      0 4px 12px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.45),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+    touch-action: manipulation;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  /* 深色主题：玻璃黑底代替白底，反向高光 */
+  [data-theme='notion-dark'] .mobile-fab-menu {
+    background:
+      linear-gradient(
+        155deg,
+        rgba(255, 255, 255, 0.12) 0%,
+        rgba(255, 255, 255, 0.04) 60%,
+        rgba(0, 0, 0, 0.10) 100%
+      );
+    backdrop-filter: blur(32px) saturate(220%);
+    box-shadow:
+      0 16px 48px rgba(0, 0, 0, 0.55),
+      0 4px 12px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+  }
+  .mobile-fab-menu.dock-hide {
+    transform: translateX(-50%) translateY(calc(100% + 24px));
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* 按钮：垂直堆叠（图标 + 标签）+ height:100% 撑满 cell 让胶囊形状跟容器同心缩比。
+     容器 padding 6px 让按钮四周保留 ~6px 间隙，避免和大胶囊内壁重合。*/
+  .mobile-fab-menu button {
+    border: none;
+    background: transparent;
+    min-width: 0;
+    height: 100%;
+    /* position/z-index：让图标+标签浮在分段滑块（.dock-slider）之上 */
+    position: relative;
+    z-index: 1;
+    padding: 6px 4px;
+    border-radius: 999px;
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    /* 短时长 + ease-out：设置页 4 按钮在激活态间来回切换时，褪色不"飘"。
+       0.1s 接近即时的同时保留微平滑，ease-out 让尾段利落。
+       box-shadow 也按同节奏，否则 inset 描边慢一拍会留残余感。*/
+    transition:
+      transform 0.15s ease,
+      background-color 0.1s ease-out,
+      box-shadow 0.1s ease-out;
+  }
+  /* 标签：图标下方，11px、颜色比图标略弱以视觉分层。
+     transition 含 color：激活时颜色突变会引起 1 帧闪烁，必须平滑过渡。*/
+  .mobile-fab-menu button .dock-label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.1px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    display: block;
+    transition: color 0.1s ease-out;
+  }
+  /* 按压态：液体玻璃按压反馈（scale 稍大、背景加深模拟 Liquid Morph 弹性）*/
+  .mobile-fab-menu button:active {
+    transform: scale(0.94);
+    background: rgba(0, 0, 0, 0.08);
+  }
+  [data-theme='notion-dark'] .mobile-fab-menu button:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  /* 激活态：accent 染色玻璃——纯色填充 + 单一细 inset 描边（concentric 形状语言），
+     不加外发光/顶部高光/底部内陷，保持平面感，与 dock 大胶囊的玻璃语言一致。*/
+  .mobile-fab-menu .search-active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--accent) 85%, white 15%);
+  }
+  .mobile-fab-menu .search-active .dock-label {
+    color: #fff;
+  }
+  /* ── 设置页分段滑块（segmented）─────────────────────────────
+     单选分段控件：滑块是唯一持续可见的 accent 胶囊，随选中 tab 横向滑动。
+     几何：grid 4 等宽列 + 容器 padding 6px → 每格宽 = (100% - 12px)/4，
+     滑块 left/top/bottom = 6px 与 padding 对齐，translateX 按 index 平移整格。
+     手感：iOS 26 .snappy 弹簧（≈ duration 0.4s / bounce 0.15 / dampingFraction 0.85），
+     溢出约 0.6% 极微——用 cubic-bezier 保留一丝回弹但不显浮夸。*/
+  .mobile-fab-menu.segmented .dock-slider {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 6px;
+    width: calc((100% - 12px) / 4);
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--accent) 85%, white 15%);
+    transform: translateX(calc(var(--dock-i) * 100%));
+    transition: transform 0.4s cubic-bezier(0.34, 1.12, 0.64, 1);
+    z-index: 0;
+    pointer-events: none;
+  }
+  /* segmented 模式下：accent 填充交给滑块，按钮自身不再画背景/描边（否则双份）。
+     文字/图标仍在选中时转白，且 color 过渡与滑块同时长同缓动 → 滑块滑过时颜色同步渐变，不抢拍。*/
+  .mobile-fab-menu.segmented .search-active {
+    background: transparent;
+    box-shadow: none;
+  }
+  .mobile-fab-menu.segmented button {
+    /* 业务先响应：color/background 用 0.1s 近即时跳变（新点中按钮立刻"亮起来"），
+       滑块 transform 仍 0.4s 保留装饰性反弹。快速来回点时 store 同步追随最后一站，
+       视觉上按钮颜色已经在 0.1s 内贴上当前 store，滑块再从容滑过来。*/
+    transition:
+      transform 0.15s ease,
+      color 0.1s ease-out,
+      background-color 0.1s ease-out;
+  }
+  .mobile-fab-menu.segmented button .dock-label {
+    transition: color 0.1s ease-out;
+  }
+  /* 批量模式隐藏 Dock*/
+  .mobile-fab-menu.dock-hidden {
+    display: none;
+  }
+
+  /* 移动端搜索栏（默认隐藏，点击搜索图标 .active 展开）*/
+  .mobile-search-bar {
+    display: flex;
+    position: fixed;
+    top: 4px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    height: 48px;
+    transform: translateY(-10px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 150;
+    padding: 0 12px;
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s 0.2s,
+      box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .mobile-search-bar.active {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    /* 激活发光：与登录页 input:focus 对齐（auth.css:279-283）*/
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    /* 进场：visibility 立即生效，覆盖默认的出场延迟 0s 0.2s */
+    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s 0s,
+      box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  /* 浅色主题额外软阴影（对齐 auth.css:349-351）*/
+  [data-theme='light'] .mobile-search-bar.active {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
+      0 2px 12px color-mix(in srgb, var(--accent) 6%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  /* 移动端搜索栏左侧图标按钮：复用桌面 .search-icon-btn 基础色，改为 flex 子元素 */
+  .mobile-search-bar .search-icon-btn {
+    position: static;
+    transform: none;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+  .mobile-search-bar .search-icon-btn:active {
+    transform: scale(0.92);
+  }
+  .mobile-search-bar input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 16px;
+    outline: none;
+    padding: 0 4px;
+  }
+  .mobile-search-bar input::placeholder {
+    color: var(--text-muted);
+  }
+  /* 右侧 × 关闭按钮：智能「清空 / 关闭」—— 永远显示，避免空内容时缺操作。
+     圆形 + 半透灰底模拟液态工具按钮，hover 加深。*/
+  .mobile-search-bar .search-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+  }
+  .mobile-search-bar .search-close-btn:hover {
+    background: rgba(0, 0, 0, 0.10);
+    color: var(--text-primary);
+  }
+  .mobile-search-bar .search-close-btn:active {
+    transform: scale(0.92);
+  }
+  [data-theme='notion-dark'] .mobile-search-bar .search-close-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  [data-theme='notion-dark'] .mobile-search-bar .search-close-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+  }
+
+  /* 批量操作栏移动端：双行布局*/
+  .batch-action-bar {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: translateY(100%);
+    max-width: 100%;
+    width: 100%;
+    padding: 10px 14px;
+    gap: 8px;
+    border-radius: 18px 18px 0 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .batch-action-bar.visible {
+    transform: translateY(0);
+  }
+}
+
+/* 桌面端默认隐藏移动端元素 */
+@media (min-width: 769px) {
+  .mobile-fab-menu,
+  .mobile-search-bar,
+  .sidebar-overlay {
+    display: none !important;
+  }
+}
+/* 设置中心 Section 卡片阴影：默认 + 悬停增强（自适应深浅色）
+   注：项目 --shadow-card token 在 main.css :root 里被简化覆盖，无法走主题分支，
+   所以这里用显式主题值；以后若清理 main.css 的 :root 覆盖可改用 var(--shadow-card) + var(--shadow-lg) */
+.section-card-shadow {
+  box-shadow: 0 2px 6px rgba(55, 53, 47, 0.05);
+}
+[data-theme="notion-dark"] .section-card-shadow {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}

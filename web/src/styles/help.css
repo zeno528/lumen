@@ -1,0 +1,303 @@
+/* ===== 帮助页：暖亚麻编辑式（ Warm Linen Editorial）=====
+   独立窗口打开。融入项目暖亚麻 token（米白 + 琥珀橙 + 暖灰 + 三层卡片阴影），
+   编辑杂志层次：Hero 封面 + 章节卡片 + Poppins 编号锚点 + 视口滚动揭示 + 精致目录。
+   字体：Poppins（编号，已有自托管 --font-logo）+ 系统中文（标题靠字重/字号造层次，不引入中文 web 字体）。 */
+
+/* ===== Hero 封面 ===== */
+.help-hero {
+  padding: 4px 0 32px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.help-hero-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.15;
+}
+.help-hero-title img {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.help-hero-sub {
+  margin-top: 14px;
+  margin-left: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+.help-hero-sub .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Hero 仓库链接 chip：
+   GitHub 仓库徽章的最小可行形态 —— 沿用 hero-sub 的暖灰 + accent 视觉语言，
+   内联 SVG octocat(Lucide 已移除商标图标) + owner/repo 双段。
+   与 hero-sub 共处一行视觉对齐(margin-left: 50px 同 title 起始)。
+   玻璃背景下边框走 var(--border) + 浅高光，避免与 search/btn 类实心按钮混淆。
+   Hover 微微上抬 + accent 发光，遵循项目现有交互语言（与卡片悬浮一致）。 */
+.help-hero-link {
+  margin-top: 12px;
+  margin-left: 50px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  max-width: max-content;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-card) 75%, transparent);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  line-height: 1.2;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+.help-hero-link:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text-primary);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.help-hero-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.help-hero-link .owner {
+  color: var(--text-muted);
+}
+.help-hero-link .sep {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+.help-hero-link .repo {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ===== 章节卡片 ===== */
+/* 章节扁平布局：内容直接铺在背景上，章节间用留白 + 顶部细分隔线分隔。
+   不用卡片框（对齐 Stripe / Vercel / Next.js / React 文档风 -- 内容驱动，靠标题层次与留白分章）。 */
+.help-section {
+  padding: 32px 0;
+  border-top: 1px solid var(--border);
+  /* 视口揭示：初始下移 + 透明，进入视口后 .revealed 还原 */
+  opacity: 0;
+  transform: translate3d(0, 20px, 0);
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+.help-section:first-of-type {
+  border-top: none;
+  padding-top: 8px;
+}
+.help-section.revealed {
+  opacity: 1;
+  transform: none;
+}
+.help-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.help-section-num {
+  font-family: var(--font-logo);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+.help-section-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.help-section-head h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+}
+.help-section-body h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+.help-section-body p,
+.help-section-body li {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.help-section-body ul,
+.help-section-body ol {
+  margin: 8px 0;
+}
+.help-section-body strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ===== 目录 ===== */
+.help-toc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.help-toc-item:hover {
+  background: var(--accent-soft-bg);
+  color: var(--text-primary);
+}
+.help-toc-item.active {
+  background: var(--accent-soft-bg);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+.help-toc-num {
+  font-family: var(--font-logo);
+  font-size: 0.7rem;
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.help-toc-item.active .help-toc-num {
+  color: var(--accent);
+}
+.help-toc-item .icon {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.help-toc-item.active .icon {
+  opacity: 1;
+}
+
+/* ===== Tip ===== */
+.help-tip {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--accent-soft-bg);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  margin: 14px 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.help-tip strong {
+  color: var(--accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ===== Code（行内）===== */
+.help-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ===== Kbd 键盘键 ===== */
+.help-kbd {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.8em;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  color: var(--text-primary);
+  display: inline-block;
+  line-height: 1.4;
+}
+
+/* ===== CodeBlock 代码块 ===== */
+.help-codeblock {
+  display: block;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 14px 0;
+}
+
+/* ===== ShortcutTable 快捷键表 ===== */
+.help-shortcut-table {
+  width: 100%;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+.help-shortcut-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.help-shortcut-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.help-shortcut-table tr:last-child td {
+  border-bottom: none;
+}
+.help-shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,188 @@
+/* ===== 暖亚麻设计 token ===== */
+:root,
+[data-theme='light'] {
+  --bg-primary: #f5f3ee; /* 暖米白页面底色 */
+  --bg-secondary: #faf9f7; /* 更亮的米白 */
+  /* --bg-canvas = 主内容画布（main 大容器，书签视图右侧大卡片底色）。
+     派生自 --bg-secondary + #37352f 暖黑（与 --border / --sidebar-icon-bg / --bg-input 同源暖黑体系，保持暖亚麻色温）。
+     9% = 用户要的 #e9e9e9 深度的暖等价（≈ #e9e7e5，同深度但 R>G>B 偏暖）；不用纯 #000（冷）、
+     不硬编码 #e9e9e9（冷灰撞暖亚麻，旧值已弃）。「sidebar 深米 → canvas 暖灰 → card 纯白」三档亮度层次。 */
+  --bg-canvas: color-mix(in srgb, var(--bg-secondary), #37352f 9%);
+  /* --bg-input = 全项目输入框/textarea/select 背景。
+     暖黑半透明叠加（与 --border / --sidebar-icon-bg 同源 #37352f Notion 暖黑），保持暖亚麻色温一致——
+     纯黑 color-mix 会让暖底变冷灰「不搭」（Radix Colors 建议：暖底配暖中性 sand，而非纯灰 gray）。
+     6% 压暗一档形成凹陷；半透明叠加自动适配底色（dialog body / 登录页皆一致分层）。 */
+  --bg-input: rgba(55, 53, 47, 0.06);
+  /* --bg-section = 设置 section 卡片中间档底色（dialog body → 卡片 → 输入框 三层分层的中间层）。
+     暖黑 4% 半透明叠加，与 --bg-input / --border 同源 #37352f 暖黑，色温一致。
+     比 dialog body(--bg-secondary) 暗一档；--bg-input(6%) 叠其上再暗一档 → 三层递进分层。 */
+  --bg-section: rgba(55, 53, 47, 0.04);
+  --bg-card: rgba(255, 255, 252, 0.95);
+  --bg-card-hover: rgba(255, 255, 252, 1);
+  --text-primary: #2c2a25; /* 暖深灰文字 */
+  --text-secondary: rgba(55, 53, 47, 0.75);
+  --text-muted: #a8a29e;
+  --accent: #c1513f; /* 赤陶（默认配色 light 版；切换配色见文末 [data-accent] 块）*/
+  --destructive: #ef4444; /* 错误 / 危险文字色（field error 反馈） */
+  --success: #22c55e; /* 成功反馈色（复制完成对号、toast.success 图标）-- 与 effects.css .toast.success .toast-icon 保持一致 */
+  /* 侧栏分类图标容器底色：固定主题相关色，不随分类 color 变化（颜色选择器只改图标色）。
+     8% 透明度的暖深灰，叠在暖米白页面上形成柔和灰底，不抢戏。 */
+  --sidebar-icon-bg: rgba(55, 53, 47, 0.08);
+  /* AI 按钮：3 色粉紫蓝紫斜向渐变（HSL 330°->271°->239° 单调递减 91°）。
+     3 色 = 渐变按钮黄金比例（比 2 色丰富，比 4 色克制）。 */
+  --ai-g-1: #d4b36a; /* 香槟金（亮）*/
+  --ai-g-2: #b08d4a; /* 暗金（中）*/
+  --ai-g-3: #8a6c36; /* 深青铜（暗）*/
+  --border: rgba(55, 53, 47, 0.1);
+  --border-hover: rgba(55, 53, 47, 0.18);
+  /* 滚动条 hover 显示色：暖深灰 20% alpha（比 --border 的 10% 明显，保证滚动条可见性）。
+     effects.css 所有滚动条 hover 态（html/body/.main 链路 + .scrollbar-hover + .desc-scroll）共用此 token。 */
+  --scrollbar-thumb: rgba(55, 53, 47, 0.2);
+  --shadow: rgba(55, 53, 47, 0.06);
+  --shadow-lg: 0 8px 32px rgba(55, 53, 47, 0.1);
+  /* 浮层卡片阴影：单值颜色 token，专供 box-shadow 内联使用。
+     --shadow-lg 是完整 shadow 字符串（0 8px 32px rgba(...)），不能与自定义偏移模糊嵌套
+     （否则第一个 shadow 会变无色），所以这里单值颜色更安全。0.18 比 --shadow-lg 的 0.1 更强。*/
+  --shadow-overlay: rgba(0, 0, 0, 0.18);
+  /* 卡片边缘三层阴影（Apple HIG 风格）：edge ring 描边 + contact 近阴影 + ambient 远阴影。
+     完整 shadow 字符串 token，独立用 box-shadow: var(--shadow-card)，不与其他偏移模糊嵌套。
+     跟 border 1px solid var(--glass-border) 叠加形成「玻璃边缘」轮廓。 */
+  --shadow-card:
+    0 0 0 1px rgba(0, 0, 0, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 20px rgba(0, 0, 0, 0.12);
+  /* glass 面板不透明度 0.85：旧值 0.55 过透，侧边栏叠在页面底色上几乎同色「融为一体」；
+     提到 0.85 保留约 15% 透出维持毛玻璃质感，同时与背景拉开层次。边框 0.06->0.12 增强勾勒。 */
+  --glass-bg: rgba(250, 249, 247, 0.85);
+  --glass-border: rgba(55, 53, 47, 0.12);
+  /* 侧栏实色，比 body 略深，main 卡片化用 #fff */
+  --sidebar-panel: #f4f2ee;
+  --toast-bg: rgba(30, 30, 30, 0.88);
+  --toast-text: #fff;
+  --toast-border: rgba(255, 255, 255, 0.1);
+  /* 顶栏批量按钮胶囊：用户指定高亮块填充色 */
+  --top-pill-bg: #222222;
+  --top-pill-text: #ffffff;
+  --favorite-star: #facc15; /* 书签卡片收藏星标：经典金黄，跨主题一致（状态识别色） */
+  --status-ok: #22c55e; /* 连通性状态：可用（绿），AI 测试连通成功 */
+  --status-warn: #f59e0b; /* 连通性状态：欠费（橙黄），AI 测试返回 402 */
+  --badge-neutral-bg: rgba(148, 163, 184, 0.12); /* 书签卡片中性徽章底（ID 徽章默认态）：slate-400 12%，dark 反相 */
+  --badge-neutral-bg-hover: rgba(148, 163, 184, 0.22); /* 中性徽章底 hover：slate-400 22% */
+  --secondary-action: #f59e0b; /* 副操作按钮琥珀色（如「仅清除图标」），跨主题一致（状态识别色） */
+  --icon-all: #6366f1; /* 全部分类图标 indigo，跨主题一致 */
+  --icon-uncategorized: #9ca3af; /* 未分类图标 gray，跨主题一致 */
+  --default-category-color: #FFA344; /* 默认分类色（用户未设颜色时 fallback），跨主题一致 */
+  --destructive-soft-bg: rgba(239, 68, 68, 0.08); /* destructive 8% 柔和 hover 底 */
+  --destructive-dark: #dc2626; /* destructive 渐变深色端 */
+  --ios-blue: #007aff; /* iOS 系统蓝：启用/激活按钮填充（light） */
+}
+
+[data-theme='notion-dark'] {
+  --bg-primary: #1a1d1f;
+  --bg-secondary: #222528;
+  /* --bg-canvas = dark 下 main 的「中间档」色：派生自 --bg-secondary，比 --bg-primary 亮一档、仍比 sidebar 暗。
+     自动跟随主题，与 light 块的派生公式对齐（都从 secondary mix 黑色），跨主题颜色规则一致。 */
+  --bg-canvas: color-mix(in srgb, var(--bg-secondary), #000 5%);
+  /* --bg-input = dark 下输入框背景：白色 6% 半透明叠加（与 dark --border / --sidebar-icon-bg 同源反相），
+     亮一档形成浮起。深色 UI 输入框宜浮不宜沉（凹陷=黑洞）；半透明自动适配底色。 */
+  --bg-input: rgba(255, 255, 255, 0.06);
+  /* --bg-section = dark 下 section 卡片中间档底色：白色 4% 半透明，与 dark --bg-input / --border 同源反相。
+     比 dialog body 亮一档；--bg-input(白6%) 叠其上再亮一档 → 三层递进（dark 浮起方向）。 */
+  --bg-section: rgba(255, 255, 255, 0.04);
+  --bg-card: rgba(34, 37, 40, 0.92);
+  --bg-card-hover: rgba(42, 45, 48, 0.95);
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(151, 154, 155, 0.95);
+  --text-muted: rgba(151, 154, 155, 0.6);
+  --accent: #ca6b5c; /* 赤陶 dark 版（默认配色，提亮以适配深底）*/
+  --destructive: #ef4444; /* dark 主题与 light 主题统一：danger 色跨主题一致，不分主题提亮 */
+  --success: #22c55e; /* dark 主题与 light 主题同 #22c55e：success 是状态色（非背景色），保持跨主题视觉强度一致 */
+  /* 侧栏分类图标容器底色 dark 版：同源暖色 8% 透明，自动跟随主题反相（暖深灰 -> 暖浅灰）。 */
+  --sidebar-icon-bg: rgba(255, 255, 255, 0.08);
+  /* AI 3 色跨主题一致：彩色是 AI 品牌资产 */
+  --ai-g-1: #d4b36a;
+  --ai-g-2: #b08d4a;
+  --ai-g-3: #8a6c36;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.2); /* 滚动条 hover 显示色 dark 版：白色 20% 反相，跟 light 同强度 */
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: rgba(0, 0, 0, 0.5);
+  /* 深主题三层阴影：edge ring 用白色低不透度（亮色描边在深色背景上才看得见），contact/ambient 用黑色 */
+  --shadow-card:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 4px 20px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(47, 52, 55, 0.85);
+  --sidebar-panel: #2c3034;
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --toast-bg: rgba(255, 255, 255, 0.92);
+  --toast-text: #2f3437;
+  --toast-border: rgba(255, 255, 255, 0.15);
+  /* 顶栏批量按钮胶囊：深色主题下反转为浅色底深色字，避免跟深色背景融为一体 */
+  --top-pill-bg: #e8e6e1;
+  --top-pill-text: #1a1d1f;
+  --favorite-star: #facc15; /* 收藏星跨主题同色：状态识别色 */
+  --status-ok: #4ade80; /* 连通性状态：可用（绿）dark 版提亮 */
+  --status-warn: #fbbf24; /* 连通性状态：欠费（橙黄）dark 版提亮 */
+  --badge-neutral-bg: rgba(255, 255, 255, 0.12); /* 中性徽章底 dark 版：白色 12% 反相 */
+  --badge-neutral-bg-hover: rgba(255, 255, 255, 0.20); /* 中性徽章底 dark hover：白色 20% */
+  --secondary-action: #f59e0b; /* 副操作按钮琥珀色，跨主题同色（状态识别色） */
+  --icon-all: #6366f1; /* 全部分类图标 indigo，跨主题同色 */
+  --icon-uncategorized: #9ca3af; /* 未分类图标 gray，跨主题同色 */
+  --default-category-color: #FFA344; /* 默认分类色，跨主题同色 */
+  --destructive-soft-bg: rgba(239, 68, 68, 0.12); /* destructive 柔和 hover 底 dark 版（dark 下 8% 过淡，提至 12%） */
+  --destructive-dark: #dc2626; /* destructive 渐变深色端，跨主题同色 */
+  --ios-blue: #0a84ff; /* iOS 系统蓝 dark 版（提亮，对齐 iOS dark 模式） */
+}
+
+/* ===== accent 派生色：全局用 color-mix 从 --accent 自动算 =====
+   原本 --accent-hover / --copy-btn-bg / --copy-btn-bg-hover / --selection-glow /
+   --accent-soft-bg / --accent-hover-bg 6 个派生色在 light/dark 块各硬编码一份 rgba，
+   加新配色要写十几行。抽到 :root 用 color-mix 派生，加配色只需覆盖 --accent
+   （见下方 [data-accent] 块），派生色自动跟着新 --accent 重算。
+   --accent 由上方 light(#d97706)/dark(#ffa344) 块或下方 [data-accent] 块提供。 */
+:root {
+  --accent-hover: color-mix(in srgb, var(--accent), #000 15%); /* 比 accent 暗 15% */
+  --copy-btn-bg: color-mix(in srgb, var(--accent), transparent 85%); /* accent 15% 透明 */
+  --copy-btn-bg-hover: color-mix(in srgb, var(--accent), transparent 75%); /* accent 25% 透明 */
+  --selection-glow: color-mix(in srgb, var(--accent), transparent 65%); /* accent 35% 透明 */
+  --accent-soft-bg: color-mix(in srgb, var(--accent), transparent 92%); /* accent 8% 透明 */
+  --accent-hover-bg: color-mix(in srgb, var(--accent), transparent 88%); /* accent 12% 透明 */
+}
+
+/* ===== 配色方案：只覆盖 --accent，派生色自动跟 =====
+   两个独立维度：data-theme 控制深浅（导航栏按钮切），data-accent 控制配色（设置中心「外观」页选）。
+   赤陶为默认，--accent 已在上方 light/dark 块定义，无需单独 [data-accent='terracotta'] 块。
+   加新配色 = 加一组 [data-accent='xxx'](light 主色) + [data-theme='notion-dark'][data-accent='xxx'](dark 主色)。 */
+[data-accent='blue'] {
+  --accent: #007aff; /* 海洋蓝 light（对齐 --ios-blue）*/
+}
+[data-theme='notion-dark'][data-accent='blue'] {
+  --accent: #0a84ff; /* 海洋蓝 dark（提亮，对齐 iOS dark 模式）*/
+}
+[data-accent='orange'] {
+  --accent: #d97706; /* 琥珀橙 light */
+}
+[data-theme='notion-dark'][data-accent='orange'] {
+  --accent: #ffa344; /* 琥珀橙 dark（提亮以适配深底）*/
+}
+[data-accent='indigo'] {
+  --accent: #635bff; /* 靛蓝 light */
+}
+[data-theme='notion-dark'][data-accent='indigo'] {
+  --accent: #8183ff; /* dark 提亮，保证深底对比度 */
+}
+[data-accent='burgundy'] {
+  --accent: #9f1239; /* 勃艮第 light */
+}
+[data-theme='notion-dark'][data-accent='burgundy'] {
+  --accent: #f43f5e; /* dark 提亮，保证深底对比度 */
+}
+[data-accent='gold'] {
+  --accent: #9a7b3f; /* 暗金 light（香槟金降饱和压暗，避免太跳）*/
+}
+[data-theme='notion-dark'][data-accent='gold'] {
+  --accent: #c2a55c; /* 暗金 dark */
+}

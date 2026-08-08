@@ -1,0 +1,11 @@
+/* ===== 自托管字体（无 CDN，符合 P0 红线）===== */
+/* Inter Variable 通过 main.tsx 的 `import '@fontsource-variable/inter'` 加载。 */
+
+/* Poppins 700（仅 Logo / 品牌标题用）*/
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/webfonts/poppins-700.woff2') format('woff2');
+}

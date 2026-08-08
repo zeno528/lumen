@@ -1,0 +1,13 @@
+# Lumen
+
+> 全栈书签管理服务。提供 REST API 供 AI agent / 第三方管理书签与分类。
+
+## API 规范
+- OpenAPI 3.0 spec: /openapi.json（需认证：Bearer API Token 或 JWT；相对站点根，各站点通用）
+- 列出全部端点 + 认证边界（x-auth 字段: public / api-token-or-jwt / jwt-only）
+
+## 认证
+所有 /api/* 端点（除 health / login / github 等 public）需 `Authorization: Bearer <token>`：
+- **JWT**：账号登录获得，90 天有效
+- **API Token**：`msk_` 前缀，设置界面创建，长期有效
+- **token 管理**（/api/tokens）仅限 JWT；API Token 调返回 403（防 token 繁殖）

@@ -1,0 +1,46 @@
+# Air — Go 后端热重载配置
+# 用法：项目根目录跑 `air`（或经 web/package.json 的 `pnpm dev` 间接调用）
+# 文档：https://github.com/air-verse/air
+
+root = "."
+tmp_dir = "tmp"
+
+# 加载开发环境变量（替代在 pwsh 里手敲 $env:PORT=...）
+# air 启动后端子进程时注入，对应 server/config.go 的 os.Getenv()
+env_files = [".env.dev"]
+
+[build]
+# 从根目录编译 server 包（go.mod module lumen，main 包在 server/）→ tmp/main.exe
+cmd = "go build -o ./tmp/main.exe ./server"
+# air v1.65+ 推荐 entrypoint（旧字段 bin 已 deprecated）
+entrypoint = ["./tmp/main.exe"]
+# 文件变更后延迟 1s 再重建，避免保存过程中多次触发
+delay = 1000
+# 只监听 Go 文件（前端走 Vite HMR，不归 air 管）
+include_ext = ["go"]
+# 只监听 server/ —— 彻底避开根目录 node_modules / web / data 等被 watch
+# （即使无 .go 不触发重建，watch 上万个 node_modules 文件也耗文件描述符）
+include_dir = ["server"]
+# 忽略测试文件改动
+exclude_regex = ["_test\\.go"]
+# 编译失败时不重启旧进程（避免跑着旧代码误导排查 —— 对应记忆里的 go-backend-restart 痛点）
+stop_on_error = true
+# 重建前给旧进程发中断信号，让端口/连接优雅释放
+send_interrupt = true
+
+[log]
+time = true
+
+[color]
+build = "yellow"
+main = "magenta"
+runner = "green"
+watcher = "cyan"
+
+[misc]
+# 退出 air 时清理 tmp 目录
+clean_on_exit = true
+
+[screen]
+# 每次重建清屏，只看最新日志（嫌闪可改 false）
+clear_on_rebuild = true

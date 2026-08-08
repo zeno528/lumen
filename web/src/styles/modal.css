@@ -1,0 +1,184 @@
+/* ===== 全局模态框系统 =====
+   所有模态框共用此套样式；具体弹窗通过 Dialog 组件组合内容。
+   动画、渐变分割线、滚动条等 Tailwind 不易表达的逻辑放在这里。
+   尺寸通过 --modal-max-width 控制，Dialog 组件默认使用 .modal-md。 */
+
+/* 遮罩层
+   Apple HIG Materials 风：透明基底 + 强 backdrop-filter，
+   让背景被自然模糊而非黑色蒙层。颜色用 color-mix 派生（替代旧硬编码
+   rgba(0,0,0,0.5) 在 dark 主题下变全黑黑洞的缺陷）。
+   只写标准 backdrop-filter，lightningcss 会自动补 -webkit- 前缀
+   （effects.css:1008-1010 约定）。 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, black 35%, transparent);
+  backdrop-filter: blur(5px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.modal-overlay-active {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* 模态框容器 */
+.modal {
+  --modal-max-width: 480px;
+  width: 100%;
+  max-width: var(--modal-max-width);
+  max-height: 90vh;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: visible; /* tooltip/下拉溢出正常；modal-body 自管滚动 */
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  /* 双层浮起阴影（与 .toast 同款范式）：近阴影走 --shadow-card 提供边缘清晰度，
+     远阴影走 --shadow-overlay 强化浮起感，颜色由 token 自动跟随主题切换。
+     远阴影用 color-mix 降到 70% 局部弱化（不动 --shadow-overlay token，
+     避免污染 .toast / .context-menu.show / .fab-btn 等其他引用方）。
+     dark 主题下从 0.5 → 0.35，避免大对话框叠加深灰底显得过重。 */
+  /* hairline：1px 阴影环代替硬边框，与 --shadow-card 边缘统一 */
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-card), 0 24px 60px color-mix(in srgb, var(--shadow-overlay) 70%, transparent);
+  transform: scale(0.95) translateY(10px);
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+}
+.modal-active {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+/* 尺寸 */
+.modal-md { --modal-max-width: 480px; }
+
+/* 移动端：仅收紧 max-height。
+   移动端模态框 = 居中 + 全圆角 16px + max-height:80vh，不是底部抽屉。
+   不要改 align-items/border-radius/margin/padding。*/
+@media (max-width: 768px) {
+  .modal {
+    max-height: 80vh;
+  }
+}
+
+/* 头部 */
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  flex-shrink: 0;
+  position: relative;
+}
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+/* 通用：容器底部两端渐隐分割线（单一 CSS 来源）。
+   适用场景：
+   - 桌面 Dialog 标题栏（.modal-header 同时挂这个类，见 dialog.tsx）
+   - 移动端设置 header（settings-dialog.tsx）
+   - 设置内清空书签区、子视图返回头等所有需要"两端淡出 1px 横线"的位置
+   颜色走 token（--border 自动跟随主题），用 color-mix 再降一档透明度 → 视觉柔和。
+   不能用 mask-image 作用于 border；改用 ::after 横向渐变背景实现两端淡出。*/
+.divider-fade-bottom {
+  position: relative;
+}
+.divider-fade-bottom::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border) 50%, transparent) 18%,
+    color-mix(in srgb, var(--border) 50%, transparent) 82%,
+    transparent
+  );
+}
+
+/* 关闭按钮 */
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.modal-close:hover {
+  /* 危险语义：关联 destructive token 派生（12% = 与 --destructive-soft-bg 思路一致）；
+     icon 走 --destructive 全色，确保视觉上"关闭 = 危险" */
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+/* focus-visible 而非 focus：鼠标 mousedown 会让按钮获得 focus，拖开放掉后 focus 残留
+   导致红色填充永久卡住（"被选中"假象）；键盘 Tab 聚焦仍显示，无障碍不破坏 */
+.modal-close:focus-visible {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  outline: none;
+}
+.modal-close:active {
+  transform: scale(0.95);
+}
+
+/* 内容区 */
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.modal-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* 底部 */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px 16px;
+  flex-shrink: 0;
+  position: relative;
+}
+.modal-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border) 40%, transparent) 8%,
+    color-mix(in srgb, var(--border) 40%, transparent) 92%,
+    transparent
+  );
+}
+.modal-footer-right {
+  justify-content: flex-end;
+}

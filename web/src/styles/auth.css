@@ -1,0 +1,512 @@
+/* ===== 登录页 =====
+   keyframes（floatBlob3/4/5、authCardIn、orbitFloat、orbitSpin、logoFaceIn/EyeIn/Blink/BlinkIdle）
+   全部定义在文件末尾的"Logo 动画 keyframes"和"背景动画 keyframes"两个小节 —— 原实现曾把
+   keyframes 散在 .auth-logo / .auth-blob / .auth-orbit 选择器之间，本文件按"按节归类"原则集中放置。 */
+
+.auth-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* 100vh fallback：不支持 dvh 的老浏览器 */
+  min-height: 100vh;
+  /* 100dvh 动态视口高度：iOS Safari 地址栏可见时 100vh > 可视区会撑出 body 滚动条，
+     登录页内容刚好满屏也会因 min-height: 100vh 偏大而出现滚动条，dvh 随工具栏伸缩修复。 */
+  min-height: 100dvh;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  /* 多层渐变背景：底色 + 中心聚光 */
+  background:
+    radial-gradient(ellipse 600px 500px at 50% 48%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 70%),
+    var(--bg-primary);
+  background-size: 100% 100%, 100% 100%;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 额外装饰光晕 */
+.auth-blob {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+}
+.auth-blob-3 {
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.25) 0%, rgba(6, 182, 212, 0.05) 50%, transparent 70%);
+  filter: blur(65px);
+  top: 35%;
+  left: 30%;
+  animation: floatBlob3 13s ease-in-out infinite;
+}
+.auth-blob-4 {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.03) 50%, transparent 70%);
+  filter: blur(80px);
+  bottom: 10%;
+  right: 15%;
+  animation: floatBlob4 15s ease-in-out infinite;
+}
+.auth-blob-5 {
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.02) 50%, transparent 70%);
+  filter: blur(75px);
+  top: 12%;
+  left: 18%;
+  animation: floatBlob5 14s ease-in-out infinite;
+}
+
+.auth-card {
+  padding: 44px 40px;
+  border-radius: 24px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  animation: authCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* 覆盖 .liquid-glass：登录卡是焦点元素，背景更实 + 更明显边缘 + 更重阴影，
+     和背景分离避免融为一体（深色 glass-bg 0.85 透过背景色差小）。
+     rgba 是 --glass-bg / --glass-border 同色提不透明度（token 派生）*/
+  background: rgba(47, 52, 55, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 12px 48px var(--shadow-overlay);
+}
+
+@keyframes fadeScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 卡片外围浮动装饰 */
+.auth-orbit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.auth-orbit-dot {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  animation: orbitFloat var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.auth-orbit-cross {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  will-change: transform, opacity;
+  animation: orbitFloat var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.auth-orbit-cross::before,
+.auth-orbit-cross::after {
+  content: '';
+  position: absolute;
+  background: var(--col, var(--accent));
+  border-radius: 1px;
+}
+.auth-orbit-cross::before {
+  width: 100%;
+  height: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.auth-orbit-cross::after {
+  width: 2px;
+  height: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.auth-orbit-tri {
+  position: absolute;
+  will-change: transform, opacity;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--col, var(--accent));
+  animation: orbitFloat var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.auth-orbit-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid var(--col, var(--accent));
+  background: transparent;
+  will-change: transform, opacity;
+  animation: orbitFloat var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.auth-orbit-spin {
+  animation: orbitFloat var(--dur, 6s) ease-in-out infinite,
+    orbitSpin var(--spin, 8s) linear infinite !important;
+}
+
+/* ===== Logo ===== */
+.auth-logo {
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.logo-mood {
+  display: inline-block;
+  transform-origin: center;
+  will-change: transform;
+}
+.logo-mood.angry {
+  animation: logoAngry 0.5s ease both;
+}
+.logo-mood.happy {
+  animation: logoHappy 1s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+@keyframes logoAngry {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-6px); }
+  30%      { transform: translateX(6px); }
+  45%      { transform: translateX(-5px); }
+  60%      { transform: translateX(5px); }
+  75%      { transform: translateX(-3px); }
+  85%      { transform: translateX(3px); }
+}
+@keyframes logoHappy {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-12px) scale(1.08); }
+  60%  { transform: translateY(4px) scale(0.96); }
+  80%  { transform: translateY(-2px) scale(1.02); }
+  100% { transform: translateY(0) scale(1); }
+}
+.auth-logo .logo-animated {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.auth-logo .logo-face {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logoFaceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.auth-logo .logo-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+.auth-logo .logo-eye-left {
+  animation: logoEyeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both;
+}
+.auth-logo .logo-eye-right {
+  animation: logoEyeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both;
+}
+.auth-logo .logo-eye.blink {
+  opacity: 1;
+  transform: scale(1);
+  /* 产品契约：每 1.3s 眨一次。logoBlinkIdle 在 12%-18% 处 scaleY(0.1)，单次眨眼约 250ms（自然眨眼区间） */
+  animation: logoBlinkIdle 1.3s ease-in-out infinite;
+}
+.auth-logo h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px;
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.auth-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+  letter-spacing: 2px;
+}
+.auth-welcome {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0 0 28px;
+  text-align: center;
+  animation: authCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+/* ===== 表单 ===== */
+.auth-input-wrapper {
+  position: relative;
+  margin-bottom: 16px;
+  /* 去掉入场动画 —— 避免 from opacity:0 残留造成闪烁
+     focus 时的 border-color + box-shadow 光环作为"简单动画"环节 */
+}
+
+/* 登录失败：左右晃动 + 红边红光环 */
+.auth-input-wrapper.shake {
+  animation: shakeX 0.4s ease both;
+}
+/* .error 红框样式停用（按需求）：错误反馈只剩 .shake + 错误文字 */
+.auth-input-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  opacity: 0.65;
+  transition: color 0.25s, opacity 0.25s;
+  pointer-events: none;
+  z-index: 1;
+}
+.auth-input-wrapper:focus-within .auth-input-icon {
+  color: var(--accent);
+  opacity: 0.8;
+}
+.auth-input-toggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+}
+.auth-input-wrapper:focus-within .auth-input-toggle,
+.auth-form input:not(:placeholder-shown) ~ .auth-input-toggle {
+  opacity: 0.5;
+}
+.auth-input-toggle:hover {
+  opacity: 1 !important;
+  color: var(--text-secondary);
+}
+.auth-form input {
+  width: 100%;
+  padding: 10px 20px 10px 46px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  color: var(--text-primary);
+  font-size: 16px;
+  outline: none;
+  transition: all 0.25s ease;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03)
+}
+.auth-form input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.45;
+  font-size: 13px;
+}
+.auth-form input:hover {
+  border-color: var(--border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.auth-form input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--accent);
+  background: rgba(255, 255, 255, 0.10);
+}
+.auth-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 999px;
+  font-size: 16px;
+  height: 44px;
+  margin-top: 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.auth-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ===== 底部 ===== */
+.auth-footer {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(220, 225, 235, 0.55);
+  font-size: 0.8rem;
+  z-index: 1;
+  letter-spacing: 0.5px;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.auth-footer .footer-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(200, 210, 225, 0.4);
+}
+
+/* ===== 浅色主题覆盖 ===== */
+[data-theme='light'] .auth-screen {
+  background: radial-gradient(ellipse 600px 500px at 50% 48%, color-mix(in srgb, var(--accent) 4%, transparent) 0%, transparent 70%),
+    var(--bg-primary);
+}
+[data-theme='light'] .auth-card {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 48px var(--shadow-overlay);
+  backdrop-filter: blur(20px);
+}
+[data-theme='light'] .auth-form input {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+[data-theme='light'] .auth-form input:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.33);
+}
+[data-theme='light'] .auth-form input:focus {
+  box-shadow: 0 0 0 1.5px var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+[data-theme='light'] .auth-btn {
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+[data-theme='light'] .auth-footer {
+  color: rgba(60, 60, 60, 0.55);
+}
+[data-theme='light'] .auth-footer .footer-dot {
+  background: rgba(60, 60, 60, 0.4);
+}
+
+/* ===== Logo 动画 keyframes =====
+   - logoFaceIn: 脸部入场（scale 0→1.15→0.93→1.04→1 + opacity）
+   - logoEyeIn:  眼睛入场（左眼延迟 0.35s、右眼延迟 0.5s）
+   - logoBlink:  单次眨眼（仅占位，React 端只切 idle）
+   - logoBlinkIdle: 持续眨眼循环（4% 处 scaleY(0.1)）。动画周期 1s，详见 .logo-eye.blink 规则注释 */
+@keyframes logoFaceIn {
+  0%   { transform: scale(0); opacity: 0; }
+  50%  { transform: scale(1.15); opacity: 1; }
+  70%  { transform: scale(0.93); }
+  85%  { transform: scale(1.04); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes logoEyeIn {
+  0%   { transform: scale(0); opacity: 0; }
+  50%  { transform: scale(1.3); opacity: 1; }
+  75%  { transform: scale(0.85); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes logoBlink {
+  0%, 45%, 100% { transform: scaleY(1); }
+  55%           { transform: scaleY(0.1); }
+}
+
+@keyframes logoBlinkIdle {
+  0%, 25%, 100% { transform: scaleY(1); }
+  12%, 18%      { transform: scaleY(0.1); }
+}
+
+/* 登录失败左右晃动 */
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-10px); }
+  30%      { transform: translateX(10px); }
+  45%      { transform: translateX(-8px); }
+  60%      { transform: translateX(8px); }
+  75%      { transform: translateX(-4px); }
+  90%      { transform: translateX(4px); }
+}
+
+/* ===== 背景动画 keyframes =====
+   - floatBlob3/4/5: 三层光晕缓慢漂移 + 缩放（13s/15s/14s 错相）
+   - orbitFloat:     卡片外围 14 个装饰元素（dot/cross/tri/ring）浮动
+   - orbitSpin:      给 .auth-orbit-spin 叠加旋转
+   - authCardIn:     "欢迎回来"文字入场（仅给 .auth-welcome 用，替代 fadeScaleIn） */
+@keyframes floatBlob3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  20%      { transform: translate(25px, -30px) scale(1.08); }
+  40%      { transform: translate(-15px, -20px) scale(0.95); }
+  60%      { transform: translate(-30px, 25px) scale(1.04); }
+  80%      { transform: translate(10px, 15px) scale(0.98); }
+}
+
+@keyframes floatBlob4 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(-20px, -25px) scale(1.1); }
+  66%      { transform: translate(15px, 20px) scale(0.92); }
+}
+
+@keyframes floatBlob5 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(20px, 30px) scale(1.06); }
+}
+
+@keyframes authCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes orbitFloat {
+  0%   { transform: translate(0, 0) scale(1);                          opacity: var(--opa, 0.5); }
+  25%  { transform: translate(var(--tx, 20px), var(--ty, -30px)) scale(1.2);   opacity: calc(var(--opa, 0.5) + 0.2); }
+  50%  { transform: translate(calc(var(--tx, 20px) * -0.5), calc(var(--ty, -30px) * -1.2)) scale(0.8); opacity: calc(var(--opa, 0.5) - 0.1); }
+  75%  { transform: translate(calc(var(--tx, 20px) * 0.8), var(--ty, -30px)) scale(1.1); opacity: calc(var(--opa, 0.5) + 0.15); }
+  100% { transform: translate(0, 0) scale(1);                          opacity: var(--opa, 0.5); }
+}
+
+@keyframes orbitSpin {
+  from { rotate: 0deg; }
+  to   { rotate: 360deg; }
+}
+
+/* ===== 登录页右上角主题切换按钮 =====
+   覆盖 layout.css 里的通用 .theme-toggle —— 这里是绝对定位、毛玻璃、圆角 10px */
+.auth-theme-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px;
+  color: var(--text-muted);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(12px);
+}
+
+.auth-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}

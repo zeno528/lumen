@@ -1,0 +1,173 @@
+name: Deploy
+
+# 推送到 main 自动部署；也支持 Actions 页面手动触发
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同一台服务器串行部署（避免连续推送并发覆盖），不同服务器之间并行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ─────────── 部署前验证：任一步失败均不会进入 deploy ───────────
+  verify:
+    name: CI checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm -C web install --frozen-lockfile
+      - name: Frontend typecheck
+        run: pnpm -C web typecheck
+      - name: Frontend production build
+        run: pnpm -C web build
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Go vet
+        run: go vet ./...
+      - name: Go test
+        run: go test -count=1 ./...
+      - name: Build production backend
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen-ci ./server/
+      - name: Backend health smoke test
+        shell: bash
+        run: |
+          # APP_ENV=development：冒烟用全新临时库，dev 模式让空 APP_PASSWORD 回退 admin（生产模式会拒空密码启动）
+          APP_ENV=development PORT=18081 DB_PATH="$RUNNER_TEMP/lumen-ci.db" JWT_SECRET=ci-test-secret ./lumen-ci > "$RUNNER_TEMP/lumen-ci.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          for _ in {1..10}; do
+            if curl -fsS http://127.0.0.1:18081/api/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/lumen-ci.log"
+          exit 1
+
+  # ─────────── 每台服务器独立「构建 + 部署」：不经 GitHub artifact 中转，避开 Actions 存储配额 ───────────
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # 一台失败不影响其他台
+      matrix:
+        server:
+          # ── 新增服务器：往 matrix 加一行 name，并把 { host, domain } 加进
+          #    DEPLOY_SERVERS secret（JSON，name -> {host, domain}），部署公钥加到
+          #    该服务器 ~/.ssh/authorized_keys 即可。IP/域名只存 secret，不进仓库 ──
+          - jp-1
+          - jp-2
+          - sj
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # 服务器 IP/域名只存在 DEPLOY_SERVERS secret（JSON），matrix 只带名字，
+      # 避免公开仓库暴露基础设施；jq 在 ubuntu runner 预装
+      - name: Resolve server endpoints
+        env:
+          DEPLOY_SERVERS: ${{ secrets.DEPLOY_SERVERS }}
+        run: |
+          SERVER_HOST=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].host')
+          SERVER_DOMAIN=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].domain')
+          if [ -z "$SERVER_HOST" ] || [ "$SERVER_HOST" = "null" ] || [ -z "$SERVER_DOMAIN" ] || [ "$SERVER_DOMAIN" = "null" ]; then
+            echo "Deployment target is incomplete" >&2
+            exit 1
+          fi
+          echo "::add-mask::$SERVER_HOST"
+          echo "::add-mask::$SERVER_DOMAIN"
+          echo "SERVER_HOST=$SERVER_HOST" >> "$GITHUB_ENV"
+          echo "SERVER_DOMAIN=$SERVER_DOMAIN" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Build frontend
+        run: pnpm -C web install --frozen-lockfile && pnpm -C web build
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # modernc.org/sqlite 是纯 Go，CGO_ENABLED=0 出静态二进制，服务器无需 gcc
+      - name: Build backend
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen ./server/
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Trust host
+        run: ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
+
+      # 新服务器可能没装 rsync；已装时 command -v 成功，|| 后面不会执行
+      - name: Ensure rsync is installed
+        run: ssh root@$SERVER_HOST "command -v rsync || (DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq rsync)"
+
+      # 停服 → 传文件 → 启服（二进制运行中被锁，必须先停再传）
+      - name: Stop service
+        run: ssh root@$SERVER_HOST "systemctl stop lumen || true"
+
+      - name: Upload backend binary
+        run: scp lumen root@$SERVER_HOST:/opt/lumen/lumen
+
+      # rsync --delete 增量同步：只传变化的文件，并清掉旧 hash 残留
+      - name: Sync frontend assets
+        run: rsync -az --delete web/dist/ root@$SERVER_HOST:/opt/lumen/static/
+
+      - name: Start service
+        run: ssh root@$SERVER_HOST "chmod +x /opt/lumen/lumen && systemctl start lumen"
+
+      # 健康检查在服务器本地执行，不依赖 runner 回连公网（最稳）
+      - name: Health check
+        run: |
+          ssh root@$SERVER_HOST 'for i in 1 2 3 4 5; do
+            if curl -fsS http://127.0.0.1:8080/api/health | grep -q ok; then
+              echo "✅ 健康检查通过"; exit 0
+            fi
+            echo "等待服务就绪... ($i/5)"; sleep 2
+          done
+          echo "❌ 健康检查失败，服务日志："; journalctl -u lumen -n 30 --no-pager; exit 1'
+
+      # WebSocket 实时同步健康检查（防御性监控，不阻塞部署）
+      # 401/101 = nginx 正确转发 upgrade；其他 = 可能漏配，见 lumen-deploy skill 常见问题
+      - name: WebSocket upgrade check
+        run: |
+          WS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --http1.1 \
+            -H "Connection: Upgrade" -H "Upgrade: websocket" \
+            -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+            "https://$SERVER_DOMAIN/api/ws")
+          case "$WS_CODE" in
+            401|101) echo "✅ ${{ matrix.server.name }} /api/ws upgrade 正常 ($WS_CODE)";;
+            *) echo "⚠️ ${{ matrix.server.name }} /api/ws 异常 ($WS_CODE) — nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;
+          esac

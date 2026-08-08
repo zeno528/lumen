@@ -1,0 +1,1125 @@
+/* ===== 全局效果 ===== */
+
+/* 基础重置：margin/padding/box-sizing 由 Tailwind preflight（@layer base）接管。
+   这里若再写 unlayered 的 * { padding:0 }，会因 cascade layers 规则
+   （unlayered 优先级高于 @layer utilities）覆盖掉所有 px-/py-/p- 间距类，
+   导致按钮/输入框 padding 失效、被压成纯文字宽度。 */
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+html,
+body {
+  height: 100%;
+  /* 移动端根层防橡皮筋：滚动到顶/底边界后继续拉时，浏览器默认会把整页 body
+     橡皮筋下拉（iOS rubberband / 下拉刷新），导致顶部导航栏被一起拖下露出空白。
+     none 同时关闭「向祖先链式传递」与「bounce 本身」。iOS Safari 16+ 支持。
+     依据：MDN overscroll-behavior / Chrome Developers。*/
+  overscroll-behavior-y: none;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 全局兜底：隐藏浏览器默认 :focus / :focus-visible 黑框
+   根因：按钮点击后保持 :focus，按 ESC 时浏览器切到 :focus-visible 显示黑框
+   注：纯抹除 outline，不加替代 ring */
+button:focus,
+a:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+}
+
+/* ========== 磨砂玻璃（侧边栏 / 顶栏 / 登录卡片）========== */
+.liquid-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  /* hairline：边缘用 1px 阴影环代替硬边框，层次过渡更自然（与 --shadow-card 同范式） */
+  box-shadow: 0 0 0 1px var(--glass-border), 0 4px 24px var(--shadow);
+  /* 全局入场动画：opacity + translateY + scale + backdrop-filter blur 0→20px 同步渐入，
+     "毛玻璃从清晰变模糊"的视觉效果最强。曲线 / 时长与项目其它动画（fadeInUp /
+     modal / ContextMenu）一致（cubic-bezier(0.16, 1, 0.3, 1) + 0.22s）。
+     退场动画不在本次范围（React 条件渲染卸载不播 CSS 退场动画，需要大重构）。 */
+  animation: liquidGlassIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes liquidGlassIn {
+  /* 入场动画只动 opacity + transform，不动画 backdrop-filter：
+     1. blur 0→20px 渐变本身就是闪烁源（背景从透变糊，0.22s 内明显跳变）
+     2. backdrop-filter 每帧重算模糊是性能杀手（业界共识：不动画 backdrop-filter）
+     blur 由 .liquid-glass 基类静态提供，入场即糊，干净不闪 */
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ========== 大圆角胶囊（侧边栏等）========== */
+/* corner-shape: squircle 渐进增强 —— Chrome 130+ 启用真超椭圆，旧浏览器自动忽略 */
+.squircle {
+  corner-shape: squircle;
+}
+
+/* ========== 自定义滚动条（默认透明，hover 显示）==========
+   三层选择器保证鼠标在视口任意位置
+   （html / body / .main）都能触发滚动条显示。
+   :not(:hover) 强制透明是防御性写法，防止其他规则泄漏色值。 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+/* 非 hover 态强制透明（高于后面 hover 规则的优先级场景）*/
+html:not(:hover)::-webkit-scrollbar-thumb,
+body:not(:hover)::-webkit-scrollbar-thumb,
+.main:not(:hover)::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+/* hover 任意主区域即显示 */
+html:hover::-webkit-scrollbar-thumb,
+body:hover::-webkit-scrollbar-thumb,
+.main:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+html:hover,
+body:hover,
+.main:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* ========== 可滚动容器：默认透明滚动条，hover 显示 + 始终预留 gutter ==========
+   全局 html/body/.main:hover 链路只命中带 .main class 的元素；弹窗 / 独立滚动区
+   （设置页 main、书签 .main-content）覆盖不到，自行声明此类。
+   scrollbar-gutter:stable 始终预留滚动条宽度，避免内容增减触发滚动条时容器内卡片宽度抖动
+   （设置页切 tab、书签切分类均是此场景）。 */
+.scrollbar-hover {
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+}
+.scrollbar-hover:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.scrollbar-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+.scrollbar-hover::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ========== 描述输入框滚动条（hover 显示）==========
+   textarea 的滚动条不被全局 html/body/.main:hover 链路覆盖（那只匹配
+   根元素自身滚动条），thumb 始终透明 → 单独给描述 textarea 加 hover 显示。 */
+.desc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.desc-scroll:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.desc-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.desc-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+.desc-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ========== 隐藏滚动条（unlayered，覆盖上方全局 * 规则）==========
+   Combobox dropdown 等浮层要「能滚但不显示滚动条且不占位」。
+   必须用 unlayered CSS——Tailwind 的 scrollbar-none 在 @layer utilities，
+   会被上方全局 * { scrollbar-width: thin }（unlayered）降级覆盖，
+   导致滚动条透明但仍占 thin 宽度，右侧留间隙。
+   对齐 .modal-body（modal.css）同款双保险写法。 */
+.combobox-dropdown {
+  scrollbar-width: none;
+}
+.combobox-dropdown::-webkit-scrollbar {
+  display: none;
+}
+
+/* ========== 主题切换过渡（View Transitions API）========== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.2s;
+  animation-timing-function: ease;
+}
+::view-transition-old(root) {
+  animation-name: vt-fade-out;
+}
+::view-transition-new(root) {
+  animation-name: vt-fade-in;
+}
+
+/* 尊重减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== 上下文菜单（卡片右键/三点）===== *
+   玻璃效果复用 .liquid-glass（--glass-bg / --glass-border / --shadow / backdrop-filter） */
+.context-menu {
+  position: fixed;
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 160px;
+  /* 宽度上限：长标题不无限撑宽菜单，超宽由 label 的 truncate 截断（dropdown-menu.tsx） */
+  max-width: 220px;
+  /* 高度上限：项太多时卡片内滚动，不无限加长 */
+  max-height: min(480px, 60vh);
+  overflow-y: auto;
+  /* 桌面端不预留滚动条槽位（右侧留白会让高亮块空隙偏大）；移动端在 @media 里单独预留 */
+  z-index: 1000;
+  display: none;
+}
+.context-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.context-menu.show {
+  display: block;
+  /* 参考 .batch-action-bar 的玻璃语言（effects.css:289 同款 glass 范式）：
+     - 白色渐变高光（color-mix 配 white，跟双主题；物理光是白色普适，无需新 token）
+     - blur(28px) saturate(200%) 比通用 .liquid-glass 的 blur(20px) saturate(180%) 更重
+     - 多层 box-shadow 含 1px inset 高光，模拟玻璃边缘折射
+     顶栏头像下拉的视觉契约是"展开时能隐约看到下面内容"，基底从 .liquid-glass 的 --glass-bg 0.85
+     降到 --bg-secondary 45% 不透度，让下面内容能透上来（38% 太透，50% 又太闷）。
+     backdrop-filter 覆盖 .liquid-glass 的 20px，border 仍走 .liquid-glass 的 --glass-border。 */
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, white 12%, transparent) 0%,
+      color-mix(in srgb, white 3%, transparent) 100%
+    ),
+    color-mix(in srgb, var(--bg-secondary) 45%, transparent);
+  backdrop-filter: blur(28px) saturate(200%);
+  /* 边缘：与书签卡片同款参数（1px var(--border) 环 + 6px 20px 浮层），
+     保证菜单卡片和主内容卡片视觉同一套 */
+  box-shadow: 0 0 0 1px var(--border), 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.context-menu-header {
+  padding: 8px 14px 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* header 也可能带 icon（avatar 下拉的昵称前面），跟 menu-item 同款 flex 布局 */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* header 图标与 menu-item 图标保持一致（用户实测要求"和设置/帮助图标一样"），
+   用 primary 色更醒目，token 跟随主题切换（light/dark 视觉差异比 secondary 更明显） */
+.context-menu-header .icon {
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  font-size: 0.8rem;
+}
+/* 可点击 header（传了 onClick，如「切换模型」→ 跳设置）：pointer + hover accent（文字 + 图标）。
+   hover 色必须写在这（unlayered），不能靠 Tailwind hover:text- —— 会被上面的 color 覆盖 */
+.context-menu-header.clickable {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.context-menu-header.clickable:hover,
+.context-menu-header.clickable:hover .icon {
+  color: var(--accent);
+}
+.context-menu-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition: all 0.15s;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.context-menu-item:hover {
+  /* 跟侧栏 .sidebar-item:hover 同款中性灰（layout.css:486）—— 普通项 hover 用黑/白低不透度，
+     让高亮块在玻璃菜单上能明显看出；删除项 hover 仍走下方红色。 */
+  background: color-mix(in srgb, black 6%, transparent);
+}
+
+[data-theme='notion-dark'] .context-menu-item:hover {
+  background: color-mix(in srgb, white 8%, transparent);
+}
+/* 激活态（当前选中项，如 AI 模型切换的当前 provider）：accent 文字 + accent/10 底，
+   复用 ai-section 快速切换的 accent/10 高亮语言。 */
+.context-menu-item.active {
+  position: relative;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* 激活态左侧直角竖条：::before 绝对定位，上下留 8px 避开 menu-item 的 8px 圆角，
+   直角不跟随圆角（box-shadow inset 会随圆角两端被切，丑）。 */
+.context-menu-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--accent);
+}
+.context-menu-item.active:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.context-menu-item i,
+.context-menu-item .icon {
+  width: 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  display: inline-flex;
+  justify-content: center;
+}
+.context-menu-item.edit i,
+.context-menu-item.edit .icon {
+  color: var(--accent);
+}
+.context-menu-item.delete i,
+.context-menu-item.delete .icon {
+  color: var(--destructive);
+}
+.context-menu-item.delete:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+/* AI 连通性状态点（顶栏 AI 切换下拉每项末尾 trailing）。
+   loading 配合 Tailwind animate-pulse 呼吸；绿可用 / 橙欠费 / 红失效 / 灰检测中 */
+.ai-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ai-status-dot.ok { background: var(--status-ok); }
+.ai-status-dot.warn { background: var(--status-warn); }
+.ai-status-dot.error { background: var(--destructive); }
+.ai-status-dot.loading { background: var(--text-muted); }
+
+/* ===== 桌面端批量操作按钮（顶栏胶囊按钮：图标 + 文本）=====
+   高亮块填充色使用用户指定的 #222222，走 theme.css --top-pill-bg token。 */
+.batch-toggle-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  /* 40px 容器（32 内容 + 3+3 内边距 + 1+1 边框）：胶囊外框尺寸恒 32px 保持容器不变。
+     35px 高 + 上下 -1.5px margin = 每侧留白 1.5px，左边贴齐。 */
+  height: 35px !important;
+  margin: -1.5px 0 -1.5px -3px !important;
+  padding: 0 13px !important;
+  border-radius: 999px !important;
+  background: var(--top-pill-bg) !important;
+  color: var(--top-pill-text) !important;
+  border: none !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  flex: 0 0 auto !important;
+}
+.batch-toggle-btn:hover {
+  background: color-mix(in srgb, var(--top-pill-bg) 90%, white 10%) !important;
+}
+/* 批量按钮保持深色胶囊，active 态不做 accent 高亮，与主题按钮视觉语言统一 */
+.batch-toggle-btn.active {
+  background: var(--top-pill-bg) !important;
+  color: var(--top-pill-text) !important;
+}
+
+/* ===== 桌面端悬浮添加书签按钮 =====
+   右下角圆形 fab-btn，hover scale 1.1，active scale 0.95。
+   移动端用 mobile-fab-menu 不渲染本按钮。 */
+.fab-btn {
+  position: fixed;
+  bottom: 36px;
+  right: 36px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 90;
+}
+.fab-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.fab-btn:active {
+  transform: scale(0.95);
+}
+.fab-btn-label {
+  display: none;
+}
+
+/* ===== 批量操作栏（桌面端 fixed bottom）===== */
+.batch-action-bar {
+  position: fixed;
+  bottom: 28px;
+  /* 水平居中于书签视图（主内容区）：视口中心向右偏移侧边栏宽度的一半，
+     这样批量栏中心与 .main 区域中心对齐，而非整个视口中心。*/
+  left: calc(50vw + var(--sidebar-width, 260px) / 2);
+  transform: translateX(-50%) translateY(100px);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.3s ease;
+  z-index: 900;
+  display: flex;
+  /* 桌面端 row / 移动端 column（在 @media 里切换） */
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  max-width: calc(100vw - 32px);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  backdrop-filter: blur(28px) saturate(200%);
+  /* hairline：1px 阴影环代替硬边框 */
+  border-radius: 50px;
+  box-shadow: 0 0 0 1px var(--border), 0 12px 40px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+/* 行容器：默认（桌面）display:contents 让 row 透明，移动端改回 flex row */
+.batch-row {
+  display: contents;
+}
+/* ×关闭按钮：桌面排在最右（contents 模式下 order:1 + margin-left:auto 顶住右侧）；
+   移动端定位由 row 控制 */
+.batch-action-bar .batch-close {
+  margin-left: auto;
+  order: 1;
+}
+.batch-action-bar.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  visibility: visible;
+}
+@media (max-width: 767px) {
+  /* 移动端预留滚动条槽位：触摸设备滚动条常驻占位，避免内容被挤 */
+  .context-menu {
+    scrollbar-gutter: stable;
+  }
+  .batch-action-bar {
+    /* 移动端贴底占满：贴底 + 占满宽度 +
+       上圆角下直角 + translateY 隐藏（非桌面 translateX 居中浮动）*/
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: translateY(100%);
+    max-width: 100%;
+    width: 100%;
+    border-radius: 18px 18px 0 0;
+    flex-direction: column;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .batch-action-bar.visible {
+    transform: translateY(0);
+  }
+  .batch-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .batch-row-top {
+    justify-content: space-between;
+  }
+  .batch-row-top .batch-btn,
+  .batch-row-top .batch-select-all {
+    flex: 1;
+    justify-content: center;
+  }
+  .batch-row-bottom {
+    gap: 6px;
+  }
+  .batch-row-bottom .batch-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 6px 8px;
+  }
+  .batch-action-bar .batch-close {
+    margin-left: 0;
+    order: 0;
+  }
+}
+
+.batch-action-bar .batch-count {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  padding: 4px 14px;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  border-radius: 50px;
+  text-align: center;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.batch-action-bar .batch-count:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.batch-action-bar .batch-btn {
+  padding: 4px 14px;
+  border-radius: 50px;
+  border: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.batch-action-bar .batch-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 16px var(--selection-glow);
+}
+.batch-action-bar .batch-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+/* 删除按钮：enabled 即红底白字常亮（危险操作醒目），不等 hover；
+   hover 再叠渐变 + 阴影作进一步增强。颜色走 --destructive token，跨主题一致。 */
+.batch-action-bar .batch-btn.btn-batch-delete {
+  color: #fff;
+  background: var(--destructive);
+}
+.batch-action-bar .batch-btn.btn-batch-delete:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--destructive), var(--destructive-dark));
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+}
+.batch-action-bar .batch-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+  padding: 4px 14px;
+  border-radius: 50px;
+  transition: all 0.2s;
+}
+.batch-action-bar .batch-select-all:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.batch-action-bar .batch-select-all input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.batch-action-bar .batch-close {
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+.batch-action-bar .batch-close:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.batch-action-bar .batch-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* ===== Toast 容器 ===== */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  backdrop-filter: blur(16px);
+  color: var(--toast-text);
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 浮层立体感：Apple HIG 三层阴影（edge ring + contact 近阴影）+ 一层更强的远阴影让 toast 飘起。
+     远阴影颜色走 --shadow-overlay：单值 token，专供 box-shadow 内联使用，dark 主题自动更黑。 */
+  /* hairline：边缘用 --toast-border 阴影环（toast 底为深色，需专属亮色环） */
+  box-shadow: 0 0 0 1px var(--toast-border), var(--shadow-card), 0 12px 40px var(--shadow-overlay);
+  animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.toast.success {
+  box-shadow: var(--shadow-card), 0 12px 40px var(--shadow-overlay),
+    0 0 14px rgba(34, 197, 94, 0.2);
+}
+.toast.success .toast-icon {
+  color: var(--success);
+}
+.toast.error {
+  box-shadow: var(--shadow-card), 0 12px 40px var(--shadow-overlay),
+    0 0 14px rgba(239, 68, 68, 0.2);
+}
+.toast.error .toast-icon {
+  color: var(--destructive);
+}
+.toast.warning {
+  box-shadow: var(--shadow-card), 0 12px 40px var(--shadow-overlay),
+    0 0 14px rgba(245, 158, 11, 0.2);
+}
+.toast.warning .toast-icon {
+  color: var(--status-warn);
+}
+.toast.loading .toast-icon {
+  color: var(--icon-all);
+}
+.toast .toast-icon {
+  font-size: 1rem;
+  display: inline-flex;
+}
+.toast .toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.toast .toast-close:hover {
+  opacity: 1;
+}
+.toast.hide {
+  animation: toastOut 0.4s ease forwards;
+  overflow: hidden;
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes toastOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    max-height: 60px;
+    padding: 10px 24px;
+    margin-bottom: 0;
+  }
+  40% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+    max-height: 0;
+    padding: 0 24px;
+    margin-bottom: -8px;
+  }
+}
+
+/* loading 态：脉冲边框 + 旋转 logo */
+.toast.loading {
+  border-color: rgba(99, 102, 241, 0.4);
+  animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    toastPulse 2s ease-in-out infinite;
+}
+@keyframes toastPulse {
+  0%,
+  100% {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: var(--shadow-card), 0 12px 40px var(--shadow-overlay);
+  }
+  50% {
+    border-color: rgba(99, 102, 241, 0.7);
+    box-shadow: var(--shadow-card), 0 12px 40px var(--shadow-overlay),
+      0 0 14px rgba(99, 102, 241, 0.2);
+  }
+}
+
+/* ===== 卡片进场/出场动画 ===== */
+/* 新书签描边 ring 高亮新书签 1.5s。跟随 accent 配色（原硬编码橙已改 var(--accent)）。手感已认可。*/
+.bookmark-highlight {
+  box-shadow: 0 0 0 3px var(--accent) !important;
+  opacity: 1 !important;
+  animation: none !important;
+  transition: none !important;
+}
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes popOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+.pop-in {
+  /* 0.2s ease，与 .pop-out 对称。
+     真根因不在参数：useCreateBookmark 乐观更新的占位卡(负id)→真卡(正id) DOM 替换打断动画。*/
+  animation: popIn 0.2s ease both !important;
+  pointer-events: none;
+}
+
+/* ===== 切换分类入场动画 =====
+   切换分类时父容器 key=currentCategory 变化 → React 重新挂载所有卡片 → mount 时 fadeInUp 播放。
+   等效 DOM 重建效果：新 DOM opacity:0 淡入，无之前状态无闪屏。
+   isNew 的 pop-in 用 !important 覆盖（新书签仍走 pop-in）。搜索时挂 .searching 禁用动画
+   （搜索/编辑不重播 fadeInUp）。*/
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+/* 复用 fadeInUp 给所有 .animate-enter 容器的直接子元素（书签卡片 / 分类项，同一套参数）*/
+.animate-enter > * {
+  animation: fadeInUp 0.3s ease both;
+}
+.bookmarks-grid.searching .bookmark-card {
+  animation: none !important;
+  opacity: 1;
+}
+
+/* ===== 空状态（分类为空 / 搜索无结果）=====
+   居中柔和展示：图标徽章 + 文案 + 一个添加书签的次级入口。无外层容器/边框/阴影，
+   视觉上像"留白的呼吸"，不和书签卡片抢眼。*/
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  margin: 56px auto;
+  padding: 24px 16px;
+  max-width: 420px;
+  color: var(--text-primary);
+}
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.empty-state-title {
+  font-size: 0.98rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+.empty-state-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 320px;
+}
+.empty-state-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.empty-state-action:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.empty-state-action:active {
+  transform: translateY(0);
+}
+/* 搜索时空状态不再 fadeInUp（和卡片 searching 同处理 —— 切关键词瞬间出结果，别闪）*/
+.empty-state.searching {
+  animation: none !important;
+  opacity: 1;
+}
+.pop-out {
+  animation: popOut 0.2s ease both !important;
+  pointer-events: none;
+}
+
+/* ===== 批量模式勾选徽章弹出 =====
+   选中圈的圆形徽章从 scale(0) 带回弹弹性放大到 scale(1)。*/
+@keyframes checkPop {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.check-pop {
+  animation: checkPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ===== 搜索高亮 mark ===== */
+mark {
+  background: var(--selection-glow);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* 设置页 / 按钮 / 表单控件 / 分类下拉框 / ID 徽章 / URL 去重 已迁移至 Tailwind
+   对应组件：bookmark-dialog / category-dialog / confirm-dialog / batch-dialog /
+   category-delete-dialog / settings.tsx + account|token|ai-section */
+/* 分类下拉框已迁移至 Tailwind（bookmark-dialog.tsx + createPortal）*/
+
+/* ========== 共享 button-trigger 伪装下拉（ProviderSelect / 未来其他场景）==========
+   trigger 是 button + 自定义 label + chevron；listbox 复用全局 .dropdown-options。
+   Combobox 用的是 Input trigger（视觉不同），见 .combobox-* 块。
+   视觉契约：trigger button + 自定义 label + chevron，下拉列表走全局 .dropdown-options。 */
+.dropdown-select {
+  position: relative;
+  width: 100%;
+}
+
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 38px 0 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.dropdown-trigger:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.dropdown-trigger:focus,
+.dropdown-trigger.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  outline: none;
+}
+.dropdown-trigger.placeholder .dropdown-trigger-label {
+  color: var(--text-muted);
+}
+.dropdown-trigger-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dropdown-trigger-chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.dropdown-trigger.open .dropdown-trigger-chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* AI Provider trigger 内的 logo（ProviderSelect 专属）*/
+.provider-logo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  object-fit: contain;
+}
+.provider-logo-fallback {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+/* ========== 共享伪装下拉（DropdownOptions + useDropdown）==========
+   trigger 由调用方（ProviderSelect / Combobox）自己渲染，本文件只定义 listbox 容器 + option 共用样式。
+   portal 出去的 .dropdown-options + .dropdown-option 是全局唯一来源。 */
+.dropdown-options {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  overflow-y: auto;
+  animation: dropdownOptionsIn 0.15s ease-out;
+  scrollbar-width: none;
+}
+.dropdown-options::-webkit-scrollbar {
+  display: none;
+}
+@keyframes dropdownOptionsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.12s;
+}
+.dropdown-option:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.dropdown-option.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 500;
+}
+.dropdown-option-label {
+  flex: 1;
+  min-width: 0;
+}
+.dropdown-option-suffix {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* listbox 为空时显示的提示行（Combobox 用）*/
+.dropdown-option-empty {
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: default;
+}
+
+/* 末尾特殊 option（Combobox 用 "将新建：xxx"）—— 视觉弱化以示非匹配项 */
+.dropdown-footer-option {
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+}
+
+/* ========== AI Provider 专属样式（trigger / logo / format hint / badge）==========
+   trigger button 用 .provider-trigger；logo / hint / badge 是 provider 特有元素。
+   listbox 容器复用全局 .dropdown-options。 */
+.provider-trigger .provider-hint {
+  /* 复用 .dropdown-option-suffix 的格式，• 前缀点表示非主要信息 */
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.provider-trigger .provider-hint::before {
+  content: '•';
+  margin-right: 6px;
+  color: var(--text-secondary);
+}
+
+/* 已保存 provider 右侧绿色圆点 badge */
+.dropdown-option.has-badge::after {
+  content: '';
+  margin-left: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+
+/* 玻璃元素只写标准 backdrop-filter，lightningcss build 时会自动补 -webkit- 前缀
+   （反向利用 Issue #537 的 bug：只写标准 → 输出标准 + -webkit- 两个版本）。
+   不要在源代码里手写 -webkit-backdrop-filter，否则 lightningcss 会删标准留前缀导致线上失效。*/
+
+/* ===== 敏感字段掩码（API Key / Token，替代 type=password）=====
+   只写 -webkit-text-security（WebKit 私有属性，无标准等价物）。与 backdrop-filter 的坑不同：
+   那个是「标准 + -webkit- 并存 → lightningcss 删标准留前缀」；私有属性没有标准版可删，
+   lightningcss 原样保留（build 后 grep dist 已验证）。
+   Why 不用 type=password：Chrome 自 2014 起官方故意忽略密码字段的 autocomplete（Chromium
+   PSA "Ignoring autocomplete='off' for password fields"），只要 type=password 就会触发
+   浏览器密码管理器把 API Key 误当登录密码——前面的「提供商名称/调用地址」文本框会被启发式
+   配成「用户名+密码」登录对，弹出已保存密码建议/自动填充。autocomplete="new-password"
+   只挡自动填充、挡不住建议条；data-1p-ignore / data-lpignore 只对 1Password/LastPass 扩展
+   有效，对 Chrome 内建密码管理器无效。改 type=text + 本掩码后浏览器彻底不识别为密码→零干扰。
+   视觉仍是 ••••（disc 圆点，与 password 框一致）。MDN：本属性 only affects fields that are
+   not of type=password。WebKit/Blink 全支持，Firefox 109+（2023-01）支持。
+   用法：输入框始终 type="text"，掩码态挂本类，眼睛 toggle 切换加/去本类（而非切 type）。*/
+.secret-mask {
+  -webkit-text-security: disc;
+}
+
+/* AI 填充指示器：渐变弧（bookmark-dialog.tsx FillIndicator）。
+   conic-gradient 从透明渐变到主色，mask 掏成圆环，整体旋转；
+   占用清除按钮位置，填充期间清除按钮隐藏（避免双控件并排）。 */
+.ai-fill-arc {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, transparent, var(--accent) 300deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), black calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), black calc(100% - 2px));
+  animation: ai-fill-arc-spin 0.9s linear infinite;
+}
+@keyframes ai-fill-arc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
