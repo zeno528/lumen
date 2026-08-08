@@ -19,9 +19,9 @@ function parseCurrentAvatar(currentAvatar: string): { isCustom: boolean; icon: s
     const file = currentAvatar === CUSTOM_AVATAR_KEY
       ? CUSTOM_AVATAR_FILES[0]
       : currentAvatar.slice(CUSTOM_AVATAR_KEY.length + 1)
-    return { isCustom: true, icon: 'fa-cat', customFile: file || CUSTOM_AVATAR_FILES[0] }
+    return { isCustom: true, icon: 'fa-piggy-bank', customFile: file || CUSTOM_AVATAR_FILES[0] }
   }
-  return { isCustom: false, icon: currentAvatar || 'fa-cat', customFile: CUSTOM_AVATAR_FILES[0] }
+  return { isCustom: false, icon: currentAvatar || 'fa-piggy-bank', customFile: CUSTOM_AVATAR_FILES[0] }
 }
 
 /** AVATAR_COLORS 颜色名（屏幕阅读器可读，避免直接读 hex 字符串） */
@@ -74,8 +74,8 @@ export function AvatarPicker({
     setSaving(true)
     try {
       await updateAvatar.mutateAsync({
-        avatar: isCustom ? `${CUSTOM_AVATAR_KEY}:${customFile}` : icon || 'fa-cat',
-        avatarColor: color || '#8b5cf6',
+        avatar: isCustom ? `${CUSTOM_AVATAR_KEY}:${customFile}` : icon || 'fa-piggy-bank',
+        avatarColor: color || '#f59e0b',
       })
       toast.success('头像已更新')
       onDone()

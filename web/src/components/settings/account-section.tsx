@@ -117,7 +117,7 @@ export function AccountSection({
   // === 头像预览数据 ===
   const customUrl = getCustomAvatarUrl(avatarData?.avatar)
   const AvatarIcon = resolveAvatarIcon(avatarData?.avatar) ?? Cat
-  const avatarColor = avatarData?.avatarColor || '#8b5cf6'
+  const avatarColor = avatarData?.avatarColor || '#f59e0b'
 
   // === 子操作视图（Master-Detail：SettingsDialog 切换到 subView 时渲染对应 Form）===
   if (subView === 'change-credentials')
@@ -125,7 +125,7 @@ export function AccountSection({
   if (subView === 'avatar')
     return (
       <AvatarPicker
-        currentAvatar={avatarData?.avatar || 'fa-cat'}
+        currentAvatar={avatarData?.avatar || 'fa-piggy-bank'}
         currentColor={avatarColor}
         onDone={() => onSubView(null)}
       />

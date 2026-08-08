@@ -458,8 +458,8 @@ func (s *Server) handleUpdateNickname(w http.ResponseWriter, r *http.Request) {
 
 // handleGetAvatar GET /api/auth/avatar
 func (s *Server) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
-	avatar := "fa-cat"
-	avatarColor := "#8b5cf6"
+	avatar := "fa-piggy-bank"
+	avatarColor := "#f59e0b"
 	s.db.QueryRow("SELECT value FROM settings WHERE key = 'avatar'").Scan(&avatar)
 	s.db.QueryRow("SELECT value FROM settings WHERE key = 'avatar_color'").Scan(&avatarColor)
 	writeJSON(w, http.StatusOK, map[string]string{"avatar": avatar, "avatarColor": avatarColor})

@@ -81,8 +81,9 @@
   --bg-primary: #1a1d1f;
   --bg-secondary: #222528;
   /* --bg-canvas = dark 下 main 的「中间档」色：派生自 --bg-secondary，比 --bg-primary 亮一档、仍比 sidebar 暗。
-     自动跟随主题，与 light 块的派生公式对齐（都从 secondary mix 黑色），跨主题颜色规则一致。 */
-  --bg-canvas: color-mix(in srgb, var(--bg-secondary), #000 5%);
+     自动跟随主题，与 light 块的派生公式对齐（都从 secondary mix 黑色），跨主题颜色规则一致。
+     与 --bg-card 拉开色差（canvas 明显更暗一档），让卡片从容器浮起。 */
+  --bg-canvas: color-mix(in srgb, var(--bg-secondary), #000 15%);
   /* --bg-input = dark 下输入框背景：白色 6% 半透明叠加（与 dark --border / --sidebar-icon-bg 同源反相），
      亮一档形成浮起。深色 UI 输入框宜浮不宜沉（凹陷=黑洞）；半透明自动适配底色。 */
   --bg-input: rgba(255, 255, 255, 0.06);

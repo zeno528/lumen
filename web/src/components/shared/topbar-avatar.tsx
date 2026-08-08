@@ -54,7 +54,7 @@ export function TopbarAvatar({
 
   const customUrl = getCustomAvatarUrl(avatarData?.avatar)
   const AvatarIcon = resolveAvatarIcon(avatarData?.avatar) ?? Cat
-  const avatarColor = avatarData?.avatarColor || '#8b5cf6'
+  const avatarColor = avatarData?.avatarColor || '#f59e0b'
   const nickname = nicknameData?.nickname || '用户'
   const wsStatus = useUIStore((s) => s.wsStatus)
   const dot = WS_DOT[wsStatus]
