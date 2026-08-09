@@ -130,7 +130,7 @@ export function ExportDialog({
               <span className="text-xs text-(--text-secondary)">· {size}</span>
             </div>
             {count !== null && (
-              <div className="grid grid-cols-2 border-t border-(--border) pt-2">
+              <div className="grid grid-cols-2 pt-2">
                 <div className="flex items-center gap-2">
                   <Bookmark size={14} className="text-(--accent)" />
                   <div className="flex items-baseline gap-1">
