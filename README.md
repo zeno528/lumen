@@ -2,174 +2,141 @@
 
 <p align="left">
   <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go&logoColor=white" alt="Go" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/TypeScript-7.x-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/React-19-20232A?style=flat&logo=react&logoColor=61DAFB" alt="React" /></a>
+  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/TypeScript-7.x-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat&logo=vite&logoColor=white" alt="Vite" /></a>
   <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
   <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white" alt="SQLite" /></a>
+  <a href="https://github.com/zeno528/lumen/actions/workflows/deploy.yml"><img src="https://github.com/zeno528/lumen/actions/workflows/deploy.yml/badge.svg?branch=main" alt="CI" /></a>
 </p>
-<p align="left">
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/TanStack_Router-1.x-FF4154?style=flat&logo=reactrouter&logoColor=white" alt="TanStack Router" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/TanStack_Query-5-FF4154?style=flat&logo=reactquery&logoColor=white" alt="TanStack Query" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Zustand-5-433E38?style=flat&logo=react&logoColor=white" alt="Zustand" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Radix_UI-1.x-161618?style=flat&logo=radixui&logoColor=white" alt="Radix UI" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/chi-5.2.1-0099E5?style=flat&logo=go&logoColor=white" alt="chi" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/WebSocket-1.8.15-FE6E36?style=flat&logo=websocket&logoColor=white" alt="coder/websocket" /></a>
+
+> 保存链接，AI 帮你补全；随时用搜索和 API 找回它。
+
+**Lumen 是一个自托管的 AI 书签工作台**，支持多模型接入、API Token、实时同步与本地数据存储。它不替你决定收藏什么，而是让每一条链接在需要时都能被快速找到和使用。
+
+## 预览
+
+<p>
+  <img width="49%" alt="Lumen 浅色主题书签列表" src="docs/images/lumen-light.png" />
+  <img width="49%" alt="Lumen 深色主题书签列表" src="docs/images/lumen-dark.png" />
 </p>
+
+## 用 Lumen 做什么
+
+| 你的需求 | Lumen 如何完成 |
+| --- | --- |
+| **快速收集** | 粘贴网址即可新建书签；可自动获取标题、描述和网站图标，并识别重复链接。 |
+| **清晰而轻量的图标** | 不只抓网站 favicon：先从两套品牌 SVG 图标库匹配域名及主域，优先拿到清晰的矢量图标；未命中再读取站点声明与常见路径，并由 6 个图标源并发兜底。大图会压到 64 × 64 后随书签保存，列表无需反复请求，清晰也轻量。 |
+| **整理而不堆积** | 用分类、标签和收藏组织内容，支持拖拽排序、批量移动、批量加标签和批量删除。 |
+| **更快找回** | 支持标题、网址和 ID 搜索；分类、收藏与未分类视图让常用内容始终可达。 |
+| **让 AI 做整理工作** | 根据网址智能补全标题、描述、分类和标签；配置多个模型后可随时测试、切换和复用。 |
+| **接入自己的工作流** | 创建 API Token，通过 Bearer 认证调用书签、分类与 AI 配置接口；内置受认证保护的 OpenAPI 说明。 |
+| **掌控自己的数据** | 数据存于 SQLite，支持 JSON 导入导出；浏览器标签页与设备间通过 WebSocket 同步更新。 |
+
+## AI，不绑定单一模型
+
+Lumen 预置 **DeepSeek、智谱 GLM、MiniMax、硅基流动与 Anthropic**，也支持填写兼容 OpenAI 或 Anthropic 格式的自定义服务地址。一个 Provider 可保存多份模型配置，顶栏可快速切换当前模型。
+
+AI 用于补全书签元数据，而不是替代你的收藏判断：输入网址后，可让它生成标题、描述、分类和标签。可选的 Serper 配置可在直连抓取失败时作为搜索兜底。
+
+## API 与自动化
+
+- 在设置中创建 `msk_` API Token；明文只在创建时显示一次。
+- 使用 `Authorization: Bearer <API_TOKEN>` 访问受支持的接口。
+- `/openapi.json` 提供 OpenAPI 3.0 描述，需要 JWT 或 API Token 认证。
+- Token 的创建、改名、撤销仅允许账号 JWT 执行，避免 API Token 自行扩大权限。
+
+## 快速开始
+
+### 前置条件
+
+- Go 1.26
+- Node.js 24（与 CI 一致）
+- pnpm 11
+- [Air](https://github.com/air-verse/air)（Go 开发热重载）
+
+```bash
+git clone https://github.com/zeno528/lumen.git
+cd lumen
+
+# 仅首次安装 Air
+go install github.com/air-verse/air@latest
+
+# 创建本地开发配置
+cp .env.example .env.dev
+
+# 安装依赖并同时启动 Go 后端与 Vite 前端
+pnpm -C web install
+pnpm -C web dev
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env.dev
+```
+
+打开 [http://localhost:5173](http://localhost:5173)。首次启动时，`.env.dev` 中的 `APP_PASSWORD` 会初始化登录密码；请先替换成自己的开发密码。
+
+## 部署要求
+
+Lumen 是 **单一 Go 二进制 + 静态前端 + SQLite**：构建后只需部署 `lumen` 二进制和 `static/` 目录，不依赖 Docker、Node.js、外部数据库或本地大模型运行时。
+
+**512 MB 内存、1 vCPU 的小型 服务器即可运行。** 在实际生产节点的空闲采样中，Lumen 进程 RSS 约 **19 MiB**；AI 请求由你配置的远程 Provider 执行，服务器只处理书签 API、SQLite、静态文件和 WebSocket 同步。
+
+> 以上是实际运行参考；书签量、Favicon 数据、并发访问和保留的部署副本会增加磁盘与内存占用。
+
+## 生产部署
+
+先构建前端与后端：
+
+```bash
+pnpm -C web build
+go build -o lumen ./server
+```
+
+将 `web/dist` 的内容放入 `STATIC_DIR` 指向的目录（默认 `./static`），然后以 `APP_ENV=production` 启动 `lumen`。生产环境必须配置长期稳定且非默认的 `JWT_SECRET` 与强 `APP_PASSWORD`；`JWT_SECRET` 同时用于加密已保存的 AI / 搜索服务密钥，部署后不要随意更换。
+
+仓库已配置 GitHub Actions：推送到 `main` 会依次执行前端类型检查、前端构建、Go 检查与测试，再部署。部署前需要在仓库 Secrets 中配置 `DEPLOY_SERVERS` 和 `VPS_SSH_KEY`。
+
+## 配置与安全
+
+从 [`.env.example`](.env.example) 复制出 `.env.dev` 作为本地配置。常用变量如下：
+
+| 变量 | 说明 |
+| --- | --- |
+| `APP_ENV` | `development` 或 `production`；未设置时按生产环境严格校验。 |
+| `PORT` | 后端端口；本地开发使用 `8081`。 |
+| `DB_PATH` | SQLite 数据库文件路径。 |
+| `STATIC_DIR` | 构建后的前端静态文件目录；默认 `./static`。 |
+| `JWT_SECRET` | JWT 签名与敏感配置加密密钥；生产环境必须替换默认值。 |
+| `APP_PASSWORD` | 空数据库首次启动时的初始登录密码。 |
+| `TRUSTED_PROXY_CIDR` | 可信反向代理 CIDR；未设置时不信任 `X-Forwarded-For`。 |
+
+> 请勿提交 `.env.dev`、数据库、日志或 API 密钥。它们已被 `.gitignore` 排除，但提交前仍应检查差异。
+
+## 开发验证
+
+```bash
+pnpm -C web typecheck
+pnpm -C web build
+go vet ./...
+go test ./...
+```
 
 ## 项目结构
 
-```
-Lumen/
-├── server/                       # Go 后端
-│   ├── main.go                   # 入口
-│   ├── config.go                 # 环境变量 / 配置载入(JWT fail-closed 校验)
-│   ├── models.go                 # 数据模型
-│   ├── auth.go                   # 登录 / 改密 / 账号 / 昵称 / 头像
-│   ├── auth_github.go            # GitHub OAuth 登录
-│   ├── bookmarks.go              # 书签 CRUD
-│   ├── categories.go             # 分类 CRUD
-│   ├── import_export.go          # 书签导入 / 导出
-│   ├── ai.go / ai_settings.go    # AI 摘要与设置
-│   ├── ai_provider_configs.go    # AI provider 配置
-│   ├── serper.go                 # Serper 搜索集成
-│   ├── crypto.go                 # AES-256-GCM + SHA-256 工具
-│   ├── tokens.go                 # JWT 生成与校验(token hash)
-│   ├── middleware.go             # 鉴权 / CORS / 限速
-│   ├── ws_broadcast.go           # WS 广播
-│   ├── utils.go                  # 通用辅助
-│   ├── ws/                       # WebSocket hub / handler / client
-│   ├── db/                       # SQLite 初始化 + migrations
-│   ├── data/                     # SQLite 数据库文件(运行时生成,git ignored)
-│   └── logs/                     # 运行日志(运行时生成,git ignored)
-│
-├── web/                          # React 前端
-│   ├── src/
-│   │   ├── api/                  # 统一 API 客户端 + 资源模块
-│   │   ├── components/           # 业务组件(desktop / mobile / settings / shared / ui)
-│   │   ├── hooks/                # TanStack Query 封装 + 通用 hooks
-│   │   ├── routes/               # TanStack Router 路由(login / _authed)
-│   │   ├── stores/               # Zustand 状态(auth / ui)
-│   │   ├── styles/               # CSS(Tailwind v4 + token / layout / effects)
-│   │   ├── lib/                  # 工具(cn、icon-map、URL、AI provider…)
-│   │   ├── main.tsx              # 入口
-│   │   └── routeTree.gen.ts      # 路由代码生成产物(@tanstack/router-plugin)
-│   ├── public/                   # 静态资源(头像等)
-│   ├── index.html
-│   ├── vite.config.ts
-│   └── package.json
-│
-├── docs/                         # 规范 / 设计文档
-├── work/                         # 工作区草稿 / 演示页(非产品代码)
-├── data/                         # 默认 SQLite 数据库目录(可被 DB_PATH 覆盖)
-├── .github/workflows/            # CI(deploy.yml)
-└── go.mod / go.sum
+```text
+server/        Go API、SQLite、鉴权、OpenAPI 与 WebSocket
+web/           React 前端与响应式界面
+docs/images/   README 效果图
+.github/       CI 与部署工作流
 ```
 
-## 技术栈
+## 参与贡献
 
-**后端**
-- Go 1.26
-- `go-chi/chi` HTTP 路由
-- `modernc.org/sqlite` 纯 Go SQLite(无 cgo)
-- `golang-jwt/jwt` JWT 鉴权 + HttpOnly Cookie
-- `coder/websocket` 实时同步
-- `sha256("lumen-salt" + pwd)` 密码哈希
-- `AES-256-GCM` 敏感字段加密(密钥从 `JWT_SECRET` 派生)
-- 路由注册、鉴权、CORS、限速统一在 `middleware.go`
+欢迎通过 Issue 反馈问题或提出功能想法；准备提交较大改动前，建议先说明使用场景和预期行为，方便一起确认方向。
 
-**前端**
-- React 19 + TypeScript 7.x
-- Vite 8
-  - `@vitejs/plugin-react` v6(不再吃 `react({babel})`,编译通过 `reactCompilerPreset`)
-  - `@rolldown/plugin-babel` + `babel-plugin-react-compiler` 1.0(自动 memo)
-  - `@tanstack/router-plugin` 代码生成 `src/routeTree.gen.ts`(plugin 顺序:router 先于 react)
-- TanStack Router + TanStack Query(`@tanstack/query-persist-client-core` 做本地缓存)
-- Zustand 5(客户端状态 + 持久化)
-- Tailwind CSS v4(`@tailwindcss/vite`),CSS token 走 `src/styles/theme.css` 双主题块
-- Radix UI(`radix-ui`)原始包 + shadcn 风格组件 + Lucide 图标
-- 主题切换走属性选择器 `[data-theme='notion-dark']`(自定义 dark 变体,不走 OS `prefers-color-scheme`)
+## 许可证
 
-**数据流**
-- 服务端状态 → TanStack Query;客户端状态 → Zustand;组件通信 → props / context
-- 渲染:`state → JSX → className`,无命令式 DOM
-- 全局配置:`/api` 在 dev / preview 都代理到 `localhost:8081`,WS 走同源 `/api/ws`
-
-## 环境变量
-
-| 变量 | 说明 |
-|:-----|:-----|
-| `APP_ENV` | `development` / `production`。**缺失或非 `development` 一律按生产严格对待**。本地开发走 `.env.dev`(`.env.example` 为模板,air 自动加载) |
-| `PORT` | 监听端口。开发固定 `8081`(Vite proxy 写死) |
-| `DB_PATH` | SQLite 路径,默认 `data/bookmarks.db` |
-| `JWT_SECRET` | JWT 签名密钥,**同时派生 AES 密钥加密 AI/Serper key,首次确定后不可改**。`development` 允许默认值;`production` 必须是强随机值,**默认/空值会拒绝启动** |
-| `APP_PASSWORD` | 仅首次启动(DB 无 `password_hash`)初始化密码用一次。`development` 留空回退 `admin`;`production` **禁止空或 `admin`,否则拒绝启动**。已有密码的库忽略此项 |
-| `TRUSTED_PROXY_CIDR` | 可信反代 CIDR,空 = 不信任 XFF(防伪造绕过限速) |
-
-> 生产安全默认(fail-closed):未显式声明 `APP_ENV=development` 时,服务对危险默认值**拒绝启动** —— 默认 JWT_SECRET、空密码或 `admin` 初始化都会直接报错退出,避免带着公开仓库里人人可见的默认凭据上线。
-
-## 重置密码
-
-后端密码以 `SHA-256("lumen-salt" + password)` 形式存储在 SQLite 的 `settings` 表 `password_hash` 字段中;账号哈希存在 `username_hash`。如忘记密码,有两种重置方式:
-
-### 方式一:有旧密码(推荐)
-
-登录后在 `设置 → 账号 / 密码` 修改,或直接调 API:
-
-```bash
-curl -X PUT https://<host>/api/auth/password \
-  -H "Content-Type: application/json" \
-  -H "Cookie: token=<登录态>" \
-  -d '{"currentPassword":"<旧密码>","newPassword":"<新密码>"}'
-```
-
-成功后服务端会**递增**内存里的 `token_version` 并写回数据库,所有旧 token 立即失效。
-
-### 方式二:忘记密码 / 改密失败兜底
-
-直接改 SQLite 数据库。数据库默认在 `./data/bookmarks.db`(`DB_PATH` 可改):
-
-```bash
-# 1) 停服
-systemctl stop lumen       # 或 kill 掉 lumen-server 进程
-
-# 2) 计算新密码哈希(SHA-256("lumen-salt" + 新密码)的 hex)
-NEW_HASH=$(printf 'lumen-salt%s' '你的新密码' | sha256sum | awk '{print $1}')
-
-# 3) 写入数据库
-sqlite3 ./data/bookmarks.db <<SQL
-INSERT INTO settings (key, value) VALUES ('password_hash', '$NEW_HASH')
-ON CONFLICT(key) DO UPDATE SET value = '$NEW_HASH';
--- 顺手重置 token 版本,把所有旧登录态作废
-INSERT INTO settings (key, value) VALUES ('token_version', '0')
-ON CONFLICT(key) DO UPDATE SET value = '0';
-SQL
-
-# 4) 重新启动
-systemctl start lumen
-```
-
-如果是首装、数据库里**还没有** `password_hash` 记录,用环境变量 `APP_PASSWORD=你的强密码` 启动一次即可初始化(由 `server/config.go` 读取)。**生产环境**(`APP_ENV=production` 或未设)下,`APP_PASSWORD` 留空或为 `admin` 会被**拒绝启动**,必须设强密码;`development` 留空则回退 `admin`。详见上方「环境变量」。
-
-## 快捷键
-
-注册点:`web/src/hooks/use-hotkeys.ts`,挂在 desktop `app-shell.tsx:118` 与 mobile `mobile-shell.tsx:70`。下表只列**全局 hotkey 系统注册**的 7 条快捷键;dialog/form 内的 `Enter` / `Esc` / `Tab` 不在本表。
-
-> `meta` = `Ctrl`(Windows/Linux)或 `Cmd`(macOS)。`useHotkeys` 用 `e.ctrlKey || e.metaKey` 自动兼容。
-
-| 快捷键 | 行为 | 备注 |
-|:-------|:-----|:----|
-| `Ctrl/Cmd + K` | 聚焦搜索框 | desktop / mobile 都生效 |
-| `Ctrl/Cmd + I` | 打开新建书签 dialog | |
-| `Ctrl/Cmd + Shift + I` | 打开新建分类 dialog | ⚠ 占用浏览器 DevTools,开发时改 F12 |
-| `Ctrl/Cmd + B` | 切换书签批量模式 | 再按一次或 `Esc` 退出 |
-| `Ctrl/Cmd + Shift + B` | 切换分类批量模式 | 再按一次或 `Esc` 退出 |
-| `Ctrl/Cmd + Enter` | 保存当前 dialog | 根据打开的 dialog 类型自动派发 submit |
-| `Esc` | 关闭 dialog → 退出批量 → 清空搜索 | 优先级:Dialog 自管 > 批量模式 > 搜索 |
-
-### 未注册但常见的快捷键
-
-- `Ctrl/Cmd + ,`(设置)─ 仅顶栏齿轮 / 头像菜单入口
-- `Ctrl/Cmd + F`(查找)─ 仅清搜索,不接管浏览器原生查找
-- `Ctrl/Cmd + D`(添加当前页书签)─ 未实现
-- `Ctrl/Cmd + /`(快捷键面板)─ 仅侧栏 → 帮助页(`/help` 的"快捷键"章节)
+Lumen 以 [MIT License](LICENSE) 开源。
