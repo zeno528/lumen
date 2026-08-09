@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileCode, Save } from 'lucide-react'
+import { Bookmark, FileCode, Folder, Save } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ export function ExportDialog({
   const [blob, setBlob] = useState<Blob | null>(null)
   const [size, setSize] = useState('')
   const [count, setCount] = useState<number | null>(null)
+  const [categoryCount, setCategoryCount] = useState<number | null>(null)
   const [filename, setFilename] = useState('')
   const [error, setError] = useState<string | null>(null)
   const fetched = useRef(false)
@@ -37,10 +38,10 @@ export function ExportDialog({
     fetched.current = true
 
     const now = new Date()
-    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
     const host = location.hostname.replace(/^www\./, '').split('.')[0]
     const suffix = ids?.length ? `-selected${ids.length}` : ''
-    setFilename(`lumen-backup-${host}-${date}${suffix}`)
+    setFilename(`lumenbackup-${host}-${date}${suffix}`)
     setLoading(true)
     setError(null)
 
@@ -60,6 +61,7 @@ export function ExportDialog({
         const sizeMB = (b.size / 1024 / 1024).toFixed(2)
         setSize(b.size >= 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`)
         setCount(data.bookmarks?.length ?? 0)
+        setCategoryCount(data.categories?.length ?? 0)
       })
       .catch((e) => {
         setError(e.message)
@@ -75,7 +77,7 @@ export function ExportDialog({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${filename}.json`
+    a.download = filename.endsWith('.json') ? filename : `${filename}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -110,7 +112,9 @@ export function ExportDialog({
           <Input
             value={filename}
             onChange={(e) => setFilename(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
             placeholder="导出文件名"
+            aria-label="文件名"
           />
         </div>
 
@@ -119,15 +123,30 @@ export function ExportDialog({
         )}
 
         {!loading && !error && blob && (
-          <div className="flex flex-col gap-1.5 p-3 rounded-[10px] bg-(--bg-primary) border border-(--border)">
+          <div className="flex flex-col gap-2.5 p-3 rounded-[10px] bg-(--bg-primary) border border-(--border)">
             <div className="flex items-center gap-2 text-sm">
               <FileCode size={14} className="text-(--accent)" />
-              <span className="font-semibold">{size}</span>
+              <span className="font-semibold">JSON</span>
+              <span className="text-xs text-(--text-secondary)">· {size}</span>
             </div>
             {count !== null && (
-              <div className="flex items-center gap-2 text-xs text-(--text-secondary)">
-                <Save size={14} className="text-(--accent)" />
-                <span>{count} 个书签</span>
+              <div className="grid grid-cols-2 border-t border-(--border) pt-2">
+                <div className="flex items-center gap-2">
+                  <Bookmark size={14} className="text-(--accent)" />
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg leading-none font-semibold tabular-nums text-(--text-primary)">{count}</span>
+                    <span className="text-sm text-(--text-secondary)">个书签</span>
+                  </div>
+                </div>
+                {categoryCount !== null && (
+                  <div className="flex items-center gap-2 border-l border-(--border) pl-3">
+                    <Folder size={14} className="text-(--accent)" />
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg leading-none font-semibold tabular-nums text-(--text-primary)">{categoryCount}</span>
+                      <span className="text-sm text-(--text-secondary)">个分类</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
