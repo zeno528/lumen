@@ -32,6 +32,10 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      '/openapi.json': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+      },
     },
   },
   preview: {
@@ -41,6 +45,10 @@ export default defineConfig({
         target: 'http://localhost:8081',
         changeOrigin: true,
         ws: true,
+      },
+      '/openapi.json': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
       },
     },
   },

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Check, Plus, Pencil, Trash2, KeyRound, X } from 'lucide-react'
+import { Copy, Check, Plus, Pencil, Trash2, KeyRound, X, ExternalLink } from 'lucide-react'
 import { listTokens, createToken, updateToken, deleteToken } from '@/api/settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
+import { useAuthStore } from '@/stores/auth'
 import { SECTION_CLASS } from './section-styles'
 import { cn } from '@/lib/utils'
 
@@ -93,6 +94,24 @@ export function TokenSection() {
     }
   }
 
+  const handleOpenAPIDocs = async () => {
+    const popup = window.open('', '_blank')
+    if (!popup) return
+    try {
+      const authToken = useAuthStore.getState().token
+      const res = await fetch('/openapi.json', {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      })
+      if (!res.ok) throw new Error(`请求失败 (${res.status})`)
+      const url = URL.createObjectURL(await res.blob())
+      popup.location.href = url
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (e) {
+      popup.close()
+      toast.error('API 文档打开失败: ' + (e as Error).message)
+    }
+  }
+
   const fmtDate = (s?: string) => {
     if (!s) return ''
     try {
@@ -111,12 +130,27 @@ export function TokenSection() {
   return (
     <section className="flex flex-col gap-2">
       <div>
-        <h3 className="text-base font-semibold text-(--text-primary) inline-flex items-center gap-2">
-          <KeyRound size={16} />
-          API Token
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-(--text-primary) inline-flex items-center gap-2">
+            <KeyRound size={16} />
+            API Token
+          </h3>
+        </div>
         <p className="text-xs text-(--text-muted) mt-0.5">
-          用于第三方调用本服务 API（Bearer 鉴权，与登录 JWT 独立）
+          用于 AI agent 调用本服务 API（Bearer 鉴权，与登录 JWT 独立）
+          {' '}
+          <a
+            href="/openapi.json"
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => {
+              e.preventDefault()
+              void handleOpenAPIDocs()
+            }}
+            className="inline-flex items-center gap-1 align-middle text-(--accent) hover:underline"
+          >
+            <ExternalLink size={11} /> 查看 API 文档
+          </a>
         </p>
       </div>
       <div className={SECTION_CLASS}>
