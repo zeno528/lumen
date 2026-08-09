@@ -79,13 +79,9 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 	var prompt string
 	// 清洗标题：去掉 "GitHub - owner/repo: ..." 前缀
 	meta.Title = cleanTitle(meta.Title)
-	// 清洗描述：去掉 GitHub 仓库后缀（如 " - owner/repo"）
-	if meta.Description != "" && strings.Contains(meta.Description, " - ") {
-		parts := strings.SplitN(meta.Description, " - ", 2)
-		if strings.Contains(parts[1], "GitHub") || strings.Contains(parts[1], "/") {
-			meta.Description = strings.TrimSpace(parts[0])
-		}
-	}
+	// 注：曾在此清洗 description 的 " - owner/repo" 后缀，但 GitHub 已改 og:description 格式
+	//（现为 "Tagline. Contribute to owner/repo..."，不含 " - "），该清洗已失效且 "/" 条件会误伤
+	// 含斜杠的正常描述（如 "工具 - 支持 GPT/Claude"）。实测 8 站 0 触发，已移除，保留完整 desc 喂 AI。
 
 	// 构建分类排除提示
 	tagExclude := ""
