@@ -6,6 +6,33 @@ import (
 	"testing"
 )
 
+func TestParseAIResultNormalizesTitleToSiteAndPageTemplate(t *testing.T) {
+	result, err := parseAIResult(`{"title_cn":"Starter Story：真实盈利创业项目数据库"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result["title_cn"]; got != "Starter Story - 真实盈利创业项目数据库" {
+		t.Fatalf("title_cn = %q, want fixed site-and-page template", got)
+	}
+}
+
+func TestParseAIResultDropsGenericPageSuffix(t *testing.T) {
+	result, err := parseAIResult(`{"title_cn":"DeepSeek API Docs - 提示词库页面"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := result["title_cn"]; got != "DeepSeek API Docs - 提示词库" {
+		t.Fatalf("title_cn = %q, want a meaningful page purpose without generic suffix", got)
+	}
+}
+
+func TestNormalizeAITagsKeepsFourSimpleChineseTerms(t *testing.T) {
+	got := normalizeAITags("提示词库, Prompt, DeepSeek, 代码助手, 写作助手, 角色扮演, 代码助手")
+	if got != "提示词库,代码助手,写作助手,角色扮演" {
+		t.Fatalf("normalizeAITags() = %q, want four simple Chinese terms", got)
+	}
+}
+
 func TestBookmarkSearchIncludesCategoriesTermsAndLiteralWildcards(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)

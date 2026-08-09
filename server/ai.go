@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 var aiClient = &http.Client{
@@ -116,14 +117,14 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 		prompt = fmt.Sprintf(`你是一个书签整理专家。根据以下信息生成书签的中文标题、描述、标签和分类。技术术语保留英文。
 
 <rules>
-- title_cn: 精确页面名（站点名仅作标识） - 一句话概括该页面，10-30字
-- description_cn: 必填，一句话摘要，说明精确页面内容或用途，30-60字
+- title_cn: 严格使用“网站名 - 页面用途”格式；网站名在前，中间只能使用半角空格-半角空格，禁止使用冒号、竖线或破折号；页面用途只写有信息量的主题或动作，禁止以“页面”“网站”“文档”结尾
+- description_cn: 必填，一句话说明这个精确页面收录的具体内容或能完成的动作；禁止只介绍整个网站、模型或品牌，30-60字
 - URL 中有意义的路径、查询参数或片段标识的是精确页面；title_cn 和 description_cn 必须描述该页面，不得退回成通用网站介绍
 - 只根据提供的 URL 和页面证据输出事实；没有证据不得补充或猜测
-- tags: 2-4个增量搜索词，英文逗号分隔，可用中文、英文或较长技术名称；排除分类名、title_cn/description_cn/URL 已明确出现的词，以及 AI、工具、平台、网站等宽泛标签%s
+- tags: 必须给出恰好4个用户日常会输入的中文检索词，每个2-8字，英文逗号分隔；少于或多于4个都不合格；优先页面主题、用途、对象的简单常用叫法；即使标题或描述已有相同词也要保留，禁止英文、复杂专业术语、宽泛词和重复标签；排除 AI、工具、平台、网站、示例等宽泛标签%s
 - %s
 - 无论原文是什么语言，都要翻译成中文并精简到30-60字，不要堆砌细节
-- 只输出JSON，不用解释: {"title_cn":"...","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
+- 只输出JSON，不用解释: {"title_cn":"网站名 - 页面用途","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
 </rules>
 
 <categories>%s</categories>%s
@@ -138,13 +139,13 @@ URL: %s
 		prompt = fmt.Sprintf(`你是一个书签整理专家。只根据这个URL中可验证的信息生成中文标题、描述、标签和分类。技术术语保留英文。
 
 <rules>
-- title_cn: 根据 URL 中可验证的信息生成中文标题，10-30字
-- description_cn: 必填，只根据 URL 中可验证的信息生成一句话摘要，30-60字
+- title_cn: 严格使用“网站名 - 页面用途”格式；网站名在前，中间只能使用半角空格-半角空格，禁止使用冒号、竖线或破折号；页面用途只写有信息量的主题或动作，禁止以“页面”“网站”“文档”结尾
+- description_cn: 必填，只根据 URL 中可验证的信息说明这个精确页面的具体内容或能完成的动作；禁止只介绍整个网站、模型或品牌，30-60字
 - URL 中有意义的路径、查询参数或片段标识的是精确页面；title_cn 和 description_cn 必须描述该页面，不得退回成通用网站介绍
 - 只根据提供的 URL 和页面证据输出事实；没有证据不得补充或猜测
-- tags: 2-4个增量搜索词，英文逗号分隔，可用中文、英文或较长技术名称；排除分类名、title_cn/description_cn/URL 已明确出现的词，以及 AI、工具、平台、网站等宽泛标签%s
+- tags: 必须给出恰好4个用户日常会输入的中文检索词，每个2-8字，英文逗号分隔；少于或多于4个都不合格；优先页面主题、用途、对象的简单常用叫法；即使标题或描述已有相同词也要保留，禁止英文、复杂专业术语、宽泛词和重复标签；排除 AI、工具、平台、网站、示例等宽泛标签%s
 - %s
-- 只输出JSON，不用解释: {"title_cn":"...","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
+- 只输出JSON，不用解释: {"title_cn":"网站名 - 页面用途","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
 </rules>
 
 <categories>%s</categories>%s
@@ -199,6 +200,9 @@ URL: %s
 	if _, ok := result["category"]; !ok {
 		result["category"] = ""
 	}
+	if tags, ok := result["tags"]; ok {
+		result["tags"] = normalizeAITags(tags)
+	}
 	result["title"] = meta.Title
 	result["description"] = meta.Description
 	result["usedSerper"] = fmt.Sprint(usedSerper)
@@ -244,7 +248,67 @@ func parseAIResult(text string) (map[string]string, error) {
 			return nil, fmt.Errorf("解析 AI 结果失败: %v", err)
 		}
 	}
+	if title, ok := result["title_cn"]; ok {
+		result["title_cn"] = normalizeAITitle(title)
+	}
 	return result, nil
+}
+
+// normalizeAITitle 把模型常用的标题分隔符统一成“网站名 - 页面用途”。
+func normalizeAITitle(title string) string {
+	title = strings.TrimSpace(title)
+	separators := []string{" - ", "：", ":", "｜", "|", " — ", " – "}
+	index, separator := -1, ""
+	for _, candidate := range separators {
+		if i := strings.Index(title, candidate); i >= 0 && (index == -1 || i < index) {
+			index, separator = i, candidate
+		}
+	}
+	if index <= 0 {
+		return title
+	}
+
+	site := strings.TrimSpace(title[:index])
+	purpose := strings.TrimSpace(title[index+len(separator):])
+	if purpose == "" {
+		return title
+	}
+	purpose = strings.NewReplacer("：", "，", ":", "，", "｜", "，", "|", "，", " — ", "，", " – ", "，", " - ", "，").Replace(purpose)
+	purpose = strings.TrimSuffix(purpose, "页面")
+	if purpose == "" {
+		return title
+	}
+	return site + " - " + purpose
+}
+
+func normalizeAITags(tags string) string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, 4)
+	for _, tag := range strings.FieldsFunc(tags, func(r rune) bool { return r == ',' || r == '，' }) {
+		tag = strings.TrimSpace(tag)
+		key := strings.ToLower(tag)
+		if tag == "" || !containsHan(tag) {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, tag)
+		if len(result) == 4 {
+			break
+		}
+	}
+	return strings.Join(result, ",")
+}
+
+func containsHan(text string) bool {
+	for _, r := range text {
+		if unicode.Is(unicode.Han, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // ==================== OpenAI 兼容 Provider (DeepSeek / OpenAI / Custom) ====================
