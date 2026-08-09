@@ -313,13 +313,15 @@ function HelpPage() {
           </p>
           <H3>导出</H3>
           <ul className="list-disc pl-5 space-y-1">
-            <li>全部导出：JSON 文件名 <Code>lumen-backup-{`<host>`}-{`<YYYY-MM-DD>`}.json</Code>，内含全部书签 + 全部分类。</li>
+            <li>可在导出窗口选择格式：<strong>JSON</strong> 用于完整备份，可再次导入；<strong>HTML</strong> 是可直接在浏览器打开的只读书签页。</li>
+            <li>HTML 按分类展示书签卡片，保留网站图标、标题、域名、描述、标签和收藏标记；它只用于查看，不支持导入。</li>
+            <li>默认文件名为 <Code>lumenbackup-{`<host>`}-{`<YYYYMMDD>`}</Code>，扩展名会随所选格式自动补为 <Code>.json</Code> 或 <Code>.html</Code>。</li>
             <li>批量导出：先进入批量模式选中书签（<Kbd>Ctrl</Kbd> + <Kbd>B</Kbd>），底部操作栏选择「导出选中」即可下载。</li>
-            <li>下载流程：点击「导出」-&gt; 系统自动拉数据 -&gt; 弹出模态框显示明细（数量 / 文件大小 / 文件名）-&gt;「下载」按钮二次确认。</li>
+            <li>导出流程：点击「导出」-&gt; 系统自动拉取数据 -&gt; 选择文件名和格式 -&gt; 查看数量与文件大小 -&gt; 点击「导出」下载。</li>
           </ul>
           <H3>导入</H3>
           <p>
-            点击「导入」选择之前导出的 JSON 文件即可。采用<strong>自动合并</strong>模式，
+            导入目前<strong>只支持 JSON</strong>：点击「导入」选择之前导出的 JSON 文件即可。采用<strong>自动合并</strong>模式，
             已存在的 URL 会被跳过（依赖数据库 UNIQUE 约束去重），导入完成弹模态框显示
             「新增 / 跳过 / 失败」统计 + 命中分类列表。
           </p>
