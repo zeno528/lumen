@@ -80,7 +80,7 @@ export const AI_APPLY_URLS: Record<string, string> = {
   zhipu: 'https://open.bigmodel.cn',
   anthropic: 'https://console.anthropic.com',
   minimax: 'https://platform.minimaxi.com',
-  siliconflow: 'https://cloud.siliconflow.cn',
+  siliconflow: 'https://cloud.siliconflow.cn/i/3SOwJUoq',
 }
 
 /** 下拉顺序（custom 在最后）*/

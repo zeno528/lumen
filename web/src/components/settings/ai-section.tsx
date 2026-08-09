@@ -567,12 +567,7 @@ export function AiSection({
                           <Bot size={20} className="shrink-0 text-(--text-muted)" />
                         )}
                         <span className="flex flex-col min-w-0">
-                          <span
-                            className={cn(
-                              'text-xs font-medium truncate',
-                              isActive ? 'text-(--accent)' : 'text-(--text-primary)',
-                            )}
-                          >
+                          <span className="text-xs font-medium truncate text-(--text-primary)">
                             {cLabel}
                           </span>
                           <span className="text-[10px] text-(--text-muted) truncate">
