@@ -219,19 +219,12 @@ export function BookmarkDialog({
   ) => {
     const category = selectedCategory || suggestedCategory
     let categoryId: number | null = null
-    if (category && (selectedCategory || (category.length <= 20 && !/[,，]/.test(category)))) {
+    // 分类只由用户掌控：AI 建议的 category 仅命中已有分类才用，不命中则留空（未分类），绝不新建
+    if (category) {
       const existing = categories.find(
         (c) => c.name.trim().toLowerCase() === category.toLowerCase(),
       )
       if (existing) categoryId = existing.id
-      else {
-        try {
-          const created = await createCategoryMut.mutateAsync({ name: category })
-          categoryId = created.id
-        } catch {
-          /* 分类创建失败不阻塞保存 */
-        }
-      }
     }
 
     const categoryNames = new Set(categories.map((c) => c.name.trim().toLowerCase()))

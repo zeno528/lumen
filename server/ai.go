@@ -16,17 +16,11 @@ var aiClient = &http.Client{
 	Timeout: 30 * time.Second,
 }
 
-// categoryExamples 分类 few-shot 示例池：仅当示例的分类名确实出现在用户已有分类中才注入
-// （保证示例的标签空间与真实分类一致；few-shot 中格式/标签空间比示例本身更关键，见 Min et al. 2022）
-var categoryExamples = []struct{ url, category string }{
-	{"https://platform.openai.com/", "AI工具"},
-	{"https://huggingface.co/", "AI工具"},
-	{"https://github.com/", "开发工具"},
-	{"https://www.docker.com/", "开发工具"},
-	{"https://www.figma.com/", "UI设计"},
-	{"https://www.vultr.com/", "VPS工具"},
-	{"https://www.namecheap.com/", "域名购买"},
-}
+// categoryExamples 分类 few-shot 示例池：仅当示例的分类名确实出现在用户已有分类中才注入。
+// 已清空：硬编码 (url,category) 对用户动态分类体系覆盖率极低（多数永不注入），且具体映射易
+// 误导类比（如 AI 平台被先例带偏归“AI工具”）。分类判断改由 categoryRule 判定逻辑承担（判
+// 本质→选已有最匹配），不依赖固定示例。
+var categoryExamples = []struct{ url, category string }{}
 
 // aiTestClient 单独给 /api/ai-test 用：测试是 max_tokens:1 最小探针，正常 2~5s 应答，
 // 15s 兜底覆盖抖动又远小于 aiClient 的 30s（避免用户看 30s spinner 以为卡死）。
@@ -95,13 +89,13 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 
 	// 构建分类排除提示
 	tagExclude := ""
-	// 分类建议提示：优先复用已有分类，其次新建
+	// 分类建议提示：强制从已有分类中选最匹配的，禁止新建（分类体系由用户掌控）
 	categoryRule := "- category: 给出这个网站所属的中文分类名（2-6字）"
 	// few-shot 示例块：只注入分类名确实在用户已有分类里的示例，保持标签空间一致
 	examplesBlock := ""
 	if len(req.Categories) > 0 {
 		tagExclude = "\n- tags 不要使用以下已有分类名: " + strings.Join(req.Categories, "、")
-		categoryRule = "- category: 必须从已有分类中选出语义最匹配、最具体的一个并原样返回其名称（禁止选宽泛分类）；仅当都不合适时才新建（2-6字）"
+		categoryRule = "- category: 先判断这个网址的本质属性（它究竟是什么、给人用来干什么、是被动工具还是自主智能体或内容平台），再从已有分类中选最能精确刻画该本质的一个，原样返回名称。必须从已有分类中选一个匹配度最高的，禁止新建分类——分类体系由用户维护，即使没有完美匹配也要选最接近的那个。多个分类都能装下时选最具体贴切的；宽泛分类（能涵盖大量互不相关网站的，如通用工具类）只在网址没有更精确属性时才兜底。不要只凭表面关键词归类，要看网址的自我定位与功能性质"
 		catSet := make(map[string]bool, len(req.Categories))
 		for _, c := range req.Categories {
 			catSet[strings.TrimSpace(c)] = true
