@@ -1123,3 +1123,18 @@ mark {
     transform: rotate(360deg);
   }
 }
+
+/* AI 按钮流体渐变：扩大背景后缓慢平移，形成 Codex/Claude Code 式的 shimmer 感。 */
+.ai-gradient-flow {
+  background-size: 240% 240%;
+  animation: ai-gradient-flow 8s ease-in-out infinite;
+}
+@keyframes ai-gradient-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
