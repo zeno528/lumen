@@ -33,6 +33,13 @@ func TestNormalizeAITagsKeepsFourSimpleChineseTerms(t *testing.T) {
 	}
 }
 
+func TestNormalizeAITagsStripsAIPrefix(t *testing.T) {
+	got := normalizeAITags("AI 排行,模型评测,AI评测,人工智能助手,大模型")
+	if got != "排行,模型评测,评测,助手" {
+		t.Fatalf("normalizeAITags() = %q, want AI prefixes stripped and deduped", got)
+	}
+}
+
 func TestBookmarkSearchIncludesCategoriesTermsAndLiteralWildcards(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)
