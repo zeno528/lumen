@@ -293,6 +293,7 @@ export function BookmarkDialog({
         normalized,
         categories.map((c) => c.name),
         ac.signal,
+        { title, description: desc, tags },
       )
       // 优先用 AI 翻译的中文，缺则回退本地原始提取
       const finalTitle = meta.title_cn || meta.title || ''

@@ -51,6 +51,11 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URL        string   `json:"url"`
 		Categories []string `json:"categories"`
+		Previous   struct {
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			Tags        string `json:"tags"`
+		} `json:"previous"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "缺少 url 参数"})
@@ -111,17 +116,21 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 			examplesBlock = "\n<examples>\n" + strings.Join(exs, "\n") + "\n</examples>"
 		}
 	}
+	variationBlock := ""
+	if req.Previous.Title != "" || req.Previous.Description != "" || req.Previous.Tags != "" {
+		variationBlock = fmt.Sprintf("\n\n上一次生成：标题=%s；描述=%s；标签=%s。此次重新生成时，标题、描述和四个标签都必须与上一次不同；标题仍须遵守“网站名 - 页面用途”格式，网站名和页面用途两部分都可使用页面证据支持的中文别称或同义表述，例如“DeepSeek API Docs”可写为“DeepSeek API文档”，但不得为了变化编造事实。", req.Previous.Title, req.Previous.Description, req.Previous.Tags)
+	}
 
 	if meta.Title != "" || meta.Description != "" {
 		// 本地提取到了内容，AI 只需翻译
 		prompt = fmt.Sprintf(`你是一个书签整理专家。根据以下信息生成书签的中文标题、描述、标签和分类。技术术语保留英文。
 
 <rules>
-- title_cn: 严格使用“网站名 - 页面用途”格式；网站名在前，中间只能使用半角空格-半角空格，禁止使用冒号、竖线或破折号；页面用途只写有信息量的主题或动作，禁止以“页面”“网站”“文档”结尾
+- title_cn: 严格使用“网站名 - 页面用途”格式；网站名取页面标题里的品牌名原样（保持大小写与空格，如“LLM Stats”，禁止照抄 URL 域名的小写连字符形式如“llm-stats”），中间只能使用半角空格-半角空格，禁止使用冒号、竖线或破折号；页面用途只写有信息量的主题或动作，禁止以“页面”“网站”“文档”结尾
 - description_cn: 必填，一句话说明这个精确页面收录的具体内容或能完成的动作；禁止只介绍整个网站、模型或品牌，30-60字
 - URL 中有意义的路径、查询参数或片段标识的是精确页面；title_cn 和 description_cn 必须描述该页面，不得退回成通用网站介绍
 - 只根据提供的 URL 和页面证据输出事实；没有证据不得补充或猜测
-- tags: 必须给出恰好4个用户日常会输入的中文检索词，每个2-8字，英文逗号分隔；少于或多于4个都不合格；优先页面主题、用途、对象的简单常用叫法；即使标题或描述已有相同词也要保留，禁止英文、复杂专业术语、宽泛词和重复标签；排除 AI、工具、平台、网站、示例等宽泛标签%s
+- tags: 必须给出恰好4个用户日常会输入的中文检索词，每个2-8字，英文逗号分隔；少于或多于4个都不合格；优先页面主题、用途、对象的简单常用叫法，选最大众的检索主题词而非窄前缀词或对比维度词（“模型评测”“大模型”“排行榜”这类高频主题词优于“模型价格”“模型速度”“智能对比”这类维度拆解词；“模型评测”优于“AI评测”）；即使标题或描述已有相同词也要保留，禁止英文、复杂专业术语、宽泛词和重复标签；排除 AI、工具、平台、网站、示例等宽泛标签，且 AI 不得作为标签或标签前缀%s
 - %s
 - 无论原文是什么语言，都要翻译成中文并精简到30-60字，不要堆砌细节
 - 只输出JSON，不用解释: {"title_cn":"网站名 - 页面用途","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
@@ -133,17 +142,17 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 URL: %s
 页面标题: %s
 页面描述: %s
-</page>`, tagExclude, categoryRule, strings.Join(req.Categories, "、"), examplesBlock, req.URL, meta.Title, meta.Description)
+</page>%s`, tagExclude, categoryRule, strings.Join(req.Categories, "、"), examplesBlock, req.URL, meta.Title, meta.Description, variationBlock)
 	} else {
 		// 什么都没抓到，仅依据 URL 中可验证的信息生成。
 		prompt = fmt.Sprintf(`你是一个书签整理专家。只根据这个URL中可验证的信息生成中文标题、描述、标签和分类。技术术语保留英文。
 
 <rules>
-- title_cn: 严格使用“网站名 - 页面用途”格式；网站名在前，中间只能使用半角空格-半角空格，禁止使用冒号、竖线或破折号；页面用途只写有信息量的主题或动作，禁止以“页面”“网站”“文档”结尾
+- title_cn: 严格使用“网站名 - 页面用途”格式；网站名取页面标题里的品牌名原样（保持大小写与空格，如“LLM Stats”，禁止照抄 URL 域名的小写连字符形式如“llm-stats”），中间只能使用半角空格-半角空格，禁止使用冒号、竖线或破折号；页面用途只写有信息量的主题或动作，禁止以“页面”“网站”“文档”结尾
 - description_cn: 必填，只根据 URL 中可验证的信息说明这个精确页面的具体内容或能完成的动作；禁止只介绍整个网站、模型或品牌，30-60字
 - URL 中有意义的路径、查询参数或片段标识的是精确页面；title_cn 和 description_cn 必须描述该页面，不得退回成通用网站介绍
 - 只根据提供的 URL 和页面证据输出事实；没有证据不得补充或猜测
-- tags: 必须给出恰好4个用户日常会输入的中文检索词，每个2-8字，英文逗号分隔；少于或多于4个都不合格；优先页面主题、用途、对象的简单常用叫法；即使标题或描述已有相同词也要保留，禁止英文、复杂专业术语、宽泛词和重复标签；排除 AI、工具、平台、网站、示例等宽泛标签%s
+- tags: 必须给出恰好4个用户日常会输入的中文检索词，每个2-8字，英文逗号分隔；少于或多于4个都不合格；优先页面主题、用途、对象的简单常用叫法，选最大众的检索主题词而非窄前缀词或对比维度词（“模型评测”“大模型”“排行榜”这类高频主题词优于“模型价格”“模型速度”“智能对比”这类维度拆解词；“模型评测”优于“AI评测”）；即使标题或描述已有相同词也要保留，禁止英文、复杂专业术语、宽泛词和重复标签；排除 AI、工具、平台、网站、示例等宽泛标签，且 AI 不得作为标签或标签前缀%s
 - %s
 - 只输出JSON，不用解释: {"title_cn":"网站名 - 页面用途","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
 </rules>
@@ -152,7 +161,7 @@ URL: %s
 
 <page>
 URL: %s
-</page>`, tagExclude, categoryRule, strings.Join(req.Categories, "、"), examplesBlock, req.URL)
+</page>%s`, tagExclude, categoryRule, strings.Join(req.Categories, "、"), examplesBlock, req.URL, variationBlock)
 	}
 
 	text, err := callAI(ai, prompt)
@@ -286,10 +295,12 @@ func normalizeAITags(tags string) string {
 	result := make([]string, 0, 4)
 	for _, tag := range strings.FieldsFunc(tags, func(r rune) bool { return r == ',' || r == '，' }) {
 		tag = strings.TrimSpace(tag)
-		key := strings.ToLower(tag)
+		// 剥离开头的 AI / 人工智能 前缀（“AI 排行”→“排行”、“AI评测”→“评测”）：prompt 已禁 AI 前缀标签，但部分模型顽固，后端兜底
+		tag = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(tag, "AI"), "人工智能"))
 		if tag == "" || !containsHan(tag) {
 			continue
 		}
+		key := strings.ToLower(tag)
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -335,7 +346,7 @@ func callOpenAIProvider(cfg AIConfig, prompt string) (string, error) {
 			{"role": "system", "content": aiSystemPrompt},
 			{"role": "user", "content": prompt},
 		},
-		"temperature": 0.3,
+		"temperature": 0.6,
 		"max_tokens":  1024,
 	}
 	// 关闭思考模式，避免 thinking 挤占输出致 JSON 解析失败、回退本地英文兜底：
@@ -415,7 +426,7 @@ func callAnthropicProvider(cfg AIConfig, prompt string) (string, error) {
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
-		"temperature": 0.3,
+		"temperature": 0.6,
 		"max_tokens":  1024,
 		"thinking":    map[string]string{"type": "disabled"},
 	}

@@ -16,6 +16,7 @@ export function fetchAIMeta(
   url: string,
   categories: string[] = [],
   signal?: AbortSignal,
+  previous?: { title: string; description: string; tags: string },
 ): Promise<{
   title_cn: string
   description_cn: string
@@ -27,7 +28,7 @@ export function fetchAIMeta(
 }> {
   return api('/ai-meta', {
     method: 'POST',
-    body: JSON.stringify({ url, categories }),
+    body: JSON.stringify({ url, categories, previous }),
     signal,
   })
 }

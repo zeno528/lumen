@@ -426,6 +426,7 @@ function BookmarksPage() {
         bookmark.url,
         categories.map((c) => c.name),
         ac.signal,
+        { title: bookmark.title, description: bookmark.description, tags: bookmark.tags.join(', ') },
       )
       const finalTitle = meta.title_cn || meta.title || ''
       const finalDesc = meta.description_cn || meta.description || ''
