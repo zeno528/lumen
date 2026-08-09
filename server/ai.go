@@ -116,12 +116,14 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 		prompt = fmt.Sprintf(`你是一个书签整理专家。根据以下信息生成书签的中文标题、描述、标签和分类。技术术语保留英文。
 
 <rules>
-- title_cn: 网站名 - 一句话概括（如 "Tavily - AI专用搜索引擎API"），10-30字
-- description_cn: 必填，一句话摘要，说明网站核心功能，30-60字（如 "专为 LLM 和 AI Agent 设计的搜索 API，支持网页搜索、内容提取和深度研究。"）
-- tags: 1-3个标签，中文，英文逗号分隔，每标签2-4字（如 "AI工具,搜索引擎,API"）%s
+- title_cn: 精确页面名（站点名仅作标识） - 一句话概括该页面，10-30字
+- description_cn: 必填，一句话摘要，说明精确页面内容或用途，30-60字
+- URL 中有意义的路径、查询参数或片段标识的是精确页面；title_cn 和 description_cn 必须描述该页面，不得退回成通用网站介绍
+- 只根据提供的 URL 和页面证据输出事实；没有证据不得补充或猜测
+- tags: 2-4个增量搜索词，英文逗号分隔，可用中文、英文或较长技术名称；排除分类名、title_cn/description_cn/URL 已明确出现的词，以及 AI、工具、平台、网站等宽泛标签%s
 - %s
 - 无论原文是什么语言，都要翻译成中文并精简到30-60字，不要堆砌细节
-- 只输出JSON，不用解释: {"title_cn":"...","description_cn":"...","tags":"标签1,标签2,标签3","category":"分类名"}
+- 只输出JSON，不用解释: {"title_cn":"...","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
 </rules>
 
 <categories>%s</categories>%s
@@ -132,15 +134,17 @@ URL: %s
 页面描述: %s
 </page>`, tagExclude, categoryRule, strings.Join(req.Categories, "、"), examplesBlock, req.URL, meta.Title, meta.Description)
 	} else {
-		// 什么都没抓到，让 AI 根据 URL 推断
-		prompt = fmt.Sprintf(`你是一个书签整理专家。根据这个URL，猜测网站名称并生成中文标题、描述、标签和分类。技术术语保留英文。
+		// 什么都没抓到，仅依据 URL 中可验证的信息生成。
+		prompt = fmt.Sprintf(`你是一个书签整理专家。只根据这个URL中可验证的信息生成中文标题、描述、标签和分类。技术术语保留英文。
 
 <rules>
-- title_cn: 从URL推断网站名 - 一句话概括（如 "npm - Node.js包管理平台"），10-30字
-- description_cn: 必填，一句话摘要，说明网站核心功能，30-60字
-- tags: 1-3个标签，中文，英文逗号分隔，每标签2-4字（如 "AI工具,搜索引擎,API"）%s
+- title_cn: 根据 URL 中可验证的信息生成中文标题，10-30字
+- description_cn: 必填，只根据 URL 中可验证的信息生成一句话摘要，30-60字
+- URL 中有意义的路径、查询参数或片段标识的是精确页面；title_cn 和 description_cn 必须描述该页面，不得退回成通用网站介绍
+- 只根据提供的 URL 和页面证据输出事实；没有证据不得补充或猜测
+- tags: 2-4个增量搜索词，英文逗号分隔，可用中文、英文或较长技术名称；排除分类名、title_cn/description_cn/URL 已明确出现的词，以及 AI、工具、平台、网站等宽泛标签%s
 - %s
-- 只输出JSON，不用解释: {"title_cn":"...","description_cn":"...","tags":"标签1,标签2,标签3","category":"分类名"}
+- 只输出JSON，不用解释: {"title_cn":"...","description_cn":"...","tags":"标签1,标签2,标签3,标签4","category":"分类名"}
 </rules>
 
 <categories>%s</categories>%s

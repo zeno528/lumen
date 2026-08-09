@@ -272,8 +272,16 @@ type PageMeta struct {
 // 注意：调用方负责关闭底层 reader（本函数不再 defer Close）。
 func extractPageMeta(r io.Reader) PageMeta {
 	var result PageMeta
+	var ogDescription, twitterDescription, plainDescription string
 	var titleText, h1Text, firstP strings.Builder
 	var inTitle, inH1, inP, headDone bool
+	finalizeHead := func() bool {
+		result.Description = firstNonEmpty(ogDescription, twitterDescription, plainDescription)
+		if title := strings.TrimSpace(titleText.String()); title != "" && result.Title == "" {
+			result.Title = cleanTitle(title)
+		}
+		return result.Title != "" && result.Description != ""
+	}
 
 	tokenizer := html.NewTokenizer(r)
 	for {
@@ -286,6 +294,13 @@ func extractPageMeta(r io.Reader) PageMeta {
 		case html.StartTagToken:
 			t := tokenizer.Token()
 			switch t.Data {
+			case "body":
+				if !headDone {
+					if finalizeHead() {
+						return result
+					}
+					headDone = true
+				}
 			case "title":
 				inTitle = true
 			case "h1":
@@ -307,14 +322,14 @@ func extractPageMeta(r io.Reader) PageMeta {
 					continue
 				}
 
-				// Description 优先级：og:description > twitter:description > meta description
+				// 收集完 <head> 后再按优先级选择，避免 DOM 顺序改变结果。
 				switch {
-				case property == "og:description" && result.Description == "":
-					result.Description = content
-				case property == "twitter:description" && result.Description == "":
-					result.Description = content
-				case name == "description" && result.Description == "":
-					result.Description = content
+				case property == "og:description" && ogDescription == "":
+					ogDescription = content
+				case (property == "twitter:description" || name == "twitter:description") && twitterDescription == "":
+					twitterDescription = content
+				case name == "description" && plainDescription == "":
+					plainDescription = content
 				// Title 优先级：og:title > twitter:title
 				case property == "og:title" && result.Title == "":
 					result.Title = content
@@ -345,20 +360,15 @@ func extractPageMeta(r io.Reader) PageMeta {
 			case "p":
 				inP = false
 			case "head":
-				// head 解析完：若已有 description，直接返回，保持性能（不全量解析 body）
-				if result.Description != "" {
+				if finalizeHead() {
 					return result
 				}
-				// description 为空 → 继续解析 body，取正文兜底
 				headDone = true
 			}
 		}
 	}
 
-	// <title> 作为兜底（优先级低于 og:title / twitter:title）
-	if t := strings.TrimSpace(titleText.String()); t != "" && result.Title == "" {
-		result.Title = cleanTitle(t)
-	}
+	finalizeHead()
 	// body 兜底：首个 <h1>
 	if h1 := strings.TrimSpace(h1Text.String()); h1 != "" && result.Title == "" {
 		result.Title = h1
@@ -369,6 +379,15 @@ func extractPageMeta(r io.Reader) PageMeta {
 	}
 
 	return result
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func getMetaAttr(t html.Token, key string) string {
@@ -391,15 +410,6 @@ func cleanTitle(title string) string {
 	// 去掉尾部的 " · GitHub" 等站名后缀
 	title = strings.TrimSuffix(title, " · GitHub")
 
-	// 常见分隔符模式：标题 - 站名 / 标题 | 站名 / 标题 · 站名
-	for _, sep := range []string{" - ", " — ", " | ", " · ", " – "} {
-		if idx := strings.Index(title, sep); idx > 0 {
-			rest := title[idx+len(sep):]
-			if len(rest) <= 30 {
-				return strings.TrimSpace(title[:idx])
-			}
-		}
-	}
 	return title
 }
 

@@ -40,6 +40,7 @@ import { fetchAIMeta } from '@/api/utils'
 import { getAISettings } from '@/api/settings'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import { cn } from '@/lib/utils'
+import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 
 /**
  * 书签页 —— 渲染在 AppShell 的 main 区。
@@ -187,23 +188,7 @@ function BookmarksPage() {
   const filtered = useMemo(() => {
     let bookmarks = allBookmarks
     if (q) {
-      // idSearchMode 激活时：纯数字 → id 精确匹配；其余 → 子串模糊匹配（兼容旧 "#N" 写法）。
-      if (idSearchMode && /^\d+$/.test(q)) {
-        bookmarks = bookmarks.filter((b) => String(b.id) === q)
-      } else {
-        const idMatch = q.match(/^#(\d+)$/)
-        if (idMatch) {
-          bookmarks = bookmarks.filter((b) => String(b.id) === idMatch[1])
-        } else {
-          bookmarks = bookmarks.filter(
-            (b) =>
-              b.title.toLowerCase().includes(q) ||
-              (b.description?.toLowerCase().includes(q) ?? false) ||
-              b.url.toLowerCase().includes(q) ||
-              (b.tags?.some((t) => t.toLowerCase().includes(q)) ?? false),
-          )
-        }
-      }
+      bookmarks = filterBookmarksBySearch(bookmarks, catMap, q, idSearchMode)
     } else if (currentCategory === '__favorites__') {
       bookmarks = bookmarks.filter((b) => b.is_favorite)
     } else if (currentCategory === '__uncategorized__') {
@@ -223,7 +208,7 @@ function BookmarksPage() {
     }
     return bookmarks
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allBookmarks, categories, q, currentCategory, idSearchMode])
+  }, [allBookmarks, categories, catMap, q, currentCategory, idSearchMode])
 
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部

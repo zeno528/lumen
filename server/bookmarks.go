@@ -75,23 +75,23 @@ func (s *Server) handleGetBookmarks(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * limit
 
-	query := "SELECT id, url, title, COALESCE(description, ''), category_id, COALESCE(tags, '[]'), '' AS favicon, CASE WHEN favicon != '' THEN 1 ELSE 0 END AS has_favicon, sort_order, COALESCE(is_favorite, 0), COALESCE(created_at, ''), COALESCE(updated_at, '') FROM bookmarks"
-	countQuery := "SELECT COUNT(*) FROM bookmarks"
+	query := "SELECT b.id, b.url, b.title, COALESCE(b.description, ''), b.category_id, COALESCE(b.tags, '[]'), '' AS favicon, CASE WHEN b.favicon != '' THEN 1 ELSE 0 END AS has_favicon, b.sort_order, COALESCE(b.is_favorite, 0), COALESCE(b.created_at, ''), COALESCE(b.updated_at, '') FROM bookmarks b LEFT JOIN categories c ON c.id = b.category_id"
+	countQuery := "SELECT COUNT(*) FROM bookmarks b LEFT JOIN categories c ON c.id = b.category_id"
 	var args []any
 	var conditions []string
 
 	if category != "" && category != "all" {
 		catID, err := strconv.ParseInt(category, 10, 64)
 		if err == nil {
-			conditions = append(conditions, "category_id = ?")
+			conditions = append(conditions, "b.category_id = ?")
 			args = append(args, catID)
 		}
 	}
 
-	if search != "" {
-		conditions = append(conditions, "(title LIKE ? OR url LIKE ? OR description LIKE ? OR tags LIKE ?)")
-		searchPattern := "%" + strings.ReplaceAll(strings.ReplaceAll(search, "%", "\\%"), "_", "\\_") + "%"
-		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
+	for _, term := range strings.Fields(search) {
+		searchPattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(term) + "%"
+		conditions = append(conditions, "(b.title LIKE ? ESCAPE '\\' OR b.url LIKE ? ESCAPE '\\' OR b.description LIKE ? ESCAPE '\\' OR b.tags LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\')")
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 
 	if len(conditions) > 0 {
@@ -109,7 +109,7 @@ func (s *Server) handleGetBookmarks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 分页查询
-	query += " ORDER BY sort_order, id DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY b.sort_order, b.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
 	rows, err := s.db.Query(query, args...)
