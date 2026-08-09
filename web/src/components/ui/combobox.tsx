@@ -186,7 +186,8 @@ export function Combobox({
         {value && (
           <button
             type="button"
-            className="absolute right-8 top-1/2 -translate-y-1/2 text-(--text-muted) hover:text-(--text-primary) p-0.5 transition-colors z-[1]"
+            className="input-clear-btn absolute right-8 top-1/2 -translate-y-1/2 text-(--text-muted) hover:text-(--text-primary) p-0.5 transition-colors z-[1]"
+            onPointerDown={(event) => event.preventDefault()}
             onClick={() => onChange('')}
             tabIndex={-1}
           >

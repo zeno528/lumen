@@ -752,7 +752,8 @@ export function BookmarkDialog({
           {desc && !aiFilling.desc && (
             <button
               type="button"
-              className="input-icon-btn absolute right-2 top-2 p-0.5 text-xs"
+              className="input-icon-btn input-clear-btn absolute right-2 top-2 p-0.5 text-xs"
+              onPointerDown={(event) => event.preventDefault()}
               onClick={() => setDesc('')}
               title="清空描述"
             >

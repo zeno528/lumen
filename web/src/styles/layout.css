@@ -278,6 +278,31 @@ select,
 .input-icon-btn:hover {
   color: var(--text-primary);
 }
+/* 清空按钮默认收起，悬停输入区域时显示；粘贴按钮保持常驻。 */
+.input-clear-btn {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, color 0.15s;
+}
+.relative:hover > .input-clear-btn,
+.relative:focus-within > .input-clear-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+.input-clear-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (max-width: 768px) {
+  .relative:hover > .input-clear-btn {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .relative:focus-within > .input-clear-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
 
 /* 主题切换按钮*/
 .theme-toggle {

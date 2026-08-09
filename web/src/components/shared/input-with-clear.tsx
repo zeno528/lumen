@@ -28,7 +28,8 @@ const InputWithClear = React.forwardRef<
       {value && !hideClear && (
         <button
           type="button"
-          className="input-icon-btn absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-xs"
+          className="input-icon-btn input-clear-btn absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-xs"
+          onPointerDown={(event) => event.preventDefault()}
           onClick={() => onChange?.({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>)}
           title="清空"
         >
