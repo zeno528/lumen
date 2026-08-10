@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import { useLongPress } from '@/hooks/use-long-press'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/types'
@@ -44,7 +44,7 @@ export function SidebarItem({
   onExitDone,
   style,
   variant = 'default',
-  accent = false,
+  iconColor,
   selected = false,
   onSelect,
 }: {
@@ -71,10 +71,10 @@ export function SidebarItem({
   onExitDone?: () => void
   /** 透传 style（用于入场动画 animationDelay 错开）*/
   style?: React.CSSProperties
-  /** 容器配色：default（侧栏分类走 --sidebar-icon-bg 主题固定）、pill（设置页 tab 走批量模式 token）*/
+  /** 容器配色：default（分类颜色浅底）、pill（设置页 tab 走批量模式 token）*/
   variant?: 'default' | 'pill'
-  /** 系统分类（全部/收藏/未分类）图标容器用 accent 派生浅底，和用户分类区分 */
-  accent?: boolean
+  /** 分类图标颜色：同时用于生成图标的浅色容器 */
+  iconColor?: string
   /** 批量模式选中高亮 */
   selected?: boolean
   /** 批量模式点击选择（传入则替代 onClick；只对真实分类用，虚拟分类不传）*/
@@ -218,16 +218,18 @@ export function SidebarItem({
       onDrop={isReal ? handleDrop : undefined}
     >
       <div
-        className={cn('sidebar-icon', variant === 'pill' && 'sidebar-icon-pill')}
+        className={cn(
+          'sidebar-icon',
+          variant === 'default' && 'sidebar-icon-category',
+          variant === 'pill' && 'sidebar-icon-pill',
+          iconColor && 'sidebar-icon-coloured',
+        )}
         style={
           variant === 'pill'
             ? { background: 'var(--top-pill-bg)' }
-            : accent
-              ? {
-                  background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
-                  boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent)',
-                }
-              : { background: 'var(--sidebar-icon-bg)' }
+            : iconColor
+              ? ({ '--sidebar-icon-color': iconColor } as CSSProperties)
+              : undefined
         }
         draggable={isReal}
         onDragStart={handleDragStart}

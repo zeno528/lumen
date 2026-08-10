@@ -4,12 +4,12 @@
   --bg-primary: #f5f3ee; /* 暖米白页面底色 */
   --bg-secondary: #faf9f7; /* 更亮的米白 */
   /* --bg-canvas = 主内容画布（main 大容器，书签视图右侧大卡片底色）。
-     派生自 --bg-secondary + #37352f 暖黑（与 --border / --sidebar-icon-bg / --bg-input 同源暖黑体系，保持暖亚麻色温）。
+     派生自 --bg-secondary + #37352f 暖黑（与 --border / --bg-input 同源暖黑体系，保持暖亚麻色温）。
      9% = 用户要的 #e9e9e9 深度的暖等价（≈ #e9e7e5，同深度但 R>G>B 偏暖）；不用纯 #000（冷）、
      不硬编码 #e9e9e9（冷灰撞暖亚麻，旧值已弃）。「sidebar 深米 → canvas 暖灰 → card 纯白」三档亮度层次。 */
   --bg-canvas: color-mix(in srgb, var(--bg-secondary), #37352f 9%);
   /* --bg-input = 全项目输入框/textarea/select 背景。
-     暖黑半透明叠加（与 --border / --sidebar-icon-bg 同源 #37352f Notion 暖黑），保持暖亚麻色温一致——
+     暖黑半透明叠加（与 --border 同源 #37352f Notion 暖黑），保持暖亚麻色温一致——
      纯黑 color-mix 会让暖底变冷灰「不搭」（Radix Colors 建议：暖底配暖中性 sand，而非纯灰 gray）。
      6% 压暗一档形成凹陷；半透明叠加自动适配底色（dialog body / 登录页皆一致分层）。 */
   --bg-input: rgba(55, 53, 47, 0.06);
@@ -25,9 +25,6 @@
   --accent: #9a7b3f; /* 暗金（默认配色 light 版；切换配色见文末 [data-accent] 块）*/
   --destructive: #ef4444; /* 错误 / 危险文字色（field error 反馈） */
   --success: #22c55e; /* 成功反馈色（复制完成对号、toast.success 图标）-- 与 effects.css .toast.success .toast-icon 保持一致 */
-  /* 侧栏分类图标容器底色：固定主题相关色，不随分类 color 变化（颜色选择器只改图标色）。
-     8% 透明度的暖深灰，叠在暖米白页面上形成柔和灰底，不抢戏。 */
-  --sidebar-icon-bg: rgba(55, 53, 47, 0.08);
   /* AI 按钮：3 色粉红→紫→靛蓝斜向渐变，保持 AI 功能的独立识别度。 */
   --ai-g-1: #db2777;
   --ai-g-2: #7c3aed;
@@ -83,7 +80,7 @@
      自动跟随主题，与 light 块的派生公式对齐（都从 secondary mix 黑色），跨主题颜色规则一致。
      与 --bg-card 拉开色差（canvas 明显更暗一档），让卡片从容器浮起。 */
   --bg-canvas: color-mix(in srgb, var(--bg-secondary), #000 15%);
-  /* --bg-input = dark 下输入框背景：白色 6% 半透明叠加（与 dark --border / --sidebar-icon-bg 同源反相），
+  /* --bg-input = dark 下输入框背景：白色 6% 半透明叠加（与 dark --border 同源反相），
      亮一档形成浮起。深色 UI 输入框宜浮不宜沉（凹陷=黑洞）；半透明自动适配底色。 */
   --bg-input: rgba(255, 255, 255, 0.06);
   /* --bg-section = dark 下 section 卡片中间档底色：白色 4% 半透明，与 dark --bg-input / --border 同源反相。
@@ -97,8 +94,6 @@
   --accent: #c2a55c; /* 暗金 dark 版（默认配色，提亮以适配深底）*/
   --destructive: #ef4444; /* dark 主题与 light 主题统一：danger 色跨主题一致，不分主题提亮 */
   --success: #22c55e; /* dark 主题与 light 主题同 #22c55e：success 是状态色（非背景色），保持跨主题视觉强度一致 */
-  /* 侧栏分类图标容器底色 dark 版：同源暖色 8% 透明，自动跟随主题反相（暖深灰 -> 暖浅灰）。 */
-  --sidebar-icon-bg: rgba(255, 255, 255, 0.08);
   /* AI 3 色跨主题一致：彩色是 AI 品牌资产 */
   --ai-g-1: #db2777;
   --ai-g-2: #7c3aed;

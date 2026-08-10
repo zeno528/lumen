@@ -472,7 +472,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       >
         <SidebarItem
           style={staggerStyle()}
-          accent
+          iconColor="var(--icon-all)"
           icon={<Layers size={14} style={{ color: 'var(--icon-all)' }} />}
           label="全部"
           count={counts.all}
@@ -482,8 +482,8 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         {counts.favorites > 0 && (
           <SidebarItem
             style={staggerStyle()}
-            accent
             isNew={favIsNew}
+            iconColor="var(--favorite-star)"
             icon={<Star size={14} style={{ color: 'var(--favorite-star)', fill: 'var(--favorite-star)' }} />}
             label="收藏"
             count={counts.favorites}
@@ -495,8 +495,8 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         {counts.uncategorized > 0 && (
           <SidebarItem
             style={staggerStyle()}
-            accent
             isNew={uncatIsNew}
+            iconColor="var(--icon-uncategorized)"
             icon={<Folder size={14} style={{ color: 'var(--icon-uncategorized)', fill: 'var(--icon-uncategorized)' }} />}
             label="未分类"
             count={counts.uncategorized}
@@ -514,6 +514,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 style={staggerStyle()}
                 category={c}
                 draggedCatId={draggedCatId}
+                iconColor={c.color || 'var(--default-category-color)'}
                 icon={<Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />}
                 label={c.name}
                 count={countByCat(c.id)}

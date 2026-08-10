@@ -566,7 +566,6 @@ export function BookmarkDialog({
             variant="ai"
             onClick={() => void handleAI()}
             disabled={aiLoading || !url}
-            className="mr-auto"
           >
             <Sparkles size={14} />
             {aiLoading ? 'AI 填充中…' : '智能填充'}
@@ -633,7 +632,7 @@ export function BookmarkDialog({
             ) : undefined
           }
           onKeyDown={(e) => {
-            // Enter 始终走普通保存；AI 仅由左下角“智能填充”触发。
+            // Enter 始终走普通保存；AI 仅由右侧“智能填充”触发。
             if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
               e.preventDefault()
               submitRef.current()
