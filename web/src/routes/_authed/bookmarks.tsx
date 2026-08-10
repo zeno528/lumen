@@ -41,6 +41,8 @@ import { getAISettings } from '@/api/settings'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
+import { resolveCategoryIcon } from '@/lib/icon-map'
+import type { Category } from '@/types'
 
 /**
  * 书签页 —— 渲染在 AppShell 的 main 区。
@@ -218,6 +220,23 @@ function BookmarksPage() {
     return bookmarks
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allBookmarks, categories, catMap, q, currentCategory, idSearchMode])
+
+  // 搜索结果按分类分组：filtered 已按分类排好（同分类必相邻），只需切连续段；未分类最后
+  const searchGroups = useMemo(() => {
+    if (!q) return [] as { category?: Category; bookmarks: Bookmark[] }[]
+    const catById = new Map(categories.map((c) => [c.id, c]))
+    const groups: { category?: Category; bookmarks: Bookmark[] }[] = []
+    for (const bookmark of filtered) {
+      const category = bookmark.category_id != null ? catById.get(bookmark.category_id) : undefined
+      const last = groups[groups.length - 1]
+      if (!last || last.category !== category) {
+        groups.push({ category, bookmarks: [bookmark] })
+      } else {
+        last.bookmarks.push(bookmark)
+      }
+    }
+    return groups
+  }, [filtered, categories, q])
 
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
@@ -607,19 +626,49 @@ function BookmarksPage() {
         </div>
       ) : (
         <div key={currentCategory} className={cn('bookmarks-grid', enterAnimate && 'animate-enter', q && 'searching', batchMode && 'select-none')}>
-          {filtered.map((b) => (
-            <BookmarkCard
-              key={b.id}
-              bookmark={b}
-              categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
-              searchQuery={q}
-              onMenuClick={(id, x, y) => setMenu({ id, x, y })}
-              onSelect={handleCardSelect}
-              isNew={b.id === recentlyAddedId}
-              refreshing={refreshingFavId === b.id}
-              exiting={isBookmarkExiting(b.id)}
-            />
-          ))}
+          {q
+            ? searchGroups.flatMap((group) => {
+                const Icon = resolveCategoryIcon(group.category?.icon)
+                const name = group.category?.name ?? '未分类'
+                const groupKey = group.category?.id ?? '__uncategorized__'
+                return [
+                  <h2 key={`group-${groupKey}`} className="search-group-title">
+                    <Icon
+                      size={14}
+                      style={{ color: group.category?.color || 'var(--text-muted)' }}
+                      aria-hidden="true"
+                    />
+                    <span>{name}</span>
+                    <span className="search-group-count">{group.bookmarks.length}</span>
+                  </h2>,
+                  ...group.bookmarks.map((b) => (
+                    <BookmarkCard
+                      key={b.id}
+                      bookmark={b}
+                      categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
+                      searchQuery={q}
+                      onMenuClick={(id, x, y) => setMenu({ id, x, y })}
+                      onSelect={handleCardSelect}
+                      isNew={b.id === recentlyAddedId}
+                      refreshing={refreshingFavId === b.id}
+                      exiting={isBookmarkExiting(b.id)}
+                    />
+                  )),
+                ]
+              })
+            : filtered.map((b) => (
+                <BookmarkCard
+                  key={b.id}
+                  bookmark={b}
+                  categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
+                  searchQuery={q}
+                  onMenuClick={(id, x, y) => setMenu({ id, x, y })}
+                  onSelect={handleCardSelect}
+                  isNew={b.id === recentlyAddedId}
+                  refreshing={refreshingFavId === b.id}
+                  exiting={isBookmarkExiting(b.id)}
+                />
+              ))}
         </div>
       )}
 
