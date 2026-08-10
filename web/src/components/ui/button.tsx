@@ -21,10 +21,9 @@ const buttonVariants = cva(
           "text-(--text-secondary) hover:bg-(--bg-primary) hover:text-(--text-primary)",
         // footer 次级按钮：灰色实心契约
         soft: "bg-(--border) text-(--text-secondary) hover:bg-(--border-hover) hover:text-(--text-primary)",
-        // AI 智能填充按钮：粉红→紫→靛蓝流体渐变；走 token 体系（--ai-g-1/-2/-3）。
-        // 文字白 + drop-shadow 补足浅色段对比度；悬停 saturate-125 + 单色辉光（紫）= 克制"AI 启动"感。
+        // AI 智能填充按钮：参考实时语音图标的蓝紫云雾质感，和项目主色保持功能区分。
         // 不可用态由根 className disabled:opacity-50 处理。
-        ai: "ai-gradient-flow bg-[image:linear-gradient(135deg,var(--ai-g-1),var(--ai-g-2),var(--ai-g-3),var(--ai-g-1))] text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)] hover:saturate-125 hover:shadow-[0_0_24px_color-mix(in_srgb,var(--ai-g-2)_45%,transparent)]",
+        ai: "ai-cloud font-medium text-white shadow-sm hover:brightness-105",
         link: "text-(--accent) underline-offset-4 hover:underline",
       },
       size: {

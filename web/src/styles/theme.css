@@ -25,10 +25,11 @@
   --accent: #9a7b3f; /* 暗金（默认配色 light 版；切换配色见文末 [data-accent] 块）*/
   --destructive: #ef4444; /* 错误 / 危险文字色（field error 反馈） */
   --success: #22c55e; /* 成功反馈色（复制完成对号、toast.success 图标）-- 与 effects.css .toast.success .toast-icon 保持一致 */
-  /* AI 按钮：3 色粉红→紫→靛蓝斜向渐变，保持 AI 功能的独立识别度。 */
-  --ai-g-1: #db2777;
-  --ai-g-2: #7c3aed;
-  --ai-g-3: #4f46e5;
+  /* AI 云雾按钮：深蓝紫核心、蓝色雾层、浅蓝底和白色高光。 */
+  --ai-cloud-deep: #6466e9;
+  --ai-cloud-blue: #87a1f6;
+  --ai-cloud-mist: #c7d7fb;
+  --ai-cloud-white: #f5f8ff;
   --border: rgba(55, 53, 47, 0.1);
   --border-hover: rgba(55, 53, 47, 0.18);
   /* 滚动条 hover 显示色：暖深灰 20% alpha（比 --border 的 10% 明显，保证滚动条可见性）。
@@ -94,10 +95,11 @@
   --accent: #c2a55c; /* 暗金 dark 版（默认配色，提亮以适配深底）*/
   --destructive: #ef4444; /* dark 主题与 light 主题统一：danger 色跨主题一致，不分主题提亮 */
   --success: #22c55e; /* dark 主题与 light 主题同 #22c55e：success 是状态色（非背景色），保持跨主题视觉强度一致 */
-  /* AI 3 色跨主题一致：彩色是 AI 品牌资产 */
-  --ai-g-1: #db2777;
-  --ai-g-2: #7c3aed;
-  --ai-g-3: #4f46e5;
+  /* AI 云雾按钮：dark 下提亮蓝紫核心和雾层，保持白字识别度。 */
+  --ai-cloud-deep: #7475f2;
+  --ai-cloud-blue: #91adfb;
+  --ai-cloud-mist: #c9dcff;
+  --ai-cloud-white: #f1f6ff;
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
   --scrollbar-thumb: rgba(255, 255, 255, 0.2); /* 滚动条 hover 显示色 dark 版：白色 20% 反相，跟 light 同强度 */

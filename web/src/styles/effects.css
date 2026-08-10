@@ -1124,17 +1124,47 @@ mark {
   }
 }
 
-/* AI 按钮流体渐变：扩大背景后缓慢平移，形成 Codex/Claude Code 式的 shimmer 感。 */
-.ai-gradient-flow {
-  background-size: 240% 240%;
-  animation: ai-gradient-flow 8s ease-in-out infinite;
+/* 参考实时语音图标的蓝紫云雾质感：多层 radial-gradient 形成柔和白色高光，
+   只移动背景层，不移动按钮和文字，避免交互时产生位移抖动。 */
+.ai-cloud {
+  background:
+    radial-gradient(
+      78% 120% at 50% 50%,
+      color-mix(in srgb, var(--ai-cloud-deep) 28%, transparent) 0%,
+      transparent 78%
+    ),
+    radial-gradient(
+      82% 135% at 18% 0%,
+      color-mix(in srgb, var(--ai-cloud-deep) 94%, transparent) 0%,
+      transparent 66%
+    ),
+    radial-gradient(
+      76% 120% at 88% 14%,
+      color-mix(in srgb, var(--ai-cloud-blue) 94%, transparent) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      72% 92% at 52% 112%,
+      var(--ai-cloud-white) 0%,
+      transparent 62%
+    ),
+    linear-gradient(135deg, var(--ai-cloud-deep) 0%, var(--ai-cloud-blue) 58%, var(--ai-cloud-mist) 100%);
+  background-size: 160% 150%, 160% 180%, 145% 160%, 145% 130%, 100% 100%;
+  background-position: 50% 50%, 0% 0%, 100% 0%, 50% 100%, 0% 0%;
+  background-repeat: no-repeat;
+  animation: ai-cloud-breathe 7s ease-in-out infinite alternate;
+  text-shadow: 0 1px 2px color-mix(in srgb, var(--ai-cloud-deep) 65%, black 25%);
 }
-@keyframes ai-gradient-flow {
-  0%,
-  100% {
-    background-position: 0% 50%;
+@keyframes ai-cloud-breathe {
+  from {
+    background-position: 50% 50%, 0% 0%, 100% 0%, 50% 100%, 0% 0%;
   }
-  50% {
-    background-position: 100% 50%;
+  to {
+    background-position: 52% 48%, 8% -5%, 92% 8%, 44% 94%, 0% 0%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-cloud {
+    animation: none;
   }
 }
