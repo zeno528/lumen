@@ -4,12 +4,18 @@ import { cn } from '@/lib/utils'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'loading'
 
+export interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 interface ToastItem {
   id: number
   msg: string
   type: ToastType
   /** 自定义图标（如 AI 厂商 logo），覆盖默认 type 图标 */
   icon?: ReactNode
+  action?: ToastAction
   /** 退场动画中：挂 .hide → toastOut 0.4s → 真正移除 */
   hiding?: boolean
 }
@@ -32,8 +38,8 @@ function removeItem(id: number) {
 }
 
 export const toast = {
-  success(msg: string, icon?: ReactNode) {
-    push({ id: ++toastIdCounter, msg, type: 'success', icon })
+  success(msg: string, icon?: ReactNode, action?: ToastAction) {
+    push({ id: ++toastIdCounter, msg, type: 'success', icon, action })
   },
   error(msg: string) {
     push({ id: ++toastIdCounter, msg, type: 'error' })
@@ -62,18 +68,18 @@ export const toast = {
   },
   /** 把 loading toast 切换成最终状态（success/error/warning），然后自动消失。
    *  三态判断：
-   *  1. exists（还在 queue） → 转 final state + 2.5s 后自动消失（正常完成 / ESC 中断）
+   *  1. exists（还在 queue） → 转 final state + 2.65s 后自动消失（正常完成 / ESC 中断）
    *  2. !exists && onDismissMap.has → 曾今是 loading 已被用户 dismiss → 静默（X 取消）
    *  3. !exists && !onDismissMap.has → 完全没存在过（resolve 误传 id）→ fallback 新建（兼容旧行为）*/
-  resolve(id: number, msg: string, type: 'success' | 'error' | 'warning') {
+  resolve(id: number, msg: string, type: 'success' | 'error' | 'warning', action?: ToastAction) {
     const exists = toastQueue.some((x) => x.id === id)
     if (exists) {
       onDismissMap.delete(id) // 正常完成的 loading 不再需要 dismiss 回调
       toastQueue = toastQueue.map((x) =>
-        x.id === id ? { ...x, msg, type, icon: undefined } : x,
+        x.id === id ? { ...x, msg, type, icon: undefined, action } : x,
       )
       notify()
-      setTimeout(() => startHiding(id), 2500)
+      setTimeout(() => startHiding(id), 2650)
     } else if (!onDismissMap.has(id)) {
       push({ id: ++toastIdCounter, msg, type })
     }
@@ -84,9 +90,9 @@ export const toast = {
 function push(t: ToastItem, autoHide = true) {
   toastQueue = [...toastQueue, t]
   notify()
-  // 2.5s 后触发退场动画（toast 自动消失时序）
+  // 2.65s 后触发退场动画（toast 自动消失时序）
   // loading 类型不自动消失，等 resolve 调用
-  if (autoHide) setTimeout(() => startHiding(t.id), 2500)
+  if (autoHide) setTimeout(() => startHiding(t.id), 2650)
 }
 
 /**
@@ -145,6 +151,18 @@ export function ToastContainer() {
         <div key={t.id} className={cn('toast', t.type, t.hiding && 'hide')}>
           <Icon type={t.type} icon={t.icon} />
           <span>{t.msg}</span>
+          {t.action && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                t.action?.onClick()
+                startHiding(t.id)
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
           <button
             className="toast-close"
             onClick={() => {

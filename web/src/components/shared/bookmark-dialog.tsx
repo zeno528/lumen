@@ -15,6 +15,7 @@ import { fetchFaviconDataUri } from '@/lib/favicon'
 import { setFavicon } from '@/lib/favicon-cache'
 import { getAISettings } from '@/api/settings'
 import { toast } from '@/components/ui/toast'
+import type { ToastAction } from '@/components/ui/toast'
 import { useUIStore } from '@/stores/ui'
 import { normalizeUrl, requireUrl, findDuplicateBookmark, parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
@@ -110,6 +111,28 @@ export function BookmarkDialog({
   const setCurrentCategory = useUIStore((s) => s.setCurrentCategory)
   const aiPrefill = useUIStore((s) => s.aiPrefill)
   const consumeAIPrefill = () => useUIStore.setState({ aiPrefill: null })
+
+  const getCreatedFeedback = (created: Bookmark, fallbackCategoryName = '') => {
+    const categoryName = created.category_id == null
+      ? '未分类'
+      : categories.find((c) => c.id === created.category_id)?.name ?? fallbackCategoryName
+    const visible =
+      currentCategory === 'all' ||
+      (currentCategory === '__favorites__' && created.is_favorite) ||
+      (currentCategory === '__uncategorized__' && created.category_id == null) ||
+      currentCategory === created.category_id
+    const action: ToastAction | undefined = visible
+      ? undefined
+      : {
+          label: '查看',
+          onClick: () => setCurrentCategory(created.category_id ?? '__uncategorized__'),
+        }
+    return {
+      message: `已保存到「${categoryName || '未分类'}」`,
+      action,
+    }
+  }
+
   useEffect(() => {
     if (!open) return
     aiSaveRequestedRef.current = false
@@ -243,15 +266,9 @@ export function BookmarkDialog({
       setFavicon(result.bookmark.id, result.bookmark.updated_at, favicon)
     }
 
-    const created = result.bookmark
-    const visible =
-      currentCategory === 'all' ||
-      (currentCategory === '__favorites__' && created.is_favorite) ||
-      (currentCategory === '__uncategorized__' && created.category_id == null) ||
-      currentCategory === created.category_id
-    if (!visible) setCurrentCategory(created.category_id ?? '__uncategorized__')
-    onCreated?.(created.id)
-    return categoryId != null && category ? `已添加「${category}」` : '已添加'
+    const feedback = getCreatedFeedback(result.bookmark, category)
+    onCreated?.(result.bookmark.id)
+    return feedback
   }
 
   /* AI 智能填充：用户在分析中保存时，复用同一次结果直接创建书签。 */
@@ -294,7 +311,7 @@ export function BookmarkDialog({
       const selectedCategory = categoryName.trim()
       const suggestedCategory = selectedCategory ? '' : (meta.category ?? '').trim()
       if (aiSaveRequestedRef.current) {
-        const message = await saveAIResult(
+        const feedback = await saveAIResult(
           normalized,
           finalTitle,
           finalDesc,
@@ -302,7 +319,7 @@ export function BookmarkDialog({
           selectedCategory,
           suggestedCategory,
         )
-        toast.resolve(tid, message, 'success')
+        toast.resolve(tid, feedback.message, 'success', feedback.action)
         return
       }
       // 回填：按 标题→描述→标签 依次填充（每步 200ms），配合输入框内指示器逐格消失
@@ -483,19 +500,21 @@ export function BookmarkDialog({
 
     // 更新：useUpdateBookmark 乐观（onMutate 改缓存秒变，失败 onError 回滚）。
     // 新建：useCreateBookmark 在 onSuccess 用后端真值 append（省 refetch；失败则未 append，缓存不动）。
-    // 立即关弹窗 + 立即弹通知，await 写库；失败补错误通知（409 冲突等：红色通知，用户重新编辑）。
+    // 立即关弹窗，await 写库后再弹成功通知；失败补错误通知（409 冲突等：红色通知，用户重新编辑）。
     onClose()
-    toast.success(editingBookmark ? '书签已更新' : '书签已添加')
     try {
       if (editingBookmark) {
         await updateMut.mutateAsync({ id: editingBookmark.id, input })
+        toast.success('书签已更新')
       } else {
         const res = await createMut.mutateAsync(input)
         // 新书签预抓的图标写入缓存，列表卡片渲染时 getFavicon 秒显（updated_at 来自后端，与 refetch 一致）
         if (preFetchedFaviconRef.current && res.bookmark.updated_at) {
           setFavicon(res.bookmark.id, res.bookmark.updated_at, preFetchedFaviconRef.current)
         }
+        const feedback = getCreatedFeedback(res.bookmark, trimmedCat)
         onCreated?.(res.bookmark.id)
+        toast.success(feedback.message, undefined, feedback.action)
       }
     } catch (e) {
       const msg = (e as Error).message

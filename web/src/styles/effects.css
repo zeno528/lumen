@@ -677,6 +677,20 @@ body:hover,
   font-size: 1rem;
   display: inline-flex;
 }
+.toast .toast-action {
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.toast .toast-action:hover {
+  opacity: 1;
+}
 .toast .toast-close {
   background: none;
   border: none;
