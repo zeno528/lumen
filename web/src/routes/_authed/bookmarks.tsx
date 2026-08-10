@@ -189,6 +189,16 @@ function BookmarksPage() {
     let bookmarks = allBookmarks
     if (q) {
       bookmarks = filterBookmarksBySearch(bookmarks, catMap, q, idSearchMode)
+      // 搜索结果按分类分组：按侧栏分类顺序（categories 已按 sort_order），
+      // 未分类/已删分类的书签放最后；组内保持原有顺序（稳定排序）。
+      const categoryOrder = new Map(categories.map((c, i) => [c.id, i]))
+      bookmarks = [...bookmarks].sort((a, b) => {
+        const ai =
+          a.category_id != null ? categoryOrder.get(a.category_id) ?? categories.length : categories.length
+        const bi =
+          b.category_id != null ? categoryOrder.get(b.category_id) ?? categories.length : categories.length
+        return ai - bi
+      })
     } else if (currentCategory === '__favorites__') {
       bookmarks = bookmarks.filter((b) => b.is_favorite)
     } else if (currentCategory === '__uncategorized__') {
@@ -202,7 +212,6 @@ function BookmarksPage() {
     // 全部 / 收藏视图（非搜索）按 id DESC（创建顺序，最新在前），不按 sort_order：移动书签到新分类时
     // 后端会改 sort_order（目标分类末尾），若这两个视图也按 sort_order 排会导致书签在当前视图换位。
     // 按 id 排让移动只改分类归属、不影响顺序。代价：全部/收藏视图不再支持拖拽重排（请在分类视图重排）。
-    // 搜索时保持后端 sort_order 顺序（搜索是临时查看，后端 LIKE 无相关度排序，维持原行为）。
     if (!q && (currentCategory === 'all' || currentCategory === '__favorites__')) {
       bookmarks = [...bookmarks].sort((a, b) => b.id - a.id)
     }
