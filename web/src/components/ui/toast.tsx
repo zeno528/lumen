@@ -138,6 +138,11 @@ const Icon = ({ type, icon }: { type: ToastType; icon?: ReactNode }) => {
 export function ToastContainer() {
   const [items, setItems] = useState<ToastItem[]>(toastQueue)
 
+  const activateAction = (item: ToastItem) => {
+    item.action?.onClick()
+    startHiding(item.id)
+  }
+
   useEffect(() => {
     listeners.add(setItems)
     return () => {
@@ -148,24 +153,19 @@ export function ToastContainer() {
   return (
     <div className="toast-container">
       {items.map((t) => (
-        <div key={t.id} className={cn('toast', t.type, t.hiding && 'hide')}>
+        <div
+          key={t.id}
+          className={cn('toast', t.type, t.action && 'has-action', t.hiding && 'hide')}
+          onClick={t.action ? () => activateAction(t) : undefined}
+        >
           <Icon type={t.type} icon={t.icon} />
           <span>{t.msg}</span>
-          {t.action && (
-            <button
-              type="button"
-              className="toast-action"
-              onClick={() => {
-                t.action?.onClick()
-                startHiding(t.id)
-              }}
-            >
-              {t.action.label}
-            </button>
-          )}
+          {t.action && <span className="toast-action">{t.action.label}</span>}
           <button
+            type="button"
             className="toast-close"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation()
               // loading toast（注册过 onDismiss）走 dismiss：立即移除 + 触发 abort，
               //   避免 fetch 完成时 resolve 复活 toast 造成"X 没用"错觉
               // 其他 toast 走 startHiding：保留 0.4s 退场动画的统一体验

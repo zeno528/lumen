@@ -677,6 +677,9 @@ body:hover,
   font-size: 1rem;
   display: inline-flex;
 }
+.toast.has-action {
+  cursor: pointer;
+}
 .toast .toast-action {
   border: 0;
   border-bottom: 1px solid currentColor;
