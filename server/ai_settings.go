@@ -180,7 +180,8 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 // handleCopyConfig POST /api/ai-settings/copy -- 复制配置（含加密密钥），返回新 configId
 func (s *Server) handleCopyConfig(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		ConfigID int64 `json:"configId"`
+		ConfigID    int64  `json:"configId"`
+		DisplayName string `json:"displayName"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -192,10 +193,14 @@ func (s *Server) handleCopyConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "原配置不存在"})
 		return
 	}
-	newName := src.DisplayName
-	if newName != "" {
-		newName += " (副本)"
+	newName := strings.TrimSpace(input.DisplayName)
+	if newName == "" {
+		newName = src.DisplayName
 	}
+	if newName == "" {
+		newName = src.Provider
+	}
+	newName += " copy"
 	newID, err := s.saveProviderConfig(0, src.Provider, newName, src.Model, "", src.BaseURL, src.ID)
 	if err != nil {
 		log.Printf("复制配置失败: %v", err)

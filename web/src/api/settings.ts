@@ -190,11 +190,11 @@ export function deleteAIProviderConfig(configId: number): Promise<{ ok: boolean 
   return api(`/ai-settings/config/${configId}`, { method: 'DELETE' })
 }
 
-/** 复制配置（含密钥），返回新 configId（POST /api/ai-settings/copy）*/
-export function copyAIConfig(configId: number): Promise<{ ok: boolean; configId: number }> {
+/** 复制配置（含密钥），并使用当前供应商名称追加 copy 后缀。*/
+export function copyAIConfig(configId: number, displayName: string): Promise<{ ok: boolean; configId: number }> {
   return api('/ai-settings/copy', {
     method: 'POST',
-    body: JSON.stringify({ configId }),
+    body: JSON.stringify({ configId, displayName }),
   })
 }
 

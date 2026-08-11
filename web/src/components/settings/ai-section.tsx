@@ -29,6 +29,9 @@ import { SECTION_CLASS } from './section-styles'
 const statusBadgeClass =
   'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border border-(--accent) text-(--accent) bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]'
 
+const getProviderDisplayName = (provider: string) =>
+  (provider === 'custom' ? CUSTOM_PROVIDER_PRESET : AI_PRESETS[provider])?.label ?? provider
+
 /**
  * AI 设置 section -- 一个厂商可存多份配置（如 DeepSeek flash + pro 各一份），平铺展示。
  * 每份配置独立编辑/启用/删除；激活全局唯一（activeConfigId）。
@@ -90,7 +93,7 @@ export function AiSection({
   const fillConfig = (c: SavedConfig) => {
     setEditingConfigId(c.id)
     setProvider(c.provider)
-    setDisplayName(c.displayName || '')
+    setDisplayName(c.displayName || getProviderDisplayName(c.provider))
     setModel(c.model || '')
     setBaseUrl(c.baseUrl || AI_PRESETS[c.provider]?.baseUrl || '')
     setApiKey('')
@@ -101,7 +104,7 @@ export function AiSection({
     const preset = AI_PRESETS[p]
     setEditingConfigId(0)
     setProvider(p)
-    setDisplayName('')
+    setDisplayName(getProviderDisplayName(p))
     setModel(preset?.model || '')
     setBaseUrl(preset?.baseUrl || '')
     setApiKey('')
@@ -114,6 +117,10 @@ export function AiSection({
     if (aiSaving) return
     if (!provider) {
       toast.warning('请选择提供商')
+      return
+    }
+    if (!displayName.trim()) {
+      toast.warning('请填写供应商名称')
       return
     }
     if (!model.trim()) {
@@ -280,11 +287,12 @@ export function AiSection({
   // 复制配置：后端创建副本（含密钥）-> 进入新副本编辑态，改完保存更新
   const onCopyConfig = async (c: SavedConfig) => {
     try {
-      const res = await copyAIConfig(c.id)
+      const copiedName = `${c.displayName || getProviderDisplayName(c.provider)} copy`
+      const res = await copyAIConfig(c.id, c.displayName || getProviderDisplayName(c.provider))
       await qc.invalidateQueries({ queryKey: ['ai-settings'] })
       setEditingConfigId(res.configId)
       setProvider(c.provider)
-      setDisplayName(c.displayName ? c.displayName + ' (副本)' : '')
+      setDisplayName(copiedName)
       setModel(c.model)
       setBaseUrl(c.baseUrl || AI_PRESETS[c.provider]?.baseUrl || '')
       setApiKey('')
@@ -357,27 +365,15 @@ export function AiSection({
   const editForm = (
     <>
       <div>
-        <Label>提供商</Label>
-        {provider === 'custom' ? (
-          <Input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="给这个自定义配置起个名字（如：我的 GPT）"
-            autoComplete="off"
-            className="h-12 text-base"
-          />
-        ) : (
-          <div className="flex items-center gap-2.5 px-3 py-2 min-h-12 rounded-[10px] border border-(--border) bg-(--bg-primary)">
-            {preset?.logo ? (
-              <img src={preset.logo} alt="" className="w-5 h-5 object-contain shrink-0" />
-            ) : (
-              <Bot size={18} className="shrink-0 text-(--text-muted)" />
-            )}
-            <span className="text-base font-medium text-(--text-primary)">
-              {preset?.label || provider || '未选择'}
-            </span>
-          </div>
-        )}
+        <Label htmlFor="ai-display-name">供应商名称</Label>
+        <Input
+          id="ai-display-name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="供应商名称"
+          autoComplete="off"
+          className="h-12 text-base"
+        />
       </div>
       <div>
         <Label htmlFor="ai-model">模型</Label>
