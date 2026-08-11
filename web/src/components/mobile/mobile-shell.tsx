@@ -305,13 +305,15 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
                 // Dock "搜索"图标 toggle：取消选中 = 一次性清空搜索 query + 收起搜索栏，
                 // 等同于搜索框内 × 关闭按钮功能（区别于 × 是逐步清：先清 input 再关闭）。
                 // 这样视图从过滤态恢复、input 重置、键盘收起同步生效。
-                setSearchOpen((v) => {
-                  if (v) {
-                    setInput('')
-                    setSearchQuery('')
-                  }
-                  return !v
-                })
+                if (searchOpen) {
+                  setInput('')
+                  setSearchQuery('')
+                  setSearchOpen(false)
+                } else {
+                  // 移动浏览器只会为点击手势内的 focus 唤起软键盘；rAF/effect 已脱离手势。
+                  flushSync(() => setSearchOpen(true))
+                  searchInputRef.current?.focus()
+                }
               }}
               className={cn(searchOpen && 'search-active')}
               aria-label="搜索"
