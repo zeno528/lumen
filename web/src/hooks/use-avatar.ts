@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getAvatar, updateAvatar, type AvatarSettings } from '@/api/settings'
+import { saveAvatarCache } from '@/lib/avatar-cache'
 
 const AVATAR_KEY = ['auth-avatar'] as const
 
@@ -7,7 +8,12 @@ const AVATAR_KEY = ['auth-avatar'] as const
 export function useAvatar() {
   return useQuery({
     queryKey: AVATAR_KEY,
-    queryFn: getAvatar,
+    queryFn: async () => {
+      const avatar = await getAvatar()
+      // 其他终端经 WS 刷新的结果也落盘，避免下次刷新仍从旧头像起步。
+      saveAvatarCache(avatar)
+      return avatar
+    },
   })
 }
 
@@ -16,11 +22,8 @@ export function useUpdateAvatar() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: AvatarSettings) => updateAvatar(body),
-    onSuccess: (_data, body) => {
-      // 同步写 localStorage，供下次首屏 hydration 用（避免头像闪烁）
-      try {
-        localStorage.setItem('avatar', JSON.stringify(body))
-      } catch { /* quota 等不影响功能 */ }
+    onSuccess: (data) => {
+      saveAvatarCache(data)
       qc.invalidateQueries({ queryKey: AVATAR_KEY })
     },
   })

@@ -7,6 +7,7 @@ import type { Persister, PersistedClient } from '@tanstack/query-persist-client-
 import '@fontsource-variable/inter'
 import './styles/main.css'
 import { setAuthQueryClient } from '@/stores/auth'
+import { readAvatarCache } from '@/lib/avatar-cache'
 import { router } from './router'
 
 /* 初始化主题（深浅 data-theme + 配色 data-accent），避免首屏闪烁 */
@@ -33,15 +34,6 @@ function readCachedNickname(): { nickname: string } | undefined {
     return undefined
   }
 }
-function readCachedAvatar(): { avatar: string; avatarColor: string } | undefined {
-  try {
-    const cached = localStorage.getItem('avatar')
-    return cached ? (JSON.parse(cached) as { avatar: string; avatarColor: string }) : undefined
-  } catch {
-    return undefined
-  }
-}
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -109,7 +101,7 @@ function startApp() {
   // 不能让上一轮 Query 缓存的旧头像在首帧短暂盖过当前头像。
   const cachedNick = readCachedNickname()
   if (cachedNick) queryClient.setQueryData(['auth-nickname'], cachedNick)
-  const cachedAvatar = readCachedAvatar()
+  const cachedAvatar = readAvatarCache()
   if (cachedAvatar) queryClient.setQueryData(['auth-avatar'], cachedAvatar)
 
   createRoot(appRoot).render(
