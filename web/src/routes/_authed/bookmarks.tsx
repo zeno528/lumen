@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useShallow } from 'zustand/react/shallow'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Star,
   Pencil,
@@ -36,9 +36,6 @@ import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toast'
 import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
-import { fetchAIMeta } from '@/api/utils'
-import { getAISettings } from '@/api/settings'
-import { AI_PRESETS } from '@/lib/ai-providers'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 import { resolveCategoryIcon } from '@/lib/icon-map'
@@ -62,9 +59,6 @@ export const Route = createFileRoute('/_authed/bookmarks')({
 function BookmarksPage() {
   const { data: bmData, isLoading, error } = useBookmarks()
   const { data: catData } = useCategories()
-  const { data: aiData } = useQuery({ queryKey: ['ai-settings'], queryFn: getAISettings })
-  const activeProviderLogo =
-    AI_PRESETS[aiData?.activeProvider ?? '']?.logo ?? null
   const toggleFav = useToggleFavorite()
   const deleteMut = useDeleteBookmark()
   const batchDeleteMut = useBatchDelete()
@@ -418,76 +412,15 @@ function BookmarksPage() {
     }
   }
 
-  // 智能填充（外面入口：右键卡片 → 选「智能填充」）：toast loading → AI 返回后开模态框 + 预填。
-  // 不闪模态框：toast loading → AI 返回后直接开 dialog + 预填。
-  // 与刷新图标对齐：注册 AbortController + ESC 监听 + toast.onDismiss，让 X 按钮 / ESC 都能取消。
-  const aiFillAbortRef = useRef<AbortController | null>(null)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && aiFillAbortRef.current) {
-        e.stopImmediatePropagation()
-        e.preventDefault()
-        aiFillAbortRef.current.abort()
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [])
-
-  const handleAIFillOutside = async (bookmark: NonNullable<typeof menuBookmark>) => {
-    const ac = new AbortController()
-    aiFillAbortRef.current = ac
-    const tid = toast.loading(
-      '正在智能分析…',
-      activeProviderLogo ? (
-        <img
-          src={activeProviderLogo}
-          alt=""
-          className="w-4 h-4 animate-spin"
-          style={{ animationDuration: '1.5s' }}
-        />
-      ) : undefined,
-      { onDismiss: () => ac.abort() },
-    )
-    try {
-      const meta = await fetchAIMeta(
-        bookmark.url,
-        categories.map((c) => c.name),
-        ac.signal,
-        { title: bookmark.title, description: bookmark.description, tags: bookmark.tags.join(', ') },
-      )
-      const finalTitle = meta.title_cn || meta.title || ''
-      const finalDesc = meta.description_cn || meta.description || ''
-      // tags：split + 过滤已有分类名
-      let finalTags = ''
-      if (meta.tags) {
-        const catNames = new Set(categories.map((c) => c.name.trim()))
-        const filtered = meta.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter((t) => t && !catNames.has(t))
-        finalTags = filtered.join(', ')
-      }
-      const usedSerper = meta.usedSerper === 'true'
-      toast.resolve(
-        tid,
-        usedSerper ? '智能获取成功 · 调用了搜索工具' : '智能获取成功',
-        'success',
-      )
-      openEditBookmarkWithPrefill(bookmark.id, {
-        id: bookmark.id,
-        title: finalTitle,
-        description: finalDesc,
-        tags: finalTags,
-      })
-    } catch (e) {
-      const err = e as Error
-      // 与刷新图标对齐：用户主动取消转 warning，不再 fallback 新建 toast
-      if (err.name === 'AbortError') toast.resolve(tid, '已取消', 'warning')
-      else toast.resolve(tid, err.message || '智能获取失败', 'error')
-    } finally {
-      if (aiFillAbortRef.current === ac) aiFillAbortRef.current = null
-    }
+  // 旧书签复用编辑弹窗内的 AI 填充：获取中仍能保存当前内容，取消则由弹窗统一中断请求。
+  const handleAIFillOutside = (bookmark: NonNullable<typeof menuBookmark>) => {
+    openEditBookmarkWithPrefill(bookmark.id, {
+      id: bookmark.id,
+      title: '',
+      description: '',
+      tags: '',
+      autoFill: true,
+    })
   }
 
   // 导出选中 → 打开 ExportDialog 带 ids 参数

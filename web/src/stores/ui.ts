@@ -15,6 +15,8 @@ export interface AIPrefill {
   title: string
   description: string
   tags: string
+  /** 右键智能填充打开编辑框后，自动开始同一套弹窗内填充流程。 */
+  autoFill?: boolean
 }
 
 interface UIState {
@@ -70,7 +72,7 @@ interface UIState {
   bookmarkDialog: number | 'create' | null
   openCreateBookmark: () => void
   openEditBookmark: (id: number) => void
-  /** 右键「智能填充」：AI 结果返回后打开编辑模态框 + 预填数据 */
+  /** 右键「智能填充」：打开编辑模态框，并可携带预填或自动填充请求。 */
   openEditBookmarkWithPrefill: (id: number, prefill: AIPrefill) => void
   closeBookmarkDialog: () => void
 

@@ -76,6 +76,7 @@ export function BookmarkDialog({
   const [duplicateBookmark, setDuplicateBookmark] = useState<Bookmark | null>(null)
   const [idCopied, setIdCopied] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
+  const [autoFillRequested, setAutoFillRequested] = useState(false)
   const [fetchingTitle, setFetchingTitle] = useState(false)
   const [fetchingDesc, setFetchingDesc] = useState(false)
   // AI 回填进行中的字段（title/desc/tags）-> 输入框内指示器
@@ -136,6 +137,7 @@ export function BookmarkDialog({
   useEffect(() => {
     if (!open) return
     aiSaveRequestedRef.current = false
+    setAutoFillRequested(aiPrefill?.autoFill === true)
     if (editingBookmark) {
       setUrl(editingBookmark.url)
       const cat = categories.find((c) => c.id === editingBookmark.category_id)
@@ -252,13 +254,36 @@ export function BookmarkDialog({
 
     const categoryNames = new Set(categories.map((c) => c.name.trim().toLowerCase()))
     if (categoryId != null && category) categoryNames.add(category.toLowerCase())
+    const tags = parseTags(rawTags).filter((tag) => !categoryNames.has(tag.toLowerCase()))
+    if (editingBookmark) {
+      const updated = {
+        ...editingBookmark,
+        url: normalized,
+        title: finalTitle || normalized,
+        description: finalDesc,
+        tags,
+        category_id: categoryId,
+      }
+      await updateMut.mutateAsync({
+        id: editingBookmark.id,
+        input: {
+          url: updated.url,
+          title: updated.title,
+          description: updated.description || undefined,
+          tags: updated.tags,
+          category_id: updated.category_id,
+        },
+      })
+      return getSavedFeedback(updated, category)
+    }
+
     const favicon =
       preFetchedFaviconRef.current || (await fetchFaviconDataUri(normalized).catch(() => null))
     const result = await createMut.mutateAsync({
       url: normalized,
       title: finalTitle || normalized,
       description: finalDesc || undefined,
-      tags: parseTags(rawTags).filter((tag) => !categoryNames.has(tag.toLowerCase())),
+      tags,
       category_id: categoryId,
       favicon: favicon || undefined,
     })
@@ -271,7 +296,7 @@ export function BookmarkDialog({
     return feedback
   }
 
-  /* AI 智能填充：用户在分析中保存时，复用同一次结果直接创建书签。 */
+  /* AI 智能填充：用户在分析中保存时，复用同一次结果创建或更新书签。 */
   const handleAI = async (urlArg?: string) => {
     const rawUrl = urlArg ?? url
     const normalized = requireUrl(rawUrl)
@@ -374,6 +399,17 @@ export function BookmarkDialog({
     }
   }
 
+  useEffect(() => {
+    if (!open || !autoFillRequested || aiLoading) return
+    setAutoFillRequested(false)
+    void handleAI()
+  }, [open, autoFillRequested, aiLoading])
+
+  const cancel = () => {
+    aiAbortRef.current?.abort()
+    onClose()
+  }
+
   // Esc 中断 AI/抓标题（capture 阶段先于 Dialog 的 bubble Esc 关闭，避免冒泡触发 dialog 自管 close）
   useEffect(() => {
     if (!open) return
@@ -425,10 +461,10 @@ export function BookmarkDialog({
   }
 
   const save = () => {
-    if (!editingBookmark && aiLoading) {
+    if (aiLoading) {
       const normalized = requireUrl(url)
       if (!normalized) return
-      const duplicate = findDuplicateBookmark(bookmarks, normalized)
+      const duplicate = findDuplicateBookmark(bookmarks, normalized, editingBookmark?.id)
       if (duplicate) {
         setUrlDuplicate(true)
         setDuplicateBookmark(duplicate)
@@ -501,7 +537,7 @@ export function BookmarkDialog({
     // 更新：useUpdateBookmark 乐观（onMutate 改缓存秒变，失败 onError 回滚）。
     // 新建：useCreateBookmark 在 onSuccess 用后端真值 append（省 refetch；失败则未 append，缓存不动）。
     // 立即关弹窗，await 写库后再弹成功通知；失败补错误通知（409 冲突等：红色通知，用户重新编辑）。
-    onClose()
+    if (!aiLoading) onClose()
     try {
       if (editingBookmark) {
         await updateMut.mutateAsync({ id: editingBookmark.id, input })
@@ -561,7 +597,7 @@ export function BookmarkDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={cancel}
       title={editingBookmark ? '编辑书签' : '添加书签'}
       headerExtra={
         editingBookmark ? (
@@ -597,12 +633,12 @@ export function BookmarkDialog({
             <Sparkles size={14} />
             {aiLoading ? 'AI 填充中…' : '智能填充'}
           </Button>
-          <Button variant="soft" onClick={onClose}>
+          <Button variant="soft" onClick={cancel}>
             取消
           </Button>
           <Button
             onClick={save}
-            disabled={saving || (!!editingBookmark && aiLoading)}
+            disabled={saving}
           >
             {saving ? (
               <>
