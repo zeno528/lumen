@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 
 	"lumen/server/db"
 )
@@ -33,10 +34,11 @@ func newTestAPI(t *testing.T) *testAPI {
 	}
 
 	srv := &Server{
-		db:           database,
-		config:       &Config{JWTSecret: "test-jwt-secret", Password: "test-password"},
-		usedTickets:  make(map[string]time.Time),
-		rateLimiters: make(map[string]*ipRateLimiter),
+		db:                database,
+		config:            &Config{JWTSecret: "test-jwt-secret", Password: "test-password"},
+		usedTickets:       make(map[string]time.Time),
+		verifiedPasswords: make(map[string]time.Time),
+		rateLimiters:      make(map[string]*ipRateLimiter),
 	}
 	if err := srv.initPasswordIfNeeded(); err != nil {
 		t.Fatal(err)
@@ -48,6 +50,8 @@ func newTestAPI(t *testing.T) *testAPI {
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(srv.config.JWTSecret, srv))
 		r.Get("/api/auth/verify", srv.handleVerify)
+		r.Get("/api/auth/password-verified", srv.handlePasswordVerifiedStatus)
+		r.Post("/api/auth/verify-password", srv.handleVerifyPassword)
 		r.Put("/api/auth/password", srv.handleChangePassword)
 		r.Get("/api/auth/avatar", srv.handleGetAvatar)
 		r.Put("/api/auth/avatar", srv.handleUpdateAvatar)
@@ -236,6 +240,105 @@ func TestPasswordChangeInvalidatesExistingJWT(t *testing.T) {
 		"password": "new-test-password",
 	})
 	requireStatus(t, res, http.StatusOK)
+}
+
+func TestVerifyPassword(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	requireStatus(t, api.request(t, http.MethodPost, "/api/auth/verify-password", jwt, map[string]string{"password": "test-password"}), http.StatusOK)
+	requireStatus(t, api.request(t, http.MethodPost, "/api/auth/verify-password", jwt, map[string]string{"password": "wrong"}), http.StatusUnauthorized)
+	requireStatus(t, api.request(t, http.MethodPost, "/api/auth/verify-password", jwt, map[string]string{}), http.StatusBadRequest)
+}
+
+func TestPasswordVerifyWindowKeepsCurrentSession(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+
+	// 登录即视为密码验证（10 分钟时效）→ 状态接口返回 verified，改账号可不带 currentPassword
+	status := decodeJSON[struct {
+		Verified bool `json:"verified"`
+	}](t, api.request(t, http.MethodGet, "/api/auth/password-verified", jwt, nil))
+	if !status.Verified {
+		t.Fatalf("登录后应为已验证状态，got %+v", status)
+	}
+
+	// 不带当前密码改账号：成功且返回新 token（当前会话保留）
+	res := api.request(t, http.MethodPut, "/api/auth/password", jwt, map[string]string{
+		"newPassword": "test-password", // 不改密码用当前密码占位（后端必填）
+		"username":    "new-admin",
+	})
+	requireStatus(t, res, http.StatusOK)
+	newJWT := decodeJSON[struct {
+		Token string `json:"token"`
+	}](t, res).Token
+	if newJWT == "" {
+		t.Fatal("响应缺少新 token")
+	}
+
+	// 新 token 可用、旧 token（其他设备）已失效
+	requireStatus(t, api.request(t, http.MethodGet, "/api/auth/verify", newJWT, nil), http.StatusOK)
+	requireStatus(t, api.request(t, http.MethodGet, "/api/auth/verify", jwt, nil), http.StatusUnauthorized)
+
+	// 验证时效继承：改完账号后直接改密码，无需再验证
+	res2 := api.request(t, http.MethodPut, "/api/auth/password", newJWT, map[string]string{
+		"newPassword": "brand-new-password",
+	})
+	requireStatus(t, res2, http.StatusOK)
+	newJWT2 := decodeJSON[struct {
+		Token string `json:"token"`
+	}](t, res2).Token
+
+	// 错误当前密码仍被拒绝
+	requireStatus(t, api.request(t, http.MethodPut, "/api/auth/password", newJWT2, map[string]string{
+		"currentPassword": "wrong",
+		"newPassword":     "whatever123",
+	}), http.StatusUnauthorized)
+}
+
+func TestChangeUsernameOnlyKeepsPassword(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api) // 登录即视为密码验证
+
+	// 只改账号、不传新密码：不应再报"请填写完整"，且密码保持不变
+	requireStatus(t, api.request(t, http.MethodPut, "/api/auth/password", jwt, map[string]string{
+		"username": "new-admin",
+	}), http.StatusOK)
+
+	requireStatus(t, api.request(t, http.MethodPost, "/api/auth/login", "", map[string]string{
+		"username": "new-admin",
+		"password": "test-password",
+	}), http.StatusOK)
+}
+
+func TestOldTokenWithoutJtiKeepsVerifyWindow(t *testing.T) {
+	api := newTestAPI(t)
+	// 构造无 jti 的"旧" token（模拟 jti 功能上线前签发的会话）
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, JWTClaims{
+		TokenVersion: 0,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer: "lumen",
+		},
+	}).SignedString([]byte("test-jwt-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 初始未验证
+	status := decodeJSON[struct {
+		Verified bool `json:"verified"`
+	}](t, api.request(t, http.MethodGet, "/api/auth/password-verified", signed, nil))
+	if status.Verified {
+		t.Fatal("新会话不应为已验证状态")
+	}
+
+	// 验证一次后，同一旧 token 保持已验证
+	requireStatus(t, api.request(t, http.MethodPost, "/api/auth/verify-password", signed, map[string]string{"password": "test-password"}), http.StatusOK)
+	status = decodeJSON[struct {
+		Verified bool `json:"verified"`
+	}](t, api.request(t, http.MethodGet, "/api/auth/password-verified", signed, nil))
+	if !status.Verified {
+		t.Fatal("验证一次后应保持已验证状态")
+	}
 }
 
 func TestBookmarkAndCategoryLifecycle(t *testing.T) {

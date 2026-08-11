@@ -147,8 +147,8 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 签发 JWT（和密码登录同一个 token）
-	token, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
+	// 签发 JWT（和密码登录同一个 token；jti 此处不用，GitHub 登录不标记"密码已验证"）
+	token, _, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
 	if err != nil {
 		log.Printf("GitHub OAuth 生成 token 失败: %v", err)
 		http.Redirect(w, r, "/?error=oauth_token_failed", http.StatusFound)

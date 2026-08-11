@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, User, KeyRound, Bot, Palette, Trash2, Home, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, User, KeyRound, Bot, Palette, Trash2, Home, ImageUp, type LucideIcon } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
@@ -32,11 +32,12 @@ const TABS: TabDef[] = [
   { id: 'token', title: 'API Token', icon: KeyRound, Component: TokenSection },
 ]
 
-/** 子操作视图标题（Master-Detail 头部显示）*/
-const SUBVIEW_TITLES: Record<string, string> = {
-  'change-credentials': '修改账号密码',
-  'avatar': '选择头像',
-  'ai-add-provider': '选择提供商',
+/** 子操作视图标题 + 图标（Master-Detail 头部显示）*/
+const SUBVIEW_META: Record<string, { title: string; icon: LucideIcon }> = {
+  'change-username': { title: '修改账号', icon: User },
+  'change-password': { title: '修改密码', icon: KeyRound },
+  'avatar': { title: '选择头像', icon: ImageUp },
+  'ai-add-provider': { title: '选择提供商', icon: Bot },
 }
 
 /**
@@ -158,6 +159,7 @@ export function SettingsDialog() {
 
   // 共享内容：左标签栏（桌面 md+）+ 顶部 tab（移动端）+ 右内容区
   // 响应式 CSS（md:）在桌面模态框 / 移动端全屏两种外壳下都基于视口宽度正确切换
+  const subMeta = subView ? SUBVIEW_META[subView] : undefined
   const content = (
     <>
       {/* 左标签栏（桌面）*/}
@@ -212,8 +214,11 @@ export function SettingsDialog() {
                   className="group inline-flex items-center gap-2 cursor-pointer transition-colors"
                 >
                   <ChevronLeft size={18} className="text-(--text-secondary) transition-colors group-hover:text-(--accent)" />
+                  {subMeta && (
+                    <subMeta.icon size={16} className="text-(--text-secondary) transition-colors group-hover:text-(--accent)" />
+                  )}
                   <h3 className="text-base font-semibold text-(--text-primary) transition-colors group-hover:text-(--accent)">
-                    {SUBVIEW_TITLES[subView] ?? ''}
+                    {subMeta?.title ?? ''}
                   </h3>
                 </button>
               </div>
@@ -259,7 +264,8 @@ export function SettingsDialog() {
             className="inline-flex items-center gap-2 cursor-pointer text-(--text-primary) active:opacity-60 transition-opacity"
           >
             <ChevronLeft size={20} className="text-(--text-secondary)" />
-            <h3 className="text-base font-semibold">{SUBVIEW_TITLES[subView] ?? ''}</h3>
+            {subMeta && <subMeta.icon size={18} className="text-(--text-secondary)" />}
+            <h3 className="text-base font-semibold">{subMeta?.title ?? ''}</h3>
           </button>
         ) : (
           <span className="text-base font-semibold text-(--text-primary)">设置中心</span>

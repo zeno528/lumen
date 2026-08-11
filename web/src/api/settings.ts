@@ -47,37 +47,59 @@ export function updateNickname(nickname: string): Promise<{ nickname: string }> 
 }
 
 /**
- * 改账号/密码（需当前密码验证，PUT /api/auth/password）。
- * 成功后 token 失效，调用方应强制重登。
- *
- * 注意：绕过统一 api 客户端——后者对所有 401 自动 logout+跳登录，
- * 但“旧密码错”是业务 401，应留在页面提示，故此处用原生 fetch 手动处理。
+ * 绕过统一 api 客户端的鉴权 fetch。
+ * 为什么不用 api()：api() 对所有 401 自动 logout+跳登录，但改账号/密码场景的 401
+ * （“旧密码错”/“请先验证”）是业务错误，应留在页面提示，不能把用户踢下线。
+ * 失败抛 ApiError（含后端 error 文案），成功返回 res 由调用方解析。
  */
+async function authedFetch(url: string, init: RequestInit, fallbackMsg: string) {
+  const token = useAuthStore.getState().token
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token ?? ''}`,
+    },
+  })
+  if (!res.ok) {
+    let msg = fallbackMsg
+    try {
+      msg = (await res.json()).error || msg
+    } catch {
+      /* 非 JSON 错误体 */
+    }
+    throw new ApiError(res.status, msg)
+  }
+  return res
+}
+
+/** 改账号/密码（PUT /api/auth/password）。成功后端返回新 token，调用方替换以保留当前会话。 */
 export async function updatePassword(body: {
   currentPassword: string
   newPassword?: string
   username?: string
   nickname?: string
-}): Promise<void> {
-  const token = useAuthStore.getState().token
-  const res = await fetch('/api/auth/password', {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token ?? ''}`,
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    let msg = '修改失败'
-    try {
-      const d = await res.json()
-      msg = d.error || msg
-    } catch {
-      /* 非 JSON 错误体 */
-    }
-    throw new ApiError(res.status, res.status === 401 ? '当前密码错误' : msg)
-  }
+}): Promise<{ token: string }> {
+  const res = await authedFetch(
+    '/api/auth/password',
+    { method: 'PUT', body: JSON.stringify(body) },
+    '修改失败',
+  )
+  return res.json()
+}
+
+/** 验证当前密码（POST /api/auth/verify-password）——改账号/密码前验证身份用，无副作用。 */
+export async function verifyPassword(password: string): Promise<void> {
+  await authedFetch(
+    '/api/auth/verify-password',
+    { method: 'POST', body: JSON.stringify({ password }) },
+    '验证失败',
+  )
+}
+
+/** 当前会话是否在密码验证时效内（GET /api/auth/password-verified）——决定是否跳过验证步骤 */
+export function getPasswordVerified(): Promise<{ verified: boolean }> {
+  return api('/auth/password-verified')
 }
 
 // ===== 用户偏好设置（user_settings.go，跨设备同步）=====

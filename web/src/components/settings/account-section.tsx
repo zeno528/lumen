@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cat, LogOut, Pencil, Shield, User } from 'lucide-react'
+import { Cat, ChevronRight, LogOut, Pencil, User } from 'lucide-react'
 import { getUsername, getNickname, updateNickname } from '@/api/settings'
 import { useAvatar } from '@/hooks/use-avatar'
 import { useUnsavedGuard } from '@/hooks/use-unsaved-guard'
@@ -120,8 +120,14 @@ export function AccountSection({
   const avatarColor = avatarData?.avatarColor || '#f59e0b'
 
   // === 子操作视图（Master-Detail：SettingsDialog 切换到 subView 时渲染对应 Form）===
-  if (subView === 'change-credentials')
-    return <ChangeCredentialsForm currentUsername={usernameData?.username ?? ''} />
+  if (subView === 'change-username' || subView === 'change-password')
+    return (
+      <ChangeCredentialsForm
+        mode={subView === 'change-username' ? 'username' : 'password'}
+        currentUsername={usernameData?.username ?? ''}
+        onSubView={onSubView}
+      />
+    )
   if (subView === 'avatar')
     return (
       <AvatarPicker
@@ -132,15 +138,14 @@ export function AccountSection({
       />
     )
 
-  // === 默认：账号 + 安全 section ===
+  // === 默认：账号与安全合并为一个卡片（X 风格：值 + 箭头行）===
   return (
-    <>
-      <section className="flex flex-col gap-2">
-        <h3 className="text-base font-semibold text-(--text-primary) inline-flex items-center gap-2">
-          <User size={16} />
-          账号
-        </h3>
-        <div className={cn(SECTION_CLASS, 'gap-4')}>
+    <section className="flex flex-col gap-2">
+      <h3 className="text-base font-semibold text-(--text-primary) inline-flex items-center gap-2">
+        <User size={16} />
+        账号与安全
+      </h3>
+      <div className={cn(SECTION_CLASS, 'gap-4')}>
           {/* 头像 */}
           <div className="flex items-center gap-3">
             <div
@@ -205,12 +210,30 @@ export function AccountSection({
             )}
           </div>
 
-          {/* 账号（只读，修改入口在安全区「修改账号密码」） */}
-          <div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-(--text-muted)">账号</span>
-              <span className="text-sm text-(--text-primary)">{usernameData?.username ?? '-'}</span>
-            </div>
+          {/* 账号 / 密码（修改入口，X 风格行） */}
+          <div className="divide-y divide-(--border)">
+            <button
+              type="button"
+              onClick={() => onSubView('change-username')}
+              className="w-full py-3 flex items-center justify-between gap-3 text-left group"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-(--text-primary)">账号</div>
+                <div className="text-xs text-(--text-muted) mt-0.5 truncate">{usernameData?.username ?? '-'}</div>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-(--text-muted) transition-colors group-hover:text-(--accent)" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onSubView('change-password')}
+              className="w-full py-3 flex items-center justify-between gap-3 text-left group"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-(--text-primary)">密码</div>
+                <div className="text-xs text-(--text-muted) mt-0.5">••••••••</div>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-(--text-muted) transition-colors group-hover:text-(--accent)" />
+            </button>
           </div>
 
           {/* 退出登录 */}
@@ -227,29 +250,7 @@ export function AccountSection({
               退出登录
             </Button>
           </div>
-        </div>
-      </section>
-
-      {/* 安全区 */}
-      <section className="flex flex-col gap-2 mt-6">
-        <h3 className="text-base font-semibold text-(--text-primary) inline-flex items-center gap-2">
-          <Shield size={16} />
-          安全
-        </h3>
-        <div className={SECTION_CLASS}>
-          <div className="divide-y divide-(--border)">
-            <div className="py-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-(--text-primary)">修改账号密码</div>
-                <div className="text-xs text-(--text-muted) mt-0.5">可单独改账号 / 密码，或一起改</div>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => onSubView('change-credentials')}>
-                修改
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
+      </div>
+    </section>
   )
 }

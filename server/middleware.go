@@ -21,24 +21,41 @@ import (
 // AuthMiddleware 在 msk_ 通道写入 true；RequireJWT 据此拦截 token 管理端点。
 type apiTokenCtxKey struct{}
 
+// jwtClaimsCtxKey 存放当前请求 JWT claims（仅 JWT 通道；API Token 通道无）。
+// 供改密码/验证密码等端点读取 jti 做会话级状态。
+type jwtClaimsCtxKey struct{}
+
+// jwtTokenCtxKey 存放当前请求的原始 JWT 字符串。
+// 旧 token 无 jti 时作为会话键兜底（否则老会话永远无法保持"密码已验证"状态）。
+type jwtTokenCtxKey struct{}
+
 // JWTClaims JWT 载荷
 type JWTClaims struct {
 	TokenVersion int `json:"tv,omitempty"`
 	jwt.RegisteredClaims
 }
 
-// GenerateToken 生成 JWT token（90 天有效期）
-func GenerateToken(secret string, version int) (string, error) {
+// GenerateToken 生成 JWT token（90 天有效期）。返回 token 与 jti（会话唯一标识），
+// 让登录/改密码等调用方直接拿到 jti 标记"密码已验证"，无需再解析刚签发的 token。
+func GenerateToken(secret string, version int) (string, string, error) {
+	// jti：会话唯一标识（改密码后保留当前会话、按会话记"密码已验证"时效用）
+	jtiBytes := make([]byte, 8)
+	if _, err := rand.Read(jtiBytes); err != nil {
+		return "", "", err
+	}
+	jti := hex.EncodeToString(jtiBytes)
 	claims := JWTClaims{
 		TokenVersion: version,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(90 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "lumen",
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(secret))
+	signed, err := token.SignedString([]byte(secret))
+	return signed, jti, err
 }
 
 // GenerateWSTicket 生成一次性 WebSocket 握手票据（5s 有效期，Issuer=lumen-ws）。
@@ -122,12 +139,13 @@ func AuthMiddleware(secret string, srv *Server) func(http.Handler) http.Handler 
 			}
 
 			// JWT 通道（校验 + TokenVersion）
-			if _, ok := validateJWT(tokenStr, secret, srv); !ok {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token 无效或已过期"})
+			if claims, ok := validateJWT(tokenStr, secret, srv); ok {
+				ctx := context.WithValue(r.Context(), jwtClaimsCtxKey{}, claims)
+				ctx = context.WithValue(ctx, jwtTokenCtxKey{}, tokenStr)
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
-
-			next.ServeHTTP(w, r)
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token 无效或已过期"})
 		})
 	}
 }

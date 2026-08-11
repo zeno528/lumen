@@ -219,6 +219,51 @@ func (s *Server) verifyPassword(password string) bool {
 	return false
 }
 
+// passwordVerifyWindow 密码验证时效：验证一次后，窗口内改账号/密码不再重复要求输入当前密码。
+const passwordVerifyWindow = 10 * time.Minute
+
+// requestSessionKey 返回当前请求的会话键：优先 JWT jti；旧 token 无 jti 时回退 token 原文
+// （同一 token 90 天有效期内保持"密码已验证"状态；API Token 通道无会话，返回空串）。
+func requestSessionKey(r *http.Request) string {
+	if claims, ok := r.Context().Value(jwtClaimsCtxKey{}).(*JWTClaims); ok && claims.ID != "" {
+		return claims.ID
+	}
+	if tok, ok := r.Context().Value(jwtTokenCtxKey{}).(string); ok && tok != "" {
+		return tok
+	}
+	return ""
+}
+
+// markSessionVerified 给当前请求的会话键标记密码验证时间。
+// 会话键 = jti（新 token）或 token 原文（旧 token 兜底，见 requestSessionKey）。
+func (s *Server) markSessionVerified(sessionKey string, at time.Time) {
+	if sessionKey == "" {
+		return
+	}
+	s.verifiedPasswordsMu.Lock()
+	s.verifiedPasswords[sessionKey] = at
+	s.verifiedPasswordsMu.Unlock()
+}
+
+// passwordVerifiedAt 返回该会话（jti）密码验证时间；未验证/已过期返回零值，并顺手清理过期记录。
+// 会话 jti 数量=登录次数（单用户规模），不清理也不会有增长风险。
+func (s *Server) passwordVerifiedAt(jti string) time.Time {
+	if jti == "" {
+		return time.Time{}
+	}
+	s.verifiedPasswordsMu.Lock()
+	defer s.verifiedPasswordsMu.Unlock()
+	at, ok := s.verifiedPasswords[jti]
+	if !ok {
+		return time.Time{}
+	}
+	if time.Since(at) >= passwordVerifyWindow {
+		delete(s.verifiedPasswords, jti)
+		return time.Time{}
+	}
+	return at
+}
+
 // upgradePasswordToBcrypt 把密码升级为 bcrypt 存储（登录验证旧 SHA-256 成功后调用，平滑迁移）。
 func (s *Server) upgradePasswordToBcrypt(password string) {
 	newHash, err := hashPasswordBcrypt(password)
@@ -308,11 +353,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	clearLoginFails(ip)
 
-	token, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
+	token, jti, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "生成 token 失败"})
 		return
 	}
+
+	// 登录即视为密码验证（同 10 分钟时效）：登录后直接改账号/密码无需再输一次当前密码
+	s.markSessionVerified(jti, time.Now())
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
@@ -336,6 +384,32 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "openapi": "/openapi.json"})
 }
 
+// handleVerifyPassword POST /api/auth/verify-password
+// 仅校验当前密码（修改账号/密码前的验证身份步骤），无任何副作用。
+func (s *Server) handleVerifyPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Password string `json:"password"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请输入当前密码"})
+		return
+	}
+	if !s.verifyPassword(input.Password) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "当前密码错误"})
+		return
+	}
+	s.markSessionVerified(requestSessionKey(r), time.Now())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handlePasswordVerifiedStatus GET /api/auth/password-verified
+// 当前会话是否在密码验证时效内（前端据此直接跳过/显示验证步骤）。
+func (s *Server) handlePasswordVerifiedStatus(w http.ResponseWriter, r *http.Request) {
+	verified := !s.passwordVerifiedAt(requestSessionKey(r)).IsZero()
+	writeJSON(w, http.StatusOK, map[string]bool{"verified": verified})
+}
+
 // handleChangePassword PUT /api/auth/password
 // 统一处理：密码、账号、昵称的修改
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -351,37 +425,53 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.OldPassword == "" || input.NewPassword == "" {
+	// 至少要改一项（密码 / 账号 / 昵称）；身份验证在下方统一处理
+	if input.NewPassword == "" && input.Username == "" && input.Nickname == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请填写完整"})
 		return
 	}
 
-	if len(input.NewPassword) < 4 {
+	if input.NewPassword != "" && len(input.NewPassword) < 4 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "新密码至少 4 个字符"})
 		return
 	}
 
-	// 验证旧密码
-	if !s.verifyPassword(input.OldPassword) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "旧密码错误"})
+	// 验证身份：提供当前密码则直接校验；未提供则要求本会话在 10 分钟验证时效内（避免重复输入）
+	sessionKey := requestSessionKey(r)
+	verifiedAt := s.passwordVerifiedAt(sessionKey)
+	if input.OldPassword != "" {
+		if !s.verifyPassword(input.OldPassword) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "旧密码错误"})
+			return
+		}
+		verifiedAt = time.Now()
+	} else if verifiedAt.IsZero() {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "请先验证当前密码"})
 		return
 	}
 
-	// 新密码用 bcrypt 哈希存入数据库（不回写 config 内存，避免明文驻留）
-	hashed, err := hashPasswordBcrypt(input.NewPassword)
-	if err != nil {
-		log.Printf("哈希密码失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存密码失败"})
-		return
-	}
-	_, err = s.db.Exec(`
-		INSERT INTO settings (key, value) VALUES ('password_hash', ?)
-		ON CONFLICT(key) DO UPDATE SET value = ?
-	`, hashed, hashed)
-	if err != nil {
-		log.Printf("保存密码失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存密码失败"})
-		return
+	// 提供新密码才更新密码（只改账号/昵称时不动密码哈希）
+	if input.NewPassword != "" {
+		// 新密码不能与当前密码相同：会话验证时效路径下前端拿不到当前密码无法校验，由后端统一兜底
+		if s.verifyPassword(input.NewPassword) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "新密码不能与当前密码相同"})
+			return
+		}
+		hashed, err := hashPasswordBcrypt(input.NewPassword)
+		if err != nil {
+			log.Printf("哈希密码失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存密码失败"})
+			return
+		}
+		_, err = s.db.Exec(`
+			INSERT INTO settings (key, value) VALUES ('password_hash', ?)
+			ON CONFLICT(key) DO UPDATE SET value = ?
+		`, hashed, hashed)
+		if err != nil {
+			log.Printf("保存密码失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存密码失败"})
+			return
+		}
 	}
 
 	// 如果提供了账号，保存（哈希用于验证，明文用于显示）
@@ -411,11 +501,31 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		s.db.Exec("INSERT INTO settings (key, value) VALUES ('nickname', ?) ON CONFLICT(key) DO UPDATE SET value = ?", input.Nickname, input.Nickname)
 	}
 
-	// 递增 token 版本号，使所有旧 token 失效
+	// 递增 token 版本号，使所有旧 token 失效（其他设备下次请求 401 退出）
 	s.IncrementTokenVersion()
 
+	// 当前会话保留：用新版本号重发 token，前端替换本地 token 即可无缝继续
+	// （OWASP V3.3.3：改密码只终止"其他"会话，不要求踢出当前会话）
+	token, jti, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "生成 token 失败"})
+		return
+	}
+	// 新会话继承验证时效（原时间戳，不刷新）：改完一个再改另一个无需重复验证
+	s.markSessionVerified(jti, verifiedAt)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   90 * 24 * 3600,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
+		"ok":    true,
+		"token": token,
 	})
 }
 

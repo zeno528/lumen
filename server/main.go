@@ -24,20 +24,22 @@ import (
 
 // Server 应用服务器
 type Server struct {
-	db             *sql.DB
-	config         *Config
-	tokenVersion   int                       // 内存缓存，改密码时更新，避免每次请求查 DB
-	tokenMu        sync.RWMutex              // 保护 tokenVersion 并发读写（validateJWT 高频读 + 改密码写）
-	configMu       sync.RWMutex              // 保护 config.AI / config.SerperAPIKey 热更新读写（设置页改配置 vs AI 分析并发读，避免读到半更新 struct）
-	trustedProxies []*net.IPNet              // 可信反代 CIDR（getClientIP 防伪 XFF 用）
-	usedTickets    map[string]time.Time      // WS ticket jti 一次性去重（5s 内重用拒绝）
-	usedTicketsMu  sync.Mutex                // 保护 usedTickets
-	rateLimiters   map[string]*ipRateLimiter // 通用 IP 限速器池（按 limit:window 复用；ai-test/import/github callback）
-	rateLimitersMu sync.Mutex                // 保护 rateLimiters
-	indexHTML      []byte                    // 内存缓存 index.html，避免每次 SPA 回退都读磁盘
-	indexHTMLMu    sync.Mutex                // 保护 indexHTML 并发读写
-	indexHTMLMod   time.Time                 // index.html 修改时间，变化时自动重载（开发热更新）
-	hub            *ws.Hub                   // WebSocket Hub，所有客户端连接的广播中枢
+	db                  *sql.DB
+	config              *Config
+	tokenVersion        int                       // 内存缓存，改密码时更新，避免每次请求查 DB
+	tokenMu             sync.RWMutex              // 保护 tokenVersion 并发读写（validateJWT 高频读 + 改密码写）
+	configMu            sync.RWMutex              // 保护 config.AI / config.SerperAPIKey 热更新读写（设置页改配置 vs AI 分析并发读，避免读到半更新 struct）
+	trustedProxies      []*net.IPNet              // 可信反代 CIDR（getClientIP 防伪 XFF 用）
+	usedTickets         map[string]time.Time      // WS ticket jti 一次性去重（5s 内重用拒绝）
+	usedTicketsMu       sync.Mutex                // 保护 usedTickets
+	verifiedPasswords   map[string]time.Time      // 会话键(jti/旧token原文)密码验证时间戳（10 分钟时效，见 auth.go）
+	verifiedPasswordsMu sync.Mutex                // 保护 verifiedPasswords
+	rateLimiters        map[string]*ipRateLimiter // 通用 IP 限速器池（按 limit:window 复用；ai-test/import/github callback）
+	rateLimitersMu      sync.Mutex                // 保护 rateLimiters
+	indexHTML           []byte                    // 内存缓存 index.html，避免每次 SPA 回退都读磁盘
+	indexHTMLMu         sync.Mutex                // 保护 indexHTML 并发读写
+	indexHTMLMod        time.Time                 // index.html 修改时间，变化时自动重载（开发热更新）
+	hub                 *ws.Hub                   // WebSocket Hub，所有客户端连接的广播中枢
 }
 
 // parseTrustedProxies 解析逗号分隔的 CIDR 列表为 []*net.IPNet。无效条目跳过并告警。
@@ -90,7 +92,13 @@ func main() {
 	}
 	log.Println("数据库迁移完成")
 
-	srv := &Server{db: database, config: config, usedTickets: make(map[string]time.Time), rateLimiters: make(map[string]*ipRateLimiter)}
+	srv := &Server{
+		db:                database,
+		config:            config,
+		usedTickets:       make(map[string]time.Time),
+		verifiedPasswords: make(map[string]time.Time),
+		rateLimiters:      make(map[string]*ipRateLimiter),
+	}
 
 	// 异步加载 theSVG 品牌图标域名映射（favicon 阶段0 精准命中 npmjs.com->npm 等，不阻塞启动；失败回退 slug 推导）
 	go loadTheSvgRegistry()
@@ -151,6 +159,8 @@ func main() {
 
 		// 认证验证
 		r.Get("/api/auth/verify", srv.handleVerify)
+		r.Get("/api/auth/password-verified", srv.handlePasswordVerifiedStatus)
+		r.Post("/api/auth/verify-password", srv.handleVerifyPassword)
 		r.Put("/api/auth/password", srv.handleChangePassword)
 		r.Get("/api/auth/nickname", srv.handleGetNickname)
 		r.Put("/api/auth/nickname", srv.handleUpdateNickname)
