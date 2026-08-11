@@ -783,7 +783,8 @@ func sniffImageMIME(data []byte) string {
 	return ""
 }
 
-// normalizeSVG 去除 SVG 内的深色模式自适应逻辑，固定为浅色模式颜色。
+// normalizeSVG 去除 SVG 内的配色方案自适应（prefers-color-scheme 媒体查询，
+// dark 与 light 分支都删），固定为浅色模式颜色。
 // 背景：品牌 SVG（theSVG/Simple Icons/站点自带）常写
 //
 //	@media (prefers-color-scheme: dark) { path { fill: #fff } }
@@ -797,15 +798,17 @@ func normalizeSVG(data []byte) []byte {
 		return data
 	}
 	// 1) 删除所有 @media (prefers-color-scheme: dark) { ... } 块（花括号配对，支持嵌套）
-	s = stripPrefersColorSchemeDark(s)
+	s = stripPrefersColorScheme(s)
 	// 2) 全白图标兜底：复用框架 replaceWhitePaint 把白色换成深灰 #242422。
 	// allPaintsWhite 保证仅全白才替换，深底白字（含非白 fill）天然不受影响。
 	s = replaceWhitePaint(s, "242422")
 	return []byte(s)
 }
 
-// stripPrefersColorSchemeDark 删除 SVG 里所有 prefers-color-scheme: dark 媒体查询块。
-func stripPrefersColorSchemeDark(s string) string {
+// stripPrefersColorScheme 删除 SVG 里所有 prefers-color-scheme 媒体查询块
+//（dark 与 light 分支都删）。品牌图标常以任一写法声明深浅自适应，lumen 图标容器
+// 固定浅色底，留着会让系统深色时图标变白隐身。保留 prefers-reduced-motion 等非配色查询。
+func stripPrefersColorScheme(s string) string {
 	var out strings.Builder
 	i := 0
 	for i < len(s) {
@@ -816,7 +819,7 @@ func stripPrefersColorSchemeDark(s string) string {
 		}
 		idx += i
 		out.WriteString(s[i:idx])
-		// 找媒体查询条件里的 prefers-color-scheme: dark（允许空格/大小写变化）
+		// 找媒体查询条件里的 prefers-color-scheme（允许空格/大小写变化）
 		head := s[idx:]
 		brace := strings.Index(head, "{")
 		if brace == -1 {
@@ -824,8 +827,8 @@ func stripPrefersColorSchemeDark(s string) string {
 			break
 		}
 		cond := strings.ToLower(head[:brace])
-		if !strings.Contains(cond, "prefers-color-scheme") || !strings.Contains(cond, "dark") {
-			// 非 dark 主题媒体查询（如 light / prefers-reduced-motion），原样保留整个块
+		if !strings.Contains(cond, "prefers-color-scheme") {
+			// 非配色方案媒体查询（如 prefers-reduced-motion），原样保留整个块
 			end := matchBrace(s, idx+brace)
 			if end == -1 {
 				out.WriteString(head)
@@ -835,7 +838,7 @@ func stripPrefersColorSchemeDark(s string) string {
 			i = end + 1
 			continue
 		}
-		// dark 主题媒体查询：跳过整个块
+		// 配色方案媒体查询：跳过整个块
 		end := matchBrace(s, idx+brace)
 		if end == -1 {
 			break

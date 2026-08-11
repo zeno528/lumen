@@ -31,6 +31,19 @@ func TestNormalizeSVG_CompactMediaQuery(t *testing.T) {
 	}
 }
 
+// prefers-color-scheme: light 写法（mobbin 等：浅色不反转、深色反转）同样应删除。
+// 只删 dark 分支会让 light 写法逃过清洗，系统深色时图标变白隐身。
+func TestNormalizeSVG_StripsLightMediaQuery(t *testing.T) {
+	in := `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><image xlink:href="data:image/png;base64,iVBORw0KGgo=" width="512" height="512"/><style>@media (prefers-color-scheme:light){:root{filter:none}}</style></svg>`
+	out := string(normalizeSVG([]byte(in)))
+	if strings.Contains(out, "prefers-color-scheme") {
+		t.Fatalf("light media query 未被删除: %s", out)
+	}
+	if !strings.Contains(out, "<image") {
+		t.Fatalf("image 标签不应被破坏: %s", out)
+	}
+}
+
 // 普通 SVG（无自适应）应原样返回。
 func TestNormalizeSVG_PlainSVGUntouched(t *testing.T) {
 	in := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#4285F4" d="M0 0h24v24H0z"/></svg>`
