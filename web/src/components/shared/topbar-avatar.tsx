@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { HelpCircle, LogOut, Moon, Settings, Sun, Cat, User } from 'lucide-react'
+import { HelpCircle, LogOut, Moon, Settings, Sun, Cat, User, Radio } from 'lucide-react'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
 import { applyTheme } from '@/components/shared/theme-toggle'
 import { useAvatar } from '@/hooks/use-avatar'
@@ -57,7 +57,6 @@ export function TopbarAvatar({
   const nickname = nicknameData?.nickname || '用户'
   const wsStatus = useUIStore((s) => s.wsStatus)
   const initialConnection = wsStatus === 'initial'
-  // 首连静默时仍用已连接的尺寸占位，避免状态出现后用户卡片横向跳动。
   const dot = WS_DOT[wsStatus] ?? WS_DOT.connected
 
   // 监听 storage 事件：其他标签页或 ThemeToggle 切换主题时同步 label/icon。
@@ -138,6 +137,13 @@ export function TopbarAvatar({
     },
     { separator: true, label: '' },
     {
+      header: true,
+      label: initialConnection ? '连接中' : dot.label,
+      icon: <Radio size={14} />,
+      labelColor: dot.color,
+    },
+    { separator: true, label: '' },
+    {
       label: theme === 'notion-dark' ? '浅色' : '深色',
       icon: theme === 'notion-dark' ? <Sun size={14} /> : <Moon size={14} />,
       onClick: toggleTheme,
@@ -173,7 +179,7 @@ export function TopbarAvatar({
       <button
         type="button"
         className={cn(
-          'topbar-icon-btn h-9 rounded-full pl-1 pr-2.5 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
+          'topbar-icon-btn h-9 rounded-full pl-1 pr-2 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
           menu ? 'menu-open scale-105' : 'border-(--border)',
           className,
         )}
@@ -183,17 +189,19 @@ export function TopbarAvatar({
         aria-label={`用户菜单 · 实时同步：${initialConnection ? '初始连接中' : dot.label}`}
         aria-expanded={!!menu}
       >
-        <span className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center bg-(--bg-secondary) shrink-0">
-          {customUrl ? (
-            <img src={customUrl} alt="头像" className="w-full h-full object-cover" loading="eager" decoding="sync" />
-          ) : (
-            <span className="w-full h-full rounded-full flex items-center justify-center" style={{ background: avatarColor + '22', color: avatarColor }}>
-              <AvatarIcon size={18} />
-            </span>
-          )}
+        <span className="relative w-7 h-7 shrink-0">
+          <span className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-(--bg-secondary)">
+            {customUrl ? (
+              <img src={customUrl} alt="头像" className="w-full h-full object-cover" loading="eager" decoding="sync" />
+            ) : (
+              <span className="w-full h-full rounded-full flex items-center justify-center" style={{ background: avatarColor + '22', color: avatarColor }}>
+                <AvatarIcon size={18} />
+              </span>
+            )}
+          </span>
+          <span className={cn('absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full border-2 border-(--bg-secondary)', initialConnection && 'invisible', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
         </span>
-        <span className={cn('w-[6px] h-[6px] rounded-full shrink-0', initialConnection && 'invisible', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
-        <span className={cn('text-xs font-medium whitespace-nowrap', initialConnection && 'invisible')} style={{ color: dot.color }}>{dot.label}</span>
+        <span className="min-w-16 max-w-24 text-xs font-medium truncate text-(--text-primary)" title={nickname}>{nickname}</span>
       </button>
       <ContextMenu
         open={!!menu}
