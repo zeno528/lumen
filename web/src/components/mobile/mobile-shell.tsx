@@ -474,7 +474,9 @@ function MobileCategorySelect() {
       >
         {current.icon}
         <span className="mobile-category-name">{current.name}</span>
-        <span className="mobile-category-count">{current.count}</span>
+        <span className={cn('mobile-category-count', !bmData && 'invisible')}>
+          {current.count}
+        </span>
         <ChevronDown size={10} className="mobile-category-arrow" />
       </button>
       <ContextMenu

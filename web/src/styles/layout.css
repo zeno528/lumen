@@ -1240,11 +1240,16 @@ select,
     text-overflow: ellipsis;
   }
   .mobile-category-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3ch;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     padding: 1px 7px;
     border-radius: 10px;
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
     flex-shrink: 0;
   }
