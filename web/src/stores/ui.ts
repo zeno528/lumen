@@ -9,16 +9,6 @@ import { setIdSearchMode as apiSetIdSearchMode } from '@/api/settings'
  */
 export type CategoryFilter = 'all' | '__favorites__' | '__uncategorized__' | number
 
-/** AI 预填数据（右键智能填充返回，传给 BookmarkDialog 预填字段）*/
-export interface AIPrefill {
-  id: number
-  title: string
-  description: string
-  tags: string
-  /** 右键智能填充打开编辑框后，自动开始同一套弹窗内填充流程。 */
-  autoFill?: boolean
-}
-
 interface UIState {
   /** 搜索词（顶栏输入，不持久化）*/
   searchQuery: string
@@ -72,12 +62,7 @@ interface UIState {
   bookmarkDialog: number | 'create' | null
   openCreateBookmark: () => void
   openEditBookmark: (id: number) => void
-  /** 右键「智能填充」：打开编辑模态框，并可携带预填或自动填充请求。 */
-  openEditBookmarkWithPrefill: (id: number, prefill: AIPrefill) => void
   closeBookmarkDialog: () => void
-
-  /** AI 预填数据（右键智能填充返回的结果，dialog 消费后清空）*/
-  aiPrefill: AIPrefill | null
 
   /** 设置模态框当前标签（设置页改为模态框后，由 SettingsDialog 标签栏共享）*/
   settingsTab: 'account' | 'token' | 'ai' | 'appearance'
@@ -214,12 +199,7 @@ export const useUIStore = create<UIState>()(
       bookmarkDialog: null as number | 'create' | null,
       openCreateBookmark: () => set({ bookmarkDialog: 'create' }),
       openEditBookmark: (id: number) => set({ bookmarkDialog: id }),
-      openEditBookmarkWithPrefill: (id: number, prefill: AIPrefill) =>
-        set({ bookmarkDialog: id, aiPrefill: prefill }),
-      closeBookmarkDialog: () => set({ bookmarkDialog: null, aiPrefill: null }),
-
-      /** AI 预填数据（右键智能填充返回，dialog 消费后清空）*/
-      aiPrefill: null as AIPrefill | null,
+      closeBookmarkDialog: () => set({ bookmarkDialog: null }),
 
       /** 设置模态框当前标签 */
       settingsTab: 'account' as 'account' | 'token' | 'ai' | 'appearance',

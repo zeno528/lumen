@@ -338,15 +338,40 @@ func (s *Server) handleUpdateBookmark(w http.ResponseWriter, r *http.Request) {
 		tagsJSON = []byte("[]")
 	}
 
-	result, err := s.db.Exec(
-		"UPDATE bookmarks SET url = ?, title = ?, description = ?, category_id = ?, tags = ?, favicon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-		input.URL, input.Title, input.Description, input.CategoryID, string(tagsJSON), input.Favicon, id,
+	categoryChanged :=
+		(existing.CategoryID == nil) != (input.CategoryID == nil) ||
+			(existing.CategoryID != nil && input.CategoryID != nil && *existing.CategoryID != *input.CategoryID)
+	sortOrder := existing.SortOrder
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Printf("操作失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+		return
+	}
+	defer tx.Rollback()
+	if categoryChanged {
+		if err := tx.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM bookmarks WHERE category_id IS ?", input.CategoryID).Scan(&sortOrder); err != nil {
+			log.Printf("操作失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+		sortOrder++
+	}
+
+	result, err := tx.Exec(
+		"UPDATE bookmarks SET url = ?, title = ?, description = ?, category_id = ?, tags = ?, favicon = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		input.URL, input.Title, input.Description, input.CategoryID, string(tagsJSON), input.Favicon, sortOrder, id,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "URL 与其他书签冲突"})
 			return
 		}
+		log.Printf("操作失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		log.Printf("操作失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
 		return

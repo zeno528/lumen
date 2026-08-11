@@ -76,7 +76,6 @@ export function BookmarkDialog({
   const [duplicateBookmark, setDuplicateBookmark] = useState<Bookmark | null>(null)
   const [idCopied, setIdCopied] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
-  const [autoFillRequested, setAutoFillRequested] = useState(false)
   const [fetchingTitle, setFetchingTitle] = useState(false)
   const [fetchingDesc, setFetchingDesc] = useState(false)
   // AI 回填进行中的字段（title/desc/tags）-> 输入框内指示器
@@ -110,8 +109,6 @@ export function BookmarkDialog({
   // 打开时初始化
   const currentCategory = useUIStore((s) => s.currentCategory)
   const setCurrentCategory = useUIStore((s) => s.setCurrentCategory)
-  const aiPrefill = useUIStore((s) => s.aiPrefill)
-  const consumeAIPrefill = () => useUIStore.setState({ aiPrefill: null })
 
   const getSavedFeedback = (
     saved: Bookmark,
@@ -145,25 +142,13 @@ export function BookmarkDialog({
   useEffect(() => {
     if (!open) return
     aiSaveRequestedRef.current = false
-    setAutoFillRequested(aiPrefill?.autoFill === true)
     if (editingBookmark) {
       setUrl(editingBookmark.url)
       const cat = categories.find((c) => c.id === editingBookmark.category_id)
       setCategoryName(cat ? cat.name : '')
-      // 如果是右键智能填充的入口：用 aiPrefill 覆盖 title/description/tags（外面入口流程）
-      if (aiPrefill && aiPrefill.id === editingBookmark.id) {
-        if (aiPrefill.title) setTitle(aiPrefill.title)
-        else setTitle(editingBookmark.title)
-        if (aiPrefill.description) setDesc(aiPrefill.description)
-        else setDesc(editingBookmark.description ?? '')
-        if (aiPrefill.tags) setTags(aiPrefill.tags)
-        else setTags(editingBookmark.tags?.join(', ') ?? '')
-        consumeAIPrefill()
-      } else {
-        setTitle(editingBookmark.title)
-        setDesc(editingBookmark.description ?? '')
-        setTags(editingBookmark.tags?.join(', ') ?? '')
-      }
+      setTitle(editingBookmark.title)
+      setDesc(editingBookmark.description ?? '')
+      setTags(editingBookmark.tags?.join(', ') ?? '')
     } else {
       setUrl('')
       setTitle('')
@@ -406,12 +391,6 @@ export function BookmarkDialog({
       if (aiAbortRef.current === ac) aiAbortRef.current = null
     }
   }
-
-  useEffect(() => {
-    if (!open || !autoFillRequested || aiLoading) return
-    setAutoFillRequested(false)
-    void handleAI()
-  }, [open, autoFillRequested, aiLoading])
 
   const cancel = () => {
     aiAbortRef.current?.abort()

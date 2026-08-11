@@ -21,6 +21,7 @@ import {
   useToggleFavorite,
   useDeleteBookmark,
   useBatchDelete,
+  useUpdateBookmark,
 } from '@/hooks/useBookmarks'
 import { refreshBookmarkFavicon, faviconUrl, updateBookmark } from '@/api/bookmarks'
 import { blobToDataUri } from '@/lib/favicon'
@@ -38,8 +39,10 @@ import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
+import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import type { Category } from '@/types'
+import { fetchAIMeta } from '@/api/utils'
 
 /**
  * 书签页 —— 渲染在 AppShell 的 main 区。
@@ -62,6 +65,7 @@ function BookmarksPage() {
   const toggleFav = useToggleFavorite()
   const deleteMut = useDeleteBookmark()
   const batchDeleteMut = useBatchDelete()
+  const updateMut = useUpdateBookmark()
   const qc = useQueryClient()
   // 退场动画标记：删除先标记后 mutate，卡片挂 pop-out 动画结束才真正删
   // 只取书签相关函数：bookmarks.tsx 不消费分类退场，避免 id 撞车误读
@@ -135,7 +139,6 @@ function BookmarksPage() {
     exitBatchMode,
     bookmarkDialog,
     openEditBookmark,
-    openEditBookmarkWithPrefill,
     openCreateBookmark,
     closeBookmarkDialog,
   } = useUIStore(
@@ -156,7 +159,6 @@ function BookmarksPage() {
       exitBatchMode: s.exitBatchMode,
       bookmarkDialog: s.bookmarkDialog,
       openEditBookmark: s.openEditBookmark,
-      openEditBookmarkWithPrefill: s.openEditBookmarkWithPrefill,
       openCreateBookmark: s.openCreateBookmark,
       closeBookmarkDialog: s.closeBookmarkDialog,
     })),
@@ -412,15 +414,34 @@ function BookmarksPage() {
     }
   }
 
-  // 旧书签复用编辑弹窗内的 AI 填充：获取中仍能保存当前内容，取消则由弹窗统一中断请求。
-  const handleAIFillOutside = (bookmark: NonNullable<typeof menuBookmark>) => {
-    openEditBookmarkWithPrefill(bookmark.id, {
-      id: bookmark.id,
-      title: '',
-      description: '',
-      tags: '',
-      autoFill: true,
-    })
+  // 右键智能填充是后台更新，不改分类，也不打断当前浏览。
+  const handleAIFillOutside = async (bookmark: NonNullable<typeof menuBookmark>) => {
+    const ac = new AbortController()
+    const tid = toast.loading('正在智能填充…', undefined, { onDismiss: () => ac.abort() })
+    try {
+      const meta = await fetchAIMeta(
+        bookmark.url,
+        categories.map((c) => c.name),
+        ac.signal,
+        {
+          title: bookmark.title,
+          description: bookmark.description ?? '',
+          tags: bookmark.tags.join(', '),
+        },
+      )
+      await updateMut.mutateAsync({
+        id: bookmark.id,
+        input: {
+          title: meta.title_cn || meta.title || bookmark.title,
+          description: meta.description_cn || meta.description || bookmark.description,
+          tags: meta.tags ? parseTags(meta.tags) : bookmark.tags,
+        },
+      })
+      toast.resolve(tid, '智能填充成功', 'success')
+    } catch (e) {
+      const err = e as Error
+      toast.resolve(tid, err.name === 'AbortError' ? '智能填充已取消' : err.message || '智能填充失败', err.name === 'AbortError' ? 'warning' : 'error')
+    }
   }
 
   // 导出选中 → 打开 ExportDialog 带 ids 参数

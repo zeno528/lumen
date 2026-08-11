@@ -248,6 +248,25 @@ func TestBookmarkBatchOperations(t *testing.T) {
 	}
 }
 
+func TestBookmarkCategoryUpdateAppendsToTarget(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	sourceID := createCategory(t, api, jwt, "Source")
+	targetID := createCategory(t, api, jwt, "Target")
+	movedID := createBookmark(t, api, jwt, "https://example.com/moved", "Moved", &sourceID)
+	firstTargetID := createBookmark(t, api, jwt, "https://example.com/first-target", "First target", &targetID)
+	secondTargetID := createBookmark(t, api, jwt, "https://example.com/second-target", "Second target", &targetID)
+
+	requireStatus(t, api.request(t, http.MethodPut, "/api/bookmarks/"+strconv.FormatInt(movedID, 10), jwt, map[string]any{"category_id": targetID}), http.StatusOK)
+
+	bookmarks := listBookmarks(t, api, jwt, "/api/bookmarks?category="+strconv.FormatInt(targetID, 10))
+	got := []int64{bookmarks[0].ID, bookmarks[1].ID, bookmarks[2].ID}
+	want := []int64{firstTargetID, secondTargetID, movedID}
+	if !slices.Equal(got, want) {
+		t.Fatalf("target category order = %v, want %v", got, want)
+	}
+}
+
 func TestCategoryMergeMovesBookmarks(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)
