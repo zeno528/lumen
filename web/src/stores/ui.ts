@@ -87,9 +87,9 @@ interface UIState {
   settingsOpen: boolean
   setSettingsOpen: (v: boolean) => void
 
-  /** WebSocket 连接状态（瞬态，不 persist；useWebSocketSync 写，TopbarAvatar 角标读）*/
-  wsStatus: 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
-  setWsStatus: (s: 'connecting' | 'connected' | 'reconnecting' | 'disconnected') => void
+  /** WebSocket 连接状态（瞬态，不 persist；initial 首连时静默）*/
+  wsStatus: 'initial' | 'connected' | 'reconnecting' | 'disconnected'
+  setWsStatus: (s: 'initial' | 'connected' | 'reconnecting' | 'disconnected') => void
 
   /** 帮助页目录抽屉开关（供 MobileShell Dock 与 help.tsx 共享）*/
   helpTocOpen: boolean
@@ -229,8 +229,8 @@ export const useUIStore = create<UIState>()(
       settingsOpen: false,
       setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
 
-      /** WebSocket 连接状态（瞬态，不 persist）*/
-      wsStatus: 'connecting',
+      /** WebSocket 连接状态（首连静默，瞬态，不 persist）*/
+      wsStatus: 'initial',
       setWsStatus: (wsStatus) => set({ wsStatus }),
 
       /** 帮助页目录抽屉开关（供 MobileShell Dock 与 help.tsx 共享）*/

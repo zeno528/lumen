@@ -16,7 +16,6 @@ const CLOSE_DELAY = 150
 /** WS 连接状态 → 角标颜色/脉冲/标签（颜色走 theme.css token，复用 .ai-status-dot 语义）*/
 const WS_DOT: Record<string, { color: string; pulse: boolean; label: string }> = {
   connected:    { color: 'var(--status-ok)',   pulse: false, label: '已连接' },
-  connecting:   { color: 'var(--text-muted)',  pulse: true,  label: '连接中' },
   reconnecting: { color: 'var(--status-warn)', pulse: true,  label: '重连中' },
   disconnected: { color: 'var(--destructive)', pulse: false, label: '已断开' },
 }
@@ -179,7 +178,7 @@ export function TopbarAvatar({
         onClick={handleButtonClick}
         onPointerEnter={handleButtonEnter}
         onPointerLeave={handleButtonLeave}
-        aria-label={`用户菜单 · 实时同步：${dot.label}`}
+        aria-label={`用户菜单 · 实时同步：${wsStatus === 'initial' ? '初始连接中' : dot.label}`}
         aria-expanded={!!menu}
       >
         <span className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center bg-(--bg-secondary) shrink-0">
@@ -191,8 +190,10 @@ export function TopbarAvatar({
             </span>
           )}
         </span>
-        <span className={cn('w-[6px] h-[6px] rounded-full shrink-0', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
-        <span className="text-xs font-medium whitespace-nowrap" style={{ color: dot.color }}>{dot.label}</span>
+        {wsStatus !== 'initial' && <>
+          <span className={cn('w-[6px] h-[6px] rounded-full shrink-0', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
+          <span className="text-xs font-medium whitespace-nowrap" style={{ color: dot.color }}>{dot.label}</span>
+        </>}
       </button>
       <ContextMenu
         open={!!menu}

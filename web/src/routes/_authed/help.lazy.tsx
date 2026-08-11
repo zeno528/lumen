@@ -367,7 +367,7 @@ function HelpPage() {
           </p>
           <ul className="list-disc pl-5 space-y-1">
             <li>🟢 <strong>绿色</strong>（已连接）- 正常，变更实时推送</li>
-            <li>⚪ <strong>灰色 + 脉冲</strong>（连接中）- 首次连接 / 获取凭证中</li>
+            <li><strong>首次连接</strong> - 静默建立连接，成功后直接显示“已连接”</li>
             <li>🟠 <strong>橙色 + 脉冲</strong>（重连中）- 连接断开，指数退避自动重连</li>
             <li>🔴 <strong>红色</strong>（已断开）- 重连 10 次失败放弃，需刷新页面重新连接</li>
           </ul>

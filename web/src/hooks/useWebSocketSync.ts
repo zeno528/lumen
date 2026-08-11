@@ -44,7 +44,6 @@ export function useWebSocketSync(qc: QueryClient) {
     closedRef.current = false
 
     const connect = () => {
-      useUIStore.getState().setWsStatus('connecting')
       api<{ ticket: string }>('/ws/ticket')
         .then(({ ticket }) => {
           if (closedRef.current) return // cleanup 已触发，丢弃迟到响应
