@@ -21,20 +21,6 @@ const root = document.getElementById('root')
 if (!root) throw new Error('#root not found')
 const appRoot = root
 
-/* ========== 昵称 / 头像 首屏 hydration ==========
-   fetchNickname 优先读 localStorage 缓存；新项目用 TanStack Query
-   没有现成持久化层，会导致首屏 queryData=undefined → 渲染兜底 "用户" → 异步拉取完成后
-   跳到真实昵称 → 闪烁。这里给 queryClient 用 initialData 从 localStorage 预填充，
-   让 query 首次渲染就有数据，与 localStorage 缓存行为对齐。
-   —— 这是 SSR/hydrate 模式下 queryClient 的标准用法，不算引入持久化层。 */
-function readCachedNickname(): { nickname: string } | undefined {
-  try {
-    const cached = localStorage.getItem('nickname')
-    return cached ? { nickname: cached } : undefined
-  } catch {
-    return undefined
-  }
-}
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -104,10 +90,11 @@ function preloadMobileAvatar(avatar: ReturnType<typeof readAvatarCache>) {
 }
 
 function startApp() {
-  // 先完成持久化缓存恢复，再以专用的昵称/头像缓存覆盖它：两者是账户设置真值，
-  // 不能让上一轮 Query 缓存的旧头像在首帧短暂盖过当前头像。
-  const cachedNick = readCachedNickname()
-  if (cachedNick) queryClient.setQueryData(['auth-nickname'], cachedNick)
+  // 完成持久化缓存恢复后，以专用的头像缓存覆盖它：头像真值，不能让上一轮 Query 缓存的
+  // 旧头像在首帧短暂盖过当前头像。
+  // 昵称不在此覆盖：localStorage['nickname'] 只有本端保存时更新，跨端变更会拿旧值盖新值，
+  // 且 setQueryData 会重置 freshness 阻止 refetch —— 交给持久化 Query 缓存（每次 fetch/WS
+  // 刷新自动落盘）作唯一本地水合来源。
   const cachedAvatar = readAvatarCache()
   if (cachedAvatar) queryClient.setQueryData(['auth-avatar'], cachedAvatar)
   // 移动端仅预解码本地头像，避免 <img> 首次绘制晚于头像容器。

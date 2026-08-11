@@ -61,12 +61,7 @@ export function AccountSection({
 
   const updateNickMut = useMutation({
     mutationFn: (n: string) => updateNickname(n),
-    onSuccess: (_data, n) => {
-      try {
-        localStorage.setItem('nickname', n)
-      } catch {
-        /* quota 等不影响功能 */
-      }
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['auth-nickname'] })
     },
   })
