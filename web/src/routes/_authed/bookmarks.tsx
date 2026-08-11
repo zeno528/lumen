@@ -271,15 +271,31 @@ function BookmarksPage() {
   }, [allBookmarks.length])
 
   // 搜索/分类切换后滚回顶部（mount 跳过，避免覆盖恢复的滚动位置）
+  // 开始搜索时记下当前位置，关闭搜索时恢复该位置，而不是回顶
   const isFirstRender = useRef(true)
+  const wasSearching = useRef(false)
+  const preSearchScroll = useRef(0)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false
       return
     }
+    const main = document.querySelector('.main')
+    const searching = !!q
+    if (searching && !wasSearching.current) {
+      // 搜索开始：记录当前位置，供关闭搜索时恢复
+      preSearchScroll.current = main?.scrollTop ?? 0
+    }
+    wasSearching.current = searching
+    if (!searching && preSearchScroll.current > 0) {
+      // 搜索关闭：恢复搜索前的位置
+      main?.scrollTo({ top: preSearchScroll.current, behavior: 'instant' as ScrollBehavior })
+      preSearchScroll.current = 0
+      return
+    }
     // 切换分类/搜索：瞬间滚回顶部（不要 smooth —— smooth 会和 grid 重挂载的 fadeInUp
     // 叠加成"快速滚动"视觉，过渡动画应只有 fadeInUp 一个）
-    document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+    main?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, currentCategory])
 
