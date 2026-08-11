@@ -179,7 +179,7 @@ export function TopbarAvatar({
       <button
         type="button"
         className={cn(
-          'topbar-icon-btn h-9 rounded-full pl-1 pr-2 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
+          'topbar-icon-btn w-24 h-9 rounded-full pl-1 pr-2 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
           menu ? 'menu-open scale-105' : 'border-(--border)',
           className,
         )}
@@ -199,9 +199,9 @@ export function TopbarAvatar({
               </span>
             )}
           </span>
-          <span className={cn('absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full border-2 border-(--bg-secondary)', initialConnection && 'invisible', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
+          <span className={cn('absolute -right-0.5 -bottom-0.5 w-[10px] h-[10px] rounded-full border-2 border-(--bg-secondary)', initialConnection && 'invisible', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
         </span>
-        <span className="min-w-16 max-w-24 text-xs font-medium truncate text-(--text-primary)" title={nickname}>{nickname}</span>
+        <span className="flex-1 min-w-0 text-xs font-medium truncate text-(--text-primary)" title={nickname}>{nickname}</span>
       </button>
       <ContextMenu
         open={!!menu}

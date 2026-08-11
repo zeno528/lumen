@@ -90,8 +90,8 @@ export function AccountSection({
       setNickError('昵称不能为空')
       return
     }
-    if (v.length > 20) {
-      setNickError('昵称最多 20 字符')
+    if (Array.from(v).length > 12) {
+      setNickError('昵称最多 12 个字符')
       return
     }
     if (v === nickCommitted) {
@@ -168,7 +168,8 @@ export function AccountSection({
               <div className="space-y-1.5">
                 <Input
                   value={nickDraft}
-                  onChange={(e) => setNickDraft(e.target.value)}
+                  onChange={(e) => setNickDraft(Array.from(e.target.value).slice(0, 12).join(''))}
+                  onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void commitNickEdit()
                     if (e.key === 'Escape') {
@@ -179,7 +180,6 @@ export function AccountSection({
                     }
                   }}
                   onBlur={() => void commitNickEdit()}
-                  maxLength={20}
                   disabled={nickPending}
                   autoFocus
                   className="h-9 rounded-lg text-sm border-(--border-hover) focus:shadow-none focus:ring-4 focus:ring-(--accent)/15"
