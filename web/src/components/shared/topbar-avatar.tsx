@@ -56,7 +56,9 @@ export function TopbarAvatar({
   const avatarColor = avatarData?.avatarColor || '#f59e0b'
   const nickname = nicknameData?.nickname || '用户'
   const wsStatus = useUIStore((s) => s.wsStatus)
-  const dot = WS_DOT[wsStatus]
+  const initialConnection = wsStatus === 'initial'
+  // 首连静默时仍用已连接的尺寸占位，避免状态出现后用户卡片横向跳动。
+  const dot = WS_DOT[wsStatus] ?? WS_DOT.connected
 
   // 监听 storage 事件：其他标签页或 ThemeToggle 切换主题时同步 label/icon。
   useEffect(() => {
@@ -178,7 +180,7 @@ export function TopbarAvatar({
         onClick={handleButtonClick}
         onPointerEnter={handleButtonEnter}
         onPointerLeave={handleButtonLeave}
-        aria-label={`用户菜单 · 实时同步：${wsStatus === 'initial' ? '初始连接中' : dot.label}`}
+        aria-label={`用户菜单 · 实时同步：${initialConnection ? '初始连接中' : dot.label}`}
         aria-expanded={!!menu}
       >
         <span className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center bg-(--bg-secondary) shrink-0">
@@ -190,10 +192,8 @@ export function TopbarAvatar({
             </span>
           )}
         </span>
-        {wsStatus !== 'initial' && <>
-          <span className={cn('w-[6px] h-[6px] rounded-full shrink-0', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
-          <span className="text-xs font-medium whitespace-nowrap" style={{ color: dot.color }}>{dot.label}</span>
-        </>}
+        <span className={cn('w-[6px] h-[6px] rounded-full shrink-0', initialConnection && 'invisible', dot.pulse && 'animate-pulse')} style={{ background: dot.color }} />
+        <span className={cn('text-xs font-medium whitespace-nowrap', initialConnection && 'invisible')} style={{ color: dot.color }}>{dot.label}</span>
       </button>
       <ContextMenu
         open={!!menu}
