@@ -141,6 +141,10 @@ export function ChangeCredentialsForm({
     <div className={cn(SECTION_CLASS, 'gap-4')}>
       {/* fieldset disabled：busy 期间禁用整个表单，防重复提交导致按钮文字反复跳 */}
       <fieldset disabled={busy} className="m-0 p-0 border-0 min-w-0 space-y-4">
+        {/* 隐藏 username decoy：吸收浏览器密码管理器的 username 填充，防止溢出到页面其他输入框（主搜索框）。
+            Chromium 官方建议 change-password form 即使 username 显而易见也要带一个 username 字段给密码管理器；
+            autoComplete="off" Chrome 会故意忽略，唯一可靠解法是给 username 一个明确落点。 */}
+        <input type="text" autoComplete="username" tabIndex={-1} aria-hidden="true" className="sr-only" />
         {step === 'verify' ? (
           <>
             <div className="space-y-2">
@@ -151,6 +155,7 @@ export function ChangeCredentialsForm({
                 value={currentPw}
                 onChange={(e) => setCurrentPw(e.target.value)}
                 disabled={busy}
+                autoComplete="current-password"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !busy) void handleVerify()
                 }}
