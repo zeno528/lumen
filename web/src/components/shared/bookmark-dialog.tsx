@@ -113,15 +113,23 @@ export function BookmarkDialog({
   const aiPrefill = useUIStore((s) => s.aiPrefill)
   const consumeAIPrefill = () => useUIStore.setState({ aiPrefill: null })
 
-  const getSavedFeedback = (saved: Bookmark, fallbackCategoryName = '') => {
+  const getSavedFeedback = (
+    saved: Bookmark,
+    fallbackCategoryName = '',
+    previousCategoryId?: number | null,
+  ) => {
+    const currentViewCategory = useUIStore.getState().currentCategory
     const categoryName = saved.category_id == null
       ? '未分类'
       : categories.find((c) => c.id === saved.category_id)?.name ?? fallbackCategoryName
     const visible =
-      currentCategory === 'all' ||
-      (currentCategory === '__favorites__' && saved.is_favorite) ||
-      (currentCategory === '__uncategorized__' && saved.category_id == null) ||
-      currentCategory === saved.category_id
+      currentViewCategory === 'all' ||
+      (currentViewCategory === '__favorites__' && saved.is_favorite) ||
+      (currentViewCategory === '__uncategorized__' && saved.category_id == null) ||
+      currentViewCategory === saved.category_id
+    if (previousCategoryId !== undefined && (previousCategoryId === saved.category_id || visible)) {
+      return { message: '书签已更新' }
+    }
     const action: ToastAction | undefined = visible
       ? undefined
       : {
@@ -274,7 +282,7 @@ export function BookmarkDialog({
           category_id: updated.category_id,
         },
       })
-      return getSavedFeedback(updated, category)
+      return getSavedFeedback(updated, category, editingBookmark.category_id)
     }
 
     const favicon =
@@ -541,15 +549,12 @@ export function BookmarkDialog({
     try {
       if (editingBookmark) {
         await updateMut.mutateAsync({ id: editingBookmark.id, input })
-        if (editingBookmark.category_id !== categoryId) {
-          const feedback = getSavedFeedback(
-            { ...editingBookmark, category_id: categoryId },
-            trimmedCat,
-          )
-          toast.success(feedback.message, undefined, feedback.action)
-        } else {
-          toast.success('书签已更新')
-        }
+        const feedback = getSavedFeedback(
+          { ...editingBookmark, category_id: categoryId },
+          trimmedCat,
+          editingBookmark.category_id,
+        )
+        toast.success(feedback.message, undefined, feedback.action)
       } else {
         const res = await createMut.mutateAsync(input)
         // 新书签预抓的图标写入缓存，列表卡片渲染时 getFavicon 秒显（updated_at 来自后端，与 refetch 一致）
