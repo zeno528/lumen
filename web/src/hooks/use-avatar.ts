@@ -8,15 +8,6 @@ export function useAvatar() {
   return useQuery({
     queryKey: AVATAR_KEY,
     queryFn: getAvatar,
-    initialData: () => {
-      try {
-        const cached = localStorage.getItem('avatar')
-        if (!cached) return undefined
-        return JSON.parse(cached) as { avatar: string; avatarColor: string }
-      } catch {
-        return undefined
-      }
-    },
   })
 }
 

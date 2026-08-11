@@ -23,6 +23,8 @@ interface ToastItem {
 let toastIdCounter = 0
 const listeners = new Set<(items: ToastItem[]) => void>()
 let toastQueue: ToastItem[] = []
+const TOAST_DURATION = 2650
+const ACTION_TOAST_DURATION = 5000
 /** loading toast 的 dismiss 回调表（用户主动取消时调，通常 abort fetch）。
  *  resolve 看到 id 已被 dismiss 时静默 —— 避免"用户 X 关掉 → fetch 完成又复活 toast"的体验 bug */
 const onDismissMap = new Map<number, () => void>()
@@ -68,7 +70,7 @@ export const toast = {
   },
   /** 把 loading toast 切换成最终状态（success/error/warning），然后自动消失。
    *  三态判断：
-   *  1. exists（还在 queue） → 转 final state + 2.65s 后自动消失（正常完成 / ESC 中断）
+   *  1. exists（还在 queue） → 转 final state 后自动消失（正常完成 / ESC 中断）
    *  2. !exists && onDismissMap.has → 曾今是 loading 已被用户 dismiss → 静默（X 取消）
    *  3. !exists && !onDismissMap.has → 完全没存在过（resolve 误传 id）→ fallback 新建（兼容旧行为）*/
   resolve(id: number, msg: string, type: 'success' | 'error' | 'warning', action?: ToastAction) {
@@ -79,7 +81,7 @@ export const toast = {
         x.id === id ? { ...x, msg, type, icon: undefined, action } : x,
       )
       notify()
-      setTimeout(() => startHiding(id), 2650)
+      setTimeout(() => startHiding(id), action ? ACTION_TOAST_DURATION : TOAST_DURATION)
     } else if (!onDismissMap.has(id)) {
       push({ id: ++toastIdCounter, msg, type })
     }
@@ -90,9 +92,9 @@ export const toast = {
 function push(t: ToastItem, autoHide = true) {
   toastQueue = [...toastQueue, t]
   notify()
-  // 2.65s 后触发退场动画（toast 自动消失时序）
+  // 带操作入口的提示保留 5s，普通提示保持 2.65s
   // loading 类型不自动消失，等 resolve 调用
-  if (autoHide) setTimeout(() => startHiding(t.id), 2650)
+  if (autoHide) setTimeout(() => startHiding(t.id), t.action ? ACTION_TOAST_DURATION : TOAST_DURATION)
 }
 
 /**

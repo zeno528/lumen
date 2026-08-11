@@ -17,6 +17,7 @@ document.documentElement.dataset.accent = localStorage.getItem('accent') || 'gol
 
 const root = document.getElementById('root')
 if (!root) throw new Error('#root not found')
+const appRoot = root
 
 /* ========== 昵称 / 头像 首屏 hydration ==========
    fetchNickname 优先读 localStorage 缓存；新项目用 TanStack Query
@@ -97,21 +98,27 @@ const localStoragePersister: Persister = {
   },
 }
 setAuthQueryClient(queryClient)
-persistQueryClient({
+const [, restoreQueryCache] = persistQueryClient({
   queryClient,
   persister: localStoragePersister,
   buster: 'v1',
 })
-// 注：initialData 用 queryClient.setQueryData 在创建后设置，避免 hooks 闭包陷阱
-const cachedNick = readCachedNickname()
-if (cachedNick) queryClient.setQueryData(['auth-nickname'], cachedNick)
-const cachedAvatar = readCachedAvatar()
-if (cachedAvatar) queryClient.setQueryData(['auth-avatar'], cachedAvatar)
 
-createRoot(root).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  </StrictMode>,
-)
+function startApp() {
+  // 先完成持久化缓存恢复，再以专用的昵称/头像缓存覆盖它：两者是账户设置真值，
+  // 不能让上一轮 Query 缓存的旧头像在首帧短暂盖过当前头像。
+  const cachedNick = readCachedNickname()
+  if (cachedNick) queryClient.setQueryData(['auth-nickname'], cachedNick)
+  const cachedAvatar = readCachedAvatar()
+  if (cachedAvatar) queryClient.setQueryData(['auth-avatar'], cachedAvatar)
+
+  createRoot(appRoot).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+}
+
+void restoreQueryCache.then(startApp, startApp)
