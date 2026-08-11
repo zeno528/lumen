@@ -8,6 +8,7 @@ import '@fontsource-variable/inter'
 import './styles/main.css'
 import { setAuthQueryClient } from '@/stores/auth'
 import { readAvatarCache } from '@/lib/avatar-cache'
+import { getCustomAvatarUrl } from '@/lib/avatar-upload'
 import { router } from './router'
 
 /* 初始化主题（深浅 data-theme + 配色 data-accent），避免首屏闪烁 */
@@ -96,13 +97,29 @@ const [, restoreQueryCache] = persistQueryClient({
   buster: 'v1',
 })
 
-function startApp() {
+async function preloadMobileAvatar(avatar: ReturnType<typeof readAvatarCache>) {
+  const url = getCustomAvatarUrl(avatar?.avatar, avatar?.avatarImage)
+  if (!url || !window.matchMedia('(max-width: 768px)').matches) return
+
+  const image = new Image()
+  image.src = url
+  try {
+    await image.decode()
+  } catch {
+    // 解码失败仍让 <img> 自己处理，不能阻断应用启动。
+  }
+}
+
+async function startApp() {
   // 先完成持久化缓存恢复，再以专用的昵称/头像缓存覆盖它：两者是账户设置真值，
   // 不能让上一轮 Query 缓存的旧头像在首帧短暂盖过当前头像。
   const cachedNick = readCachedNickname()
   if (cachedNick) queryClient.setQueryData(['auth-nickname'], cachedNick)
   const cachedAvatar = readAvatarCache()
   if (cachedAvatar) queryClient.setQueryData(['auth-avatar'], cachedAvatar)
+  // 移动端仅预解码本地 128px WebP，避免 <img> 首次绘制晚于头像容器。
+  // Data URI 已在 localStorage 中，不产生额外网络请求。
+  await preloadMobileAvatar(cachedAvatar)
 
   createRoot(appRoot).render(
     <StrictMode>

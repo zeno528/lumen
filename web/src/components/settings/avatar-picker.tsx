@@ -247,7 +247,7 @@ export function AvatarPicker({
             保存中…
           </>
         ) : (
-          '确认'
+          '保存'
         )}
       </Button>
     </div>
