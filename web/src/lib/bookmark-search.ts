@@ -7,6 +7,11 @@ type SearchableBookmark = {
   category_id?: number | null
 }
 
+/** 拆词：空格分隔 + 中英文/数字边界（git 下载、git下载、下载git 都得到 [git, 下载]）*/
+function splitTerms(normalized: string): string[] {
+  return normalized.match(/[a-z0-9.]+|[\u4e00-\u9fff]+/g) ?? []
+}
+
 export function bookmarkMatchesSearch(
   bookmark: SearchableBookmark,
   categoryName: string | undefined,
@@ -22,7 +27,7 @@ export function bookmarkMatchesSearch(
 
   const fields = [bookmark.title, bookmark.description ?? '', bookmark.url, categoryName ?? '', ...(bookmark.tags ?? [])]
     .map((field) => field.toLowerCase())
-  return normalized.split(/\s+/).every((term) => fields.some((field) => field.includes(term)))
+  return splitTerms(normalized).every((term) => fields.some((field) => field.includes(term)))
 }
 
 export function filterBookmarksBySearch<T extends SearchableBookmark>(

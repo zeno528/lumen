@@ -6,7 +6,8 @@
  * 过滤规则（与桌面端筛选同步）：
  * 1) idSearchMode 激活：q 为纯数字 → id 精确匹配；其他继续走文本搜索。
  * 2) 始终兼容旧的 "#N" 写法：q 为 "#数字" → id 精确匹配。
- * 3) 其余按空白分词；每个词都必须命中 title、description、url、tags 或分类名之一，词可分布在不同字段。
+ * 3) 其余按空白或中英文边界分词（git下载 与 git 下载 等价）；每个词都必须命中
+ *    title、description、url、tags 或分类名之一，词可分布在不同字段。
  * 搜索时分类筛选被忽略（bookmarks.tsx 的 q 分支），count 即"搜索匹配总数"。
  */
 import { useBookmarks } from '@/hooks/useBookmarks'
