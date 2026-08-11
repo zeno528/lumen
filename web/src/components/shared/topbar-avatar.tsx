@@ -9,7 +9,7 @@ import { resolveAvatarIcon, getCustomAvatarUrl } from '@/lib/avatar-icons'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
 import { getNickname } from '@/api/settings'
-import { cn } from '@/lib/utils'
+import { cn, openInNewTab } from '@/lib/utils'
 
 const CLOSE_DELAY = 150
 
@@ -161,7 +161,7 @@ export function TopbarAvatar({
     {
       label: '帮助',
       icon: <HelpCircle size={14} />,
-      onClick: () => window.open('/help', '_blank', 'noopener,noreferrer'),
+      onClick: () => openInNewTab('/help'),
     },
     {
       label: '登出',

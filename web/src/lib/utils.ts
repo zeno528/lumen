@@ -5,3 +5,8 @@ import { twMerge } from 'tailwind-merge'
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+/** 新标签页安全打开外链（noopener+noreferrer 防反向 tabnabbing） */
+export function openInNewTab(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}

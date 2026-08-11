@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { bookmarkMatchesSearch } from '../src/lib/bookmark-search.ts'
+import { bookmarkMatchesSearch, getIdFromQuery } from '../src/lib/bookmark-search.ts'
 
 const bookmark = {
   id: 42,
@@ -40,4 +40,12 @@ test('bookmark search preserves digit and #ID exact matching', () => {
   assert.equal(bookmarkMatchesSearch(bookmark, 'Engineering', '4', true), false)
   assert.equal(bookmarkMatchesSearch(bookmark, 'Engineering', '#42', false), true)
   assert.equal(bookmarkMatchesSearch(bookmark, 'Engineering', '#4', false), false)
+})
+
+test('getIdFromQuery parses ID targets for Enter-to-open', () => {
+  assert.equal(getIdFromQuery('253', true), 253)
+  assert.equal(getIdFromQuery('#253', false), 253)
+  assert.equal(getIdFromQuery('253', false), null)
+  assert.equal(getIdFromQuery('git', true), null)
+  assert.equal(getIdFromQuery('', true), null)
 })

@@ -12,7 +12,8 @@ import { useUIStore } from '@/stores/ui'
 import { useHotkeys } from '@/hooks/use-hotkeys'
 import { useDebouncedValue } from '@/hooks/use-debounce'
 import { SearchCount } from '@/components/shared/search-count'
-import { cn } from '@/lib/utils'
+import { getIdFromQuery } from '@/lib/bookmark-search'
+import { cn, openInNewTab } from '@/lib/utils'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 
 /**
@@ -53,6 +54,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
 
   const [input, setInput] = useState(searchQuery)
   const debounced = useDebouncedValue(input, 300)
+  const { data: bmData } = useBookmarks()
   // 搜索 input 用稳定 ref（不再 inline lambda），避免每次 render 重建 ref 触发 focus 重置
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -217,6 +219,16 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           title="搜索（Ctrl+K）"
+          onKeyDown={(e) => {
+            // 回车直达：ID 搜索命中时直接打开该书签（与点击卡片一致，新标签页）
+            if (e.key === 'Enter') {
+              const id = getIdFromQuery(input, idSearchMode)
+              if (id != null && !batchMode) {
+                const hit = bmData?.bookmarks.find((b) => b.id === id)
+                if (hit) openInNewTab(hit.url)
+              }
+            }
+          }}
         />
         <SearchCount />
         <button

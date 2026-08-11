@@ -11,6 +11,9 @@ import { useHotkeys } from '@/hooks/use-hotkeys'
 import { useDebouncedValue } from '@/hooks/use-debounce'
 import { SearchCount } from '@/components/shared/search-count'
 import { MobileShell } from '@/components/mobile/mobile-shell'
+import { useBookmarks } from '@/hooks/useBookmarks'
+import { getIdFromQuery } from '@/lib/bookmark-search'
+import { openInNewTab } from '@/lib/utils'
 import {
   computeGridContentWidth,
   MAX_CONTAINER_WIDTH,
@@ -163,6 +166,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   } = useUIStore()
   const [input, setInput] = useState(searchQuery)
   const debounced = useDebouncedValue(input, 300)
+  const { data: bmData } = useBookmarks()
   // 顶栏搜索框/按钮组与下方卡片网格列对齐所需的左右内缩量（0 表示无网格时回退）
   const gridInset = useGridInset()
   // 设置页/帮助页是独立全屏区域，隐藏侧边栏（对齐移动端 mobile-shell.tsx:99-101 的处理）
@@ -201,6 +205,14 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                     if (e.key === 'Escape' && input) {
                       setInput('')
                       setSearchQuery('')
+                    }
+                    // 回车直达：ID 搜索命中时直接打开该书签（与点击卡片一致，新标签页）
+                    if (e.key === 'Enter') {
+                      const id = getIdFromQuery(input, idSearchMode)
+                      if (id != null && !batchMode) {
+                        const hit = bmData?.bookmarks.find((b) => b.id === id)
+                        if (hit) openInNewTab(hit.url)
+                      }
                     }
                   }}
                 />

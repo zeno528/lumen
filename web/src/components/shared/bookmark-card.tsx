@@ -7,7 +7,7 @@ import { useToggleFavorite, useReorderBookmarks } from '@/hooks/useBookmarks'
 import { useLongPress } from '@/hooks/use-long-press'
 import { useUIStore } from '@/stores/ui'
 import { highlightText } from '@/lib/bookmark-utils'
-import { cn } from '@/lib/utils'
+import { cn, openInNewTab } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 
 /**
@@ -98,7 +98,7 @@ export function BookmarkCard({
       }
       return
     }
-    window.open(bookmark.url, '_blank', 'noopener,noreferrer')
+    openInNewTab(bookmark.url)
   }
 
   /**
