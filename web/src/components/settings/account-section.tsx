@@ -211,7 +211,6 @@ export function AccountSection({
               <span className="text-xs text-(--text-muted)">账号</span>
               <span className="text-sm text-(--text-primary)">{usernameData?.username ?? '-'}</span>
             </div>
-            <p className="text-xs text-(--text-muted) mt-1.5">用于登录，改动需重新登录</p>
           </div>
 
           {/* 退出登录 */}
