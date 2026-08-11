@@ -27,6 +27,7 @@ func hashPassword(password string) string {
 const bcryptCost = 12
 const uploadedAvatarKey = "custom:upload"
 const maxUploadedAvatarBytes = 48 * 1024
+const maxNicknameRunes = 12
 
 // hashPasswordBcrypt 用 bcrypt 哈希密码（自带随机 salt + 算法标识，新密码一律走此）。
 func hashPasswordBcrypt(password string) (string, error) {
@@ -403,8 +404,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	// 如果提供了昵称，保存
 	if input.Nickname != "" {
 		input.Nickname = strings.TrimSpace(input.Nickname)
-		if len([]rune(input.Nickname)) > 20 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "昵称需要 1-20 个字符"})
+		if len([]rune(input.Nickname)) > maxNicknameRunes {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "昵称需要 1-12 个字符"})
 			return
 		}
 		s.db.Exec("INSERT INTO settings (key, value) VALUES ('nickname', ?) ON CONFLICT(key) DO UPDATE SET value = ?", input.Nickname, input.Nickname)
@@ -437,8 +438,8 @@ func (s *Server) handleUpdateNickname(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Nickname = strings.TrimSpace(input.Nickname)
-	if input.Nickname == "" || len([]rune(input.Nickname)) > 20 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "昵称需要 1-20 个字符"})
+	if input.Nickname == "" || len([]rune(input.Nickname)) > maxNicknameRunes {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "昵称需要 1-12 个字符"})
 		return
 	}
 
