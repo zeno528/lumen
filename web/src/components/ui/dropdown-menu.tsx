@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 export interface MenuItem {
   label: string
   icon?: ReactNode
+  /** 文案语义色，如连接状态 */
+  labelColor?: string
   onClick?: () => void
   variant?: 'default' | 'edit' | 'delete'
   separator?: boolean
@@ -155,12 +157,14 @@ export function ContextMenu({
               }}
             >
               {item.icon && <span className="icon">{item.icon}</span>}
-              <span>{item.label}</span>
+              <span className="flex-1 min-w-0 max-w-32 truncate" style={{ color: item.labelColor }} title={item.label}>{item.label}</span>
+              {item.trailing && <span className="shrink-0">{item.trailing}</span>}
             </button>
           ) : (
             <div key={i} className="context-menu-header">
               {item.icon && <span className="icon">{item.icon}</span>}
-              <span>{item.label}</span>
+              <span className="flex-1 min-w-0 max-w-32 truncate" style={{ color: item.labelColor }} title={item.label}>{item.label}</span>
+              {item.trailing && <span className="shrink-0">{item.trailing}</span>}
             </div>
           )
         ) : (
@@ -178,7 +182,7 @@ export function ContextMenu({
             }}
           >
             {item.icon && <span className="icon">{item.icon}</span>}
-            <span className="flex-1 min-w-0 truncate">{item.label}</span>
+            <span className="flex-1 min-w-0 truncate" style={{ color: item.labelColor }}>{item.label}</span>
             {item.trailing && <span className="shrink-0">{item.trailing}</span>}
           </button>
         ),
