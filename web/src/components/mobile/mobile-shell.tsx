@@ -19,7 +19,7 @@ import { useRouterState, useNavigate } from '@tanstack/react-router'
 /**
  * 移动端 Shell。
  * - 顶栏压缩：只保留 logo + 搜索图标 + 用户头像（隐藏文字/搜索框）
- * - 底部 Dock（mobile-fab-menu）：4 按钮 = 搜索 / 批量 / 添加 / 回到顶部
+ * - 底部 Dock（mobile-fab-menu）：4 按钮 = 搜索 / 批量 / 添加 / 主侧栏
  * - 抽屉式 sidebar：复用桌面 Sidebar 组件（含右键菜单/编辑/删除/长按，零重复）
  *   CSS 窄屏把 .sidebar 改 fixed 抽屉，移动端传 open 滑入
  * - 移动端搜索栏（点击 Dock 搜索图标展开，顶部胶囊条）+ 结果计数
@@ -310,7 +310,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
             </button>
           </>
         ) : (
-          // 书签页 Dock：搜索 / 批量 / 添加 / 回到顶部
+          // 书签页 Dock：搜索 / 批量 / 添加 / 主侧栏
           <>
             <button
               onClick={() => {

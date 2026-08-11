@@ -199,11 +199,12 @@ function HelpPage() {
         <Section id="quick-start" index={1} icon={Rocket} title="快速开始" registerRef={registerSection}>
           <H3>登录</H3>
           <p>
-            打开页面后输入账号和密码登录。默认账号 <Code>admin</Code>，默认密码{' '}
-            <Code>admin</Code>。建议登录后进入「设置中心」-&gt;「账号设置」修改密码。
+            打开页面后输入账号和密码登录。默认账号 <Code>admin</Code>；首次启动的密码由部署时设置的
+            <Code>APP_PASSWORD</Code> 环境变量决定（本地开发未设置时回退 <Code>admin</Code>）。
+            建议登录后进入「设置中心」-&gt;「账号」修改密码。
           </p>
           <p>
-            项目为<strong>单用户部署</strong>，账号名在「设置中心 -&gt; 账号设置 -&gt; 修改账号」处修改（会影响后续所有登录）。
+            项目为<strong>单用户部署</strong>，账号名在「设置中心 -&gt; 账号 -&gt; 修改账号」处修改（会影响后续所有登录）。
           </p>
           <H3>添加第一个书签</H3>
           <ol className="list-decimal pl-5 space-y-1">
@@ -222,13 +223,14 @@ function HelpPage() {
             <li><strong>头像</strong> - 多种图标 + 自定义背景颜色 + 自定义头像图片，同步保存到服务器</li>
             <li><strong>昵称</strong> - 显示在顶栏头像区</li>
             <li><strong>账号 & 密码</strong> - 登录凭据，密码修改后立即生效</li>
-            <li><strong>清空所有书签</strong> - 一键删除所有书签数据</li>
+            <li><strong>清空所有书签</strong>（设置窗口左下角，四个 tab 均可见）- 一键清空全部书签与分类，不可恢复</li>
             <li><strong>退出登录</strong> - 清除登录态并返回登录页</li>
           </ul>
           <H3>外观</H3>
           <p>
-            选择<strong>配色方案</strong>（琥珀橙 / 海洋蓝 / 赤陶 / 靛蓝 / 勃艮第 / 暗金），
-            偏好存 <Code>localStorage.accent</Code>。<strong>深浅主题</strong>（浅色 / notion-dark）在顶栏头像下拉切换，不在设置中心内。
+            <strong>深浅主题</strong>（浅色 / 深色）与<strong>配色方案</strong>（赤陶为默认 / 暗金 / 勃艮第 /
+            琥珀橙 / 靛蓝 / 海洋蓝）都在本 tab 选择，偏好存 <Code>localStorage</Code>；
+            深浅主题同样可在顶栏头像下拉切换，双向同步。
           </p>
           <H3>AI 设置</H3>
           <p>配置 AI Provider 与 Serper 搜索，详见下方「AI 功能」章节。</p>
@@ -281,9 +283,10 @@ function HelpPage() {
         <Section id="search" index={6} icon={Search} title="搜索" registerRef={registerSection}>
           <ul className="list-disc pl-5 space-y-1">
             <li>按 <Kbd>Ctrl</Kbd> + <Kbd>K</Kbd> 或点击搜索框聚焦</li>
-            <li>实时过滤标题、描述、URL、标签</li>
-            <li>输入 <Code>#数字</Code> 可按书签 ID 精确查找，跨分类命中</li>
-            <li>匹配关键词会高亮显示</li>
+            <li>实时匹配标题、描述、URL、标签与分类名</li>
+            <li>空格分隔多个关键词需全部命中，顺序不限（如 <Code>git 下载</Code>）；中英文连写自动拆词（<Code>git下载</Code> 与 <Code>git 下载</Code> 等价）</li>
+            <li>输入 <Code>#数字</Code>，或开启 ID 搜索后直接输数字，可按书签 ID 精确查找，按回车直达打开</li>
+            <li>单个关键词命中会高亮显示</li>
           </ul>
         </Section>
 
@@ -323,7 +326,7 @@ function HelpPage() {
           <p>
             导入目前<strong>只支持 JSON</strong>：点击「导入」选择之前导出的 JSON 文件即可。采用<strong>自动合并</strong>模式，
             已存在的 URL 会被跳过（依赖数据库 UNIQUE 约束去重），导入完成弹模态框显示
-            「新增 / 跳过 / 失败」统计 + 命中分类列表。
+            「新增书签 / 跳过重复 / 新增分类」统计。
           </p>
         </Section>
 
@@ -385,7 +388,7 @@ function HelpPage() {
               { keys: ['Ctrl', 'Shift', 'I'], action: '新建分类' },
               { keys: ['Ctrl', 'B'], action: '书签批量模式（再按一次或 Esc 退出）' },
               { keys: ['Ctrl', 'Shift', 'B'], action: '分类批量模式（再按一次或 Esc 退出）' },
-              { keys: ['Enter'], action: '弹窗内输入框保存（描述框除外）' },
+              { keys: ['Enter'], action: '弹窗内输入框保存（描述框除外）/ ID 搜索命中时直达打开' },
               { keys: ['Ctrl', 'Enter'], action: '保存（弹窗内，任意位置触发）' },
               { keys: ['Tab'], action: '标签输入框追加英文逗号分隔（弹窗内）' },
               { keys: ['Esc'], action: '关闭弹窗 / 退出批量模式 / 清空搜索' },
