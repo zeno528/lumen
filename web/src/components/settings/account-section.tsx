@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cat, LogOut, Shield, User } from 'lucide-react'
+import { Cat, LogOut, Pencil, Shield, User } from 'lucide-react'
 import { getUsername, getNickname, updateNickname } from '@/api/settings'
 import { useAvatar } from '@/hooks/use-avatar'
 import { useUnsavedGuard } from '@/hooks/use-unsaved-guard'
@@ -160,10 +160,6 @@ export function AccountSection({
 
           {/* 昵称（inline edit） */}
           <div>
-            <div className="text-xs text-(--text-muted) mb-1.5 flex items-center gap-2">
-              <span>昵称</span>
-              <span className="text-(--text-muted)/70">· 点击编辑</span>
-            </div>
             {nickEditing ? (
               <div className="space-y-1.5">
                 <Input
@@ -191,24 +187,30 @@ export function AccountSection({
                     {nickError}
                   </p>
                 )}
-                <p className="text-xs text-(--text-muted)">回车保存 · ESC 取消 · 失焦自动保存</p>
+                <p className="text-xs text-(--text-muted)">回车或失焦时自动保存，ESC 取消</p>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={startNickEdit}
-                className="text-sm text-(--text-primary) hover:text-(--accent) hover:underline transition-colors"
-                title="点击编辑昵称"
-              >
-                {nickCommitted ?? '-'}
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-(--text-muted)">昵称</span>
+                <button
+                  type="button"
+                  onClick={startNickEdit}
+                  className="group inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm text-(--text-primary) transition-colors hover:bg-(--hover) hover:text-(--accent)"
+                  title="编辑昵称"
+                >
+                  <span className="truncate">{nickCommitted ?? '-'}</span>
+                  <Pencil size={13} className="shrink-0 text-(--text-muted) transition-colors group-hover:text-(--accent)" />
+                </button>
+              </div>
             )}
           </div>
 
           {/* 账号（只读，修改入口在安全区「修改账号密码」） */}
           <div>
-            <div className="text-xs text-(--text-muted) mb-1.5">账号</div>
-            <span className="text-sm text-(--text-primary)">{usernameData?.username ?? '-'}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-(--text-muted)">账号</span>
+              <span className="text-sm text-(--text-primary)">{usernameData?.username ?? '-'}</span>
+            </div>
             <p className="text-xs text-(--text-muted) mt-1.5">用于登录，改动需重新登录</p>
           </div>
 
