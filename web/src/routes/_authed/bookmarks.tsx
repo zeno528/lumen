@@ -35,14 +35,17 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { ExportDialog } from '@/components/shared/export-dialog'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toast'
+import type { ToastAction } from '@/components/ui/toast'
 import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
+import { AI_PRESETS } from '@/lib/ai-providers'
 import type { Category } from '@/types'
 import { fetchAIMeta } from '@/api/utils'
+import type { AISettings } from '@/api/settings'
 
 /**
  * 书签页 —— 渲染在 AppShell 的 main 区。
@@ -414,10 +417,23 @@ function BookmarksPage() {
     }
   }
 
-  // 右键智能填充是后台更新，不改分类，也不打断当前浏览。
+  // 右键智能填充是后台更新：已有分类不动，未分类仅在建议命中已有分类时归类。
   const handleAIFillOutside = async (bookmark: NonNullable<typeof menuBookmark>) => {
     const ac = new AbortController()
-    const tid = toast.loading('正在智能填充…', undefined, { onDismiss: () => ac.abort() })
+    const activeProvider = qc.getQueryData<AISettings>(['ai-settings'])?.activeProvider
+    const activeProviderLogo = AI_PRESETS[activeProvider ?? '']?.logo
+    const tid = toast.loading(
+      '正在智能填充…',
+      activeProviderLogo ? (
+        <img
+          src={activeProviderLogo}
+          alt=""
+          className="w-4 h-4 animate-spin"
+          style={{ animationDuration: '1.5s' }}
+        />
+      ) : undefined,
+      { onDismiss: () => ac.abort() },
+    )
     try {
       const meta = await fetchAIMeta(
         bookmark.url,
@@ -429,15 +445,37 @@ function BookmarksPage() {
           tags: bookmark.tags.join(', '),
         },
       )
+      const suggestedCategory = bookmark.category_id == null && meta.category
+        ? categories.find((c) => c.name.trim().toLowerCase() === meta.category?.trim().toLowerCase())
+        : undefined
+      const categoryNames = new Set(categories.map((c) => c.name.trim().toLowerCase()))
       await updateMut.mutateAsync({
         id: bookmark.id,
         input: {
           title: meta.title_cn || meta.title || bookmark.title,
           description: meta.description_cn || meta.description || bookmark.description,
-          tags: meta.tags ? parseTags(meta.tags) : bookmark.tags,
+          tags: meta.tags
+            ? parseTags(meta.tags).filter((tag) => !categoryNames.has(tag.toLowerCase()))
+            : bookmark.tags,
+          ...(suggestedCategory ? { category_id: suggestedCategory.id } : {}),
         },
       })
-      toast.resolve(tid, '智能填充成功', 'success')
+      if (!suggestedCategory) {
+        toast.resolve(tid, '智能填充成功', 'success')
+        return
+      }
+      const currentViewCategory = useUIStore.getState().currentCategory
+      const visible =
+        currentViewCategory === 'all' ||
+        (currentViewCategory === '__favorites__' && bookmark.is_favorite) ||
+        currentViewCategory === suggestedCategory.id
+      const action: ToastAction | undefined = visible
+        ? undefined
+        : {
+            label: '查看',
+            onClick: () => useUIStore.getState().setCurrentCategory(suggestedCategory.id),
+          }
+      toast.resolve(tid, `已保存到「${suggestedCategory.name}」`, 'success', action)
     } catch (e) {
       const err = e as Error
       toast.resolve(tid, err.name === 'AbortError' ? '智能填充已取消' : err.message || '智能填充失败', err.name === 'AbortError' ? 'warning' : 'error')
