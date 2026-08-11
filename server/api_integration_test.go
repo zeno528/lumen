@@ -264,8 +264,7 @@ func TestPasswordVerifyWindowKeepsCurrentSession(t *testing.T) {
 
 	// 不带当前密码改账号：成功且返回新 token（当前会话保留）
 	res := api.request(t, http.MethodPut, "/api/auth/password", jwt, map[string]string{
-		"newPassword": "test-password", // 不改密码用当前密码占位（后端必填）
-		"username":    "new-admin",
+		"username": "new-admin", // 只改账号：newPassword 不传，后端空则不动密码哈希
 	})
 	requireStatus(t, res, http.StatusOK)
 	newJWT := decodeJSON[struct {

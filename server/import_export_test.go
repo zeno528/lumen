@@ -31,10 +31,11 @@ func newImportExportTestAPI(t *testing.T) *testAPI {
 	}
 
 	srv := &Server{
-		db:           database,
-		config:       &Config{JWTSecret: "test-jwt-secret", Password: "test-password"},
-		usedTickets:  make(map[string]time.Time),
-		rateLimiters: make(map[string]*ipRateLimiter),
+		db:                database,
+		config:            &Config{JWTSecret: "test-jwt-secret", Password: "test-password"},
+		usedTickets:       make(map[string]time.Time),
+		verifiedPasswords: make(map[string]time.Time),
+		rateLimiters:      make(map[string]*ipRateLimiter),
 	}
 	if err := srv.initPasswordIfNeeded(); err != nil {
 		t.Fatal(err)
