@@ -185,7 +185,7 @@ export function TopbarAvatar({
       >
         <span className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center bg-(--bg-secondary) shrink-0">
           {customUrl ? (
-            <img src={customUrl} alt="头像" className="w-full h-full object-cover" loading="eager" decoding="async" />
+            <img src={customUrl} alt="头像" className="w-full h-full object-cover" loading="eager" decoding="sync" />
           ) : (
             <span className="w-full h-full rounded-full flex items-center justify-center" style={{ background: avatarColor + '22', color: avatarColor }}>
               <AvatarIcon size={18} />

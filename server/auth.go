@@ -471,15 +471,23 @@ func (s *Server) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 }
 
 func normalizeUploadedAvatarImage(raw string) (string, error) {
-	const prefix = "data:image/webp;base64,"
-	if !strings.HasPrefix(raw, prefix) {
-		return "", fmt.Errorf("头像图片必须为 WebP 格式")
+	const webpPrefix = "data:image/webp;base64,"
+	const pngPrefix = "data:image/png;base64,"
+	var mime, encoded string
+	switch {
+	case strings.HasPrefix(raw, webpPrefix):
+		mime, encoded = "image/webp", strings.TrimPrefix(raw, webpPrefix)
+	case strings.HasPrefix(raw, pngPrefix):
+		// 部分移动端 Canvas 不支持 WebP 编码，会按平台规则回退为 PNG。
+		mime, encoded = "image/png", strings.TrimPrefix(raw, pngPrefix)
+	default:
+		return "", fmt.Errorf("头像图片必须为 WebP 或 PNG 格式")
 	}
-	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(raw, prefix))
-	if err != nil || len(data) == 0 || len(data) > maxUploadedAvatarBytes || sniffImageMIME(data) != "image/webp" {
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(data) == 0 || len(data) > maxUploadedAvatarBytes || sniffImageMIME(data) != mime {
 		return "", fmt.Errorf("头像图片无效或过大")
 	}
-	return prefix + base64.StdEncoding.EncodeToString(data), nil
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }
 
 // handleUpdateAvatar PUT /api/auth/avatar

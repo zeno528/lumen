@@ -20,6 +20,9 @@ import {
   Skull,
   type LucideIcon,
 } from 'lucide-react'
+import { isCustomAvatar } from './avatar-upload'
+
+export { UPLOADED_AVATAR_KEY, isCustomAvatar, getCustomAvatarUrl } from './avatar-upload'
 
 /**
  * 头像图标映射 -- Font Awesome 类名映射到 Lucide。
@@ -105,18 +108,6 @@ export const AVATAR_ICON_GROUPS: { title: string; icons: { key: string; Icon: Lu
       ],
     },
   ]
-
-export const UPLOADED_AVATAR_KEY = 'custom:upload'
-
-/** 判断是否为自定义图片头像 */
-export function isCustomAvatar(raw?: string | null): boolean {
-  return raw === UPLOADED_AVATAR_KEY
-}
-
-/** 从 avatar 值解析出自定义头像 URL；不是自定义头像时返回 null */
-export function getCustomAvatarUrl(raw?: string | null, uploadedImage?: string): string | null {
-  return raw === UPLOADED_AVATAR_KEY && uploadedImage?.startsWith('data:image/webp;base64,') ? uploadedImage : null
-}
 
 /** 把后端头像名解析成 Lucide 图标组件；自定义图片头像返回 null */
 export function resolveAvatarIcon(raw?: string | null): LucideIcon | null {

@@ -201,12 +201,23 @@ func TestUploadedAvatarRoundTrip(t *testing.T) {
 	}
 }
 
-func TestUploadedAvatarRejectsNonWebPImage(t *testing.T) {
+func TestUploadedAvatarAcceptsPNGFallback(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	image := "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("\x89PNG\r\n\x1a\n"))
+	res := api.request(t, http.MethodPut, "/api/auth/avatar", jwt, map[string]string{
+		"avatar":      "custom:upload",
+		"avatarImage": image,
+	})
+	requireStatus(t, res, http.StatusOK)
+}
+
+func TestUploadedAvatarRejectsMismatchedImageType(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)
 	res := api.request(t, http.MethodPut, "/api/auth/avatar", jwt, map[string]string{
 		"avatar":      "custom:upload",
-		"avatarImage": "data:image/png;base64,iVBORw0KGgo=",
+		"avatarImage": "data:image/webp;base64,iVBORw0KGgo=",
 	})
 	requireStatus(t, res, http.StatusBadRequest)
 }
