@@ -16,7 +16,7 @@
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
         const dark = stored === 'notion-dark' || (stored === 'system' && prefersDark)
         document.documentElement.dataset.theme = dark ? 'notion-dark' : 'light'
-        document.documentElement.dataset.accent = localStorage.getItem('accent') || 'orange'
+        document.documentElement.dataset.accent = localStorage.getItem('accent') || 'terracotta'
       })()
     </script>
   </head>
