@@ -541,7 +541,7 @@ export function AiSection({
                           : isEditing
                             ? 'border-(--accent) bg-[var(--accent)]/10'
                             : isActive
-                              ? 'border-(--border) bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_8%,transparent),transparent)]'
+                              ? 'border-(--border) bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_10%,transparent),transparent)]'
                               : 'border-(--border) hover:bg-(--bg-primary)',
                       )}
                     >
@@ -563,7 +563,7 @@ export function AiSection({
                           <Bot size={20} className="shrink-0 text-(--text-muted)" />
                         )}
                         <span className="flex flex-col min-w-0">
-                          <span className="text-xs font-medium truncate text-(--text-primary)">
+                          <span className="text-xs truncate text-(--text-primary)" style={{ fontWeight: 550 }}>
                             {cLabel}
                           </span>
                           <span className="text-[10px] text-(--text-muted) truncate">
