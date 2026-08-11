@@ -115,7 +115,7 @@ export function AccountSection({
   }
 
   // === 头像预览数据 ===
-  const customUrl = getCustomAvatarUrl(avatarData?.avatar)
+  const customUrl = getCustomAvatarUrl(avatarData?.avatar, avatarData?.avatarImage)
   const AvatarIcon = resolveAvatarIcon(avatarData?.avatar) ?? Cat
   const avatarColor = avatarData?.avatarColor || '#f59e0b'
 
@@ -127,6 +127,7 @@ export function AccountSection({
       <AvatarPicker
         currentAvatar={avatarData?.avatar || 'fa-piggy-bank'}
         currentColor={avatarColor}
+        currentAvatarImage={avatarData?.avatarImage}
         onDone={() => onSubView(null)}
       />
     )

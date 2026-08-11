@@ -51,7 +51,7 @@ export function TopbarAvatar({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const customUrl = getCustomAvatarUrl(avatarData?.avatar)
+  const customUrl = getCustomAvatarUrl(avatarData?.avatar, avatarData?.avatarImage)
   const AvatarIcon = resolveAvatarIcon(avatarData?.avatar) ?? Cat
   const avatarColor = avatarData?.avatarColor || '#f59e0b'
   const nickname = nicknameData?.nickname || '用户'

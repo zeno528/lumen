@@ -18,6 +18,7 @@ export function getNickname(): Promise<{ nickname: string }> {
 export interface AvatarSettings {
   avatar: string
   avatarColor: string
+  avatarImage?: string
 }
 
 export function getAvatar(): Promise<AvatarSettings> {

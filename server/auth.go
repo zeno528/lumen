@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,8 @@ func hashPassword(password string) string {
 }
 
 const bcryptCost = 12
+const uploadedAvatarKey = "custom:upload"
+const maxUploadedAvatarBytes = 48 * 1024
 
 // hashPasswordBcrypt 用 bcrypt 哈希密码（自带随机 salt + 算法标识，新密码一律走此）。
 func hashPasswordBcrypt(password string) (string, error) {
@@ -460,9 +463,23 @@ func (s *Server) handleUpdateNickname(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetAvatar(w http.ResponseWriter, r *http.Request) {
 	avatar := "fa-piggy-bank"
 	avatarColor := "#f59e0b"
+	avatarImage := ""
 	s.db.QueryRow("SELECT value FROM settings WHERE key = 'avatar'").Scan(&avatar)
 	s.db.QueryRow("SELECT value FROM settings WHERE key = 'avatar_color'").Scan(&avatarColor)
-	writeJSON(w, http.StatusOK, map[string]string{"avatar": avatar, "avatarColor": avatarColor})
+	s.db.QueryRow("SELECT value FROM settings WHERE key = 'avatar_image'").Scan(&avatarImage)
+	writeJSON(w, http.StatusOK, map[string]string{"avatar": avatar, "avatarColor": avatarColor, "avatarImage": avatarImage})
+}
+
+func normalizeUploadedAvatarImage(raw string) (string, error) {
+	const prefix = "data:image/webp;base64,"
+	if !strings.HasPrefix(raw, prefix) {
+		return "", fmt.Errorf("头像图片必须为 WebP 格式")
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(raw, prefix))
+	if err != nil || len(data) == 0 || len(data) > maxUploadedAvatarBytes || sniffImageMIME(data) != "image/webp" {
+		return "", fmt.Errorf("头像图片无效或过大")
+	}
+	return prefix + base64.StdEncoding.EncodeToString(data), nil
 }
 
 // handleUpdateAvatar PUT /api/auth/avatar
@@ -470,6 +487,7 @@ func (s *Server) handleUpdateAvatar(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Avatar      string `json:"avatar"`
 		AvatarColor string `json:"avatarColor"`
+		AvatarImage string `json:"avatarImage"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -480,6 +498,17 @@ func (s *Server) handleUpdateAvatar(w http.ResponseWriter, r *http.Request) {
 	input.Avatar = strings.TrimSpace(input.Avatar)
 	if input.Avatar == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请选择头像"})
+		return
+	}
+	if input.Avatar == uploadedAvatarKey {
+		image, err := normalizeUploadedAvatarImage(strings.TrimSpace(input.AvatarImage))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		input.AvatarImage = image
+	} else if input.AvatarImage != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "仅上传头像可携带图片数据"})
 		return
 	}
 
@@ -499,12 +528,22 @@ func (s *Server) handleUpdateAvatar(w http.ResponseWriter, r *http.Request) {
 			ON CONFLICT(key) DO UPDATE SET value = ?
 		`, input.AvatarColor, input.AvatarColor)
 	}
+	_, err = s.db.Exec(`
+		INSERT INTO settings (key, value) VALUES ('avatar_image', ?)
+		ON CONFLICT(key) DO UPDATE SET value = ?
+	`, input.AvatarImage, input.AvatarImage)
+	if err != nil {
+		log.Printf("保存头像图片失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存头像图片失败"})
+		return
+	}
 
 	s.broadcastInvalidated("auth-avatar")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":          true,
 		"avatar":      input.Avatar,
 		"avatarColor": input.AvatarColor,
+		"avatarImage": input.AvatarImage,
 	})
 }
 

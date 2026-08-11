@@ -106,22 +106,16 @@ export const AVATAR_ICON_GROUPS: { title: string; icons: { key: string; Icon: Lu
     },
   ]
 
-export const CUSTOM_AVATAR_KEY = 'custom'
-
-/** 当前可用的自定义头像文件名列表（新增头像时在这里追加，不要覆盖旧文件） */
-export const CUSTOM_AVATAR_FILES = ['default.webp', 'custom-duck.webp']
+export const UPLOADED_AVATAR_KEY = 'custom:upload'
 
 /** 判断是否为自定义图片头像 */
 export function isCustomAvatar(raw?: string | null): boolean {
-  return raw === CUSTOM_AVATAR_KEY || raw?.startsWith(`${CUSTOM_AVATAR_KEY}:`) || false
+  return raw === UPLOADED_AVATAR_KEY
 }
 
 /** 从 avatar 值解析出自定义头像 URL；不是自定义头像时返回 null */
-export function getCustomAvatarUrl(raw?: string | null): string | null {
-  if (!raw || !isCustomAvatar(raw)) return null
-  if (raw === CUSTOM_AVATAR_KEY) return `/avatars/${CUSTOM_AVATAR_FILES[0]}`
-  const filename = raw.slice(CUSTOM_AVATAR_KEY.length + 1)
-  return `/avatars/${filename}`
+export function getCustomAvatarUrl(raw?: string | null, uploadedImage?: string): string | null {
+  return raw === UPLOADED_AVATAR_KEY && uploadedImage?.startsWith('data:image/webp;base64,') ? uploadedImage : null
 }
 
 /** 把后端头像名解析成 Lucide 图标组件；自定义图片头像返回 null */

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -48,6 +49,8 @@ func newTestAPI(t *testing.T) *testAPI {
 		r.Use(AuthMiddleware(srv.config.JWTSecret, srv))
 		r.Get("/api/auth/verify", srv.handleVerify)
 		r.Put("/api/auth/password", srv.handleChangePassword)
+		r.Get("/api/auth/avatar", srv.handleGetAvatar)
+		r.Put("/api/auth/avatar", srv.handleUpdateAvatar)
 
 		r.Get("/api/categories", srv.handleGetCategories)
 		r.Post("/api/categories", srv.handleCreateCategory)
@@ -175,6 +178,37 @@ func TestAPIAuthenticationAndTokenBoundary(t *testing.T) {
 	}
 	requireStatus(t, api.request(t, http.MethodGet, "/api/bookmarks", apiToken, nil), http.StatusOK)
 	requireStatus(t, api.request(t, http.MethodGet, "/api/tokens", apiToken, nil), http.StatusForbidden)
+}
+
+func TestUploadedAvatarRoundTrip(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	image := "data:image/webp;base64," + base64.StdEncoding.EncodeToString([]byte("RIFF\x04\x00\x00\x00WEBP"))
+
+	res := api.request(t, http.MethodPut, "/api/auth/avatar", jwt, map[string]string{
+		"avatar":      "custom:upload",
+		"avatarColor": "#f59e0b",
+		"avatarImage": image,
+	})
+	requireStatus(t, res, http.StatusOK)
+
+	got := decodeJSON[struct {
+		Avatar      string `json:"avatar"`
+		AvatarImage string `json:"avatarImage"`
+	}](t, api.request(t, http.MethodGet, "/api/auth/avatar", jwt, nil))
+	if got.Avatar != "custom:upload" || got.AvatarImage != image {
+		t.Fatalf("avatar = %#v, want uploaded avatar and image", got)
+	}
+}
+
+func TestUploadedAvatarRejectsNonWebPImage(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	res := api.request(t, http.MethodPut, "/api/auth/avatar", jwt, map[string]string{
+		"avatar":      "custom:upload",
+		"avatarImage": "data:image/png;base64,iVBORw0KGgo=",
+	})
+	requireStatus(t, res, http.StatusBadRequest)
 }
 
 func TestPasswordChangeInvalidatesExistingJWT(t *testing.T) {

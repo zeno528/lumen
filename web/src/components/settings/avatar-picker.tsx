@@ -1,27 +1,71 @@
-import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ImageUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUpdateAvatar } from '@/hooks/use-avatar'
 import {
   AVATAR_COLORS,
   AVATAR_ICON_GROUPS,
   resolveAvatarIcon,
-  CUSTOM_AVATAR_KEY,
-  CUSTOM_AVATAR_FILES,
+  UPLOADED_AVATAR_KEY,
+  getCustomAvatarUrl,
   isCustomAvatar,
 } from '@/lib/avatar-icons'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { SECTION_CLASS } from './section-styles'
 
-function parseCurrentAvatar(currentAvatar: string): { isCustom: boolean; icon: string; customFile: string } {
+const AVATAR_SIZE = 128
+const MAX_SOURCE_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_AVATAR_IMAGE_BYTES = 48 * 1024
+const ACCEPTED_AVATAR_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+function parseCurrentAvatar(currentAvatar: string): { isCustom: boolean; icon: string } {
   if (isCustomAvatar(currentAvatar)) {
-    const file = currentAvatar === CUSTOM_AVATAR_KEY
-      ? CUSTOM_AVATAR_FILES[0]
-      : currentAvatar.slice(CUSTOM_AVATAR_KEY.length + 1)
-    return { isCustom: true, icon: 'fa-piggy-bank', customFile: file || CUSTOM_AVATAR_FILES[0] }
+    return { isCustom: true, icon: 'fa-piggy-bank' }
   }
-  return { isCustom: false, icon: currentAvatar || 'fa-piggy-bank', customFile: CUSTOM_AVATAR_FILES[0] }
+  return { isCustom: false, icon: currentAvatar || 'fa-piggy-bank' }
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality))
+}
+
+function readAsDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('图片读取失败'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function compressAvatarImage(file: File): Promise<string> {
+  if (!ACCEPTED_AVATAR_IMAGE_TYPES.has(file.type) || file.size > MAX_SOURCE_IMAGE_BYTES) {
+    throw new Error('请选择 5 MB 以内的 JPG、PNG 或 WebP 图片')
+  }
+  const sourceURL = URL.createObjectURL(file)
+  const image = new Image()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('无法读取图片'))
+      image.src = sourceURL
+    })
+    const side = Math.min(image.naturalWidth, image.naturalHeight)
+    const canvas = document.createElement('canvas')
+    canvas.width = AVATAR_SIZE
+    canvas.height = AVATAR_SIZE
+    const context = canvas.getContext('2d')
+    if (!context || side === 0) throw new Error('无法处理图片')
+    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE)
+    for (const quality of [0.82, 0.68, 0.54]) {
+      const blob = await canvasToBlob(canvas, quality)
+      if (blob && blob.size <= MAX_AVATAR_IMAGE_BYTES) return readAsDataURL(blob)
+    }
+    throw new Error('图片压缩后仍过大，请换一张图片')
+  } finally {
+    URL.revokeObjectURL(sourceURL)
+  }
 }
 
 /** AVATAR_COLORS 颜色名（屏幕阅读器可读，避免直接读 hex 字符串） */
@@ -50,10 +94,12 @@ function colorName(hex: string): string {
 export function AvatarPicker({
   currentAvatar,
   currentColor,
+  currentAvatarImage,
   onDone,
 }: {
   currentAvatar: string
   currentColor: string
+  currentAvatarImage?: string
   onDone: () => void
 }) {
   const updateAvatar = useUpdateAvatar()
@@ -61,12 +107,24 @@ export function AvatarPicker({
   const [icon, setIcon] = useState(initial.icon)
   const [color, setColor] = useState(currentColor)
   const [isCustom, setIsCustom] = useState(initial.isCustom)
-  const [customFile, setCustomFile] = useState(initial.customFile)
+  const [customImage, setCustomImage] = useState(currentAvatarImage || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const uploadInputRef = useRef<HTMLInputElement>(null)
 
   const PreviewIcon = resolveAvatarIcon(icon)
-  const previewUrl = `/avatars/${customFile}`
+  const previewUrl = customImage || getCustomAvatarUrl(currentAvatar) || undefined
+
+  const handleImageUpload = async (file?: File) => {
+    if (!file || saving) return
+    setError('')
+    try {
+      setCustomImage(await compressAvatarImage(file))
+      setIsCustom(true)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
 
   const handleConfirm = async () => {
     if (saving) return
@@ -74,8 +132,9 @@ export function AvatarPicker({
     setSaving(true)
     try {
       await updateAvatar.mutateAsync({
-        avatar: isCustom ? `${CUSTOM_AVATAR_KEY}:${customFile}` : icon || 'fa-piggy-bank',
+        avatar: isCustom && customImage ? UPLOADED_AVATAR_KEY : isCustom ? currentAvatar : icon || 'fa-piggy-bank',
         avatarColor: color || '#f59e0b',
+        avatarImage: isCustom && customImage ? customImage : undefined,
       })
       toast.success('头像已更新')
       onDone()
@@ -101,29 +160,25 @@ export function AvatarPicker({
         )}
       </div>
 
-      {/* 自定义头像选项 */}
+      {/* 自定义头像上传：只在设置弹窗加载时本地压缩，不进入首屏路径 */}
       <div className="flex flex-col items-center gap-2 w-full">
         <div className="text-[0.65rem] font-semibold text-(--text-muted) tracking-[0.5px]">自定义</div>
-        <div className="flex flex-wrap justify-center gap-2">
-          {CUSTOM_AVATAR_FILES.map((file) => (
-            <button
-              key={file}
-              type="button"
-              className={cn(
-                'w-11 h-11 rounded-xl border p-0 cursor-pointer transition-all overflow-hidden bg-(--bg-secondary)',
-                isCustom && customFile === file
-                  ? 'border-(--accent) ring-2 ring-(--accent)'
-                  : 'border-(--border) hover:border-(--accent)',
-              )}
-              onClick={() => { setIsCustom(true); setCustomFile(file) }}
-              title={file}
-              aria-label={`自定义头像 ${file}`}
-              disabled={saving}
-            >
-              <img src={`/avatars/${file}`} alt={file} className="w-full h-full object-cover" width={44} height={44} />
-            </button>
-          ))}
-        </div>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          onChange={(event) => {
+            void handleImageUpload(event.target.files?.[0])
+            event.target.value = ''
+          }}
+          disabled={saving}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={() => uploadInputRef.current?.click()} disabled={saving}>
+          <ImageUp size={14} />
+          上传图片
+        </Button>
+        <p className="text-xs text-(--text-muted)">支持 JPG、PNG、WebP，最大 5 MB</p>
       </div>
 
       {/* 色板 -- 仅图标模式可用 */}
@@ -169,7 +224,7 @@ export function AvatarPicker({
                     !isCustom && icon === key && '!border-current',
                   )}
                   style={!isCustom && icon === key ? { background: color + '22', color } : undefined}
-                  onClick={() => { setIsCustom(false); setIcon(key) }}
+              onClick={() => { setIsCustom(false); setCustomImage(''); setIcon(key) }}
                   title={key}
                   disabled={saving}
                 >
