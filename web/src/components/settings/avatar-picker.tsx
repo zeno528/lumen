@@ -10,11 +10,11 @@ import {
   getCustomAvatarUrl,
   isCustomAvatar,
 } from '@/lib/avatar-icons'
+import { AVATAR_UPLOAD_SIZES } from '@/lib/avatar-upload'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { SECTION_CLASS } from './section-styles'
 
-const AVATAR_SIZE = 128
 const MAX_SOURCE_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_AVATAR_IMAGE_BYTES = 48 * 1024
 const ACCEPTED_AVATAR_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -53,14 +53,18 @@ async function compressAvatarImage(file: File): Promise<string> {
     })
     const side = Math.min(image.naturalWidth, image.naturalHeight)
     const canvas = document.createElement('canvas')
-    canvas.width = AVATAR_SIZE
-    canvas.height = AVATAR_SIZE
     const context = canvas.getContext('2d')
     if (!context || side === 0) throw new Error('无法处理图片')
-    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE)
-    for (const quality of [0.82, 0.68, 0.54]) {
-      const blob = await canvasToBlob(canvas, quality)
-      if (blob && blob.size <= MAX_AVATAR_IMAGE_BYTES) return readAsDataURL(blob)
+    for (const size of AVATAR_UPLOAD_SIZES) {
+      canvas.width = size
+      canvas.height = size
+      context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, size, size)
+      for (const quality of [0.82, 0.68, 0.54]) {
+        const blob = await canvasToBlob(canvas, quality)
+        if (blob && blob.size <= MAX_AVATAR_IMAGE_BYTES) return readAsDataURL(blob)
+        // Canvas 回退 PNG 时 quality 无效，直接缩小尺寸后再试。
+        if (blob?.type === 'image/png') break
+      }
     }
     throw new Error('图片压缩后仍过大，请换一张图片')
   } finally {
