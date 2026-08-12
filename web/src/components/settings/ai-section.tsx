@@ -631,8 +631,8 @@ export function AiSection({
                           : isEditing
                             ? 'border-(--accent) bg-[var(--accent)]/10'
                             : isActive
-                              ? 'border-(--border) bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_10%,transparent),transparent)]'
-                              : 'border-(--border) hover:bg-(--bg-primary)',
+                              ? 'border-(--border) hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_10%,transparent),transparent)]'
+                              : 'border-(--border) hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] hover:bg-(--bg-primary)',
                       )}
                     >
                       <button

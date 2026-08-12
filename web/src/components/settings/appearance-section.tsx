@@ -73,10 +73,10 @@ export function AppearanceSection() {
                 key={value}
                 type="button"
                 className={cn(
-                  'flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm text-(--text-secondary) transition-colors cursor-pointer hover:bg-(--accent-soft-bg) hover:text-(--accent)',
+                  'flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm transition-colors cursor-pointer',
                   theme === value
                     ? 'bg-(--accent) text-white shadow-sm'
-                    : undefined,
+                    : 'text-(--text-secondary) hover:bg-(--accent-soft-bg) hover:text-(--accent)',
                 )}
                 onClick={() => handleSelectTheme(value)}
                 aria-label={label}
