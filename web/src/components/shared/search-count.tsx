@@ -28,3 +28,14 @@ export function SearchCount() {
   const count = filterBookmarksBySearch(bookmarks, categoryNames, q, idSearchMode).length
   return <span className="bookmark-tag search-count">{count} 条</span>
 }
+
+/** 唯一结果的行内操作提示：覆盖原生文字渲染，输入与光标仍由 input 本身负责。 */
+export function SearchEnterHint({ query, visible }: { query: string; visible: boolean }) {
+  if (!visible) return null
+  return (
+    <span className="search-enter-hint" aria-hidden="true">
+      <span>{query}</span>
+      <kbd className="shortcut-kbd search-enter-kbd">↵ Enter</kbd>
+    </span>
+  )
+}

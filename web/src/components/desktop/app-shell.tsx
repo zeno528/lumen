@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, CheckCheck, X } from 'lucide-react'
 import { useRouterState } from '@tanstack/react-router'
 import { Sidebar } from './sidebar'
@@ -9,10 +9,11 @@ import { useUIStore } from '@/stores/ui'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useHotkeys } from '@/hooks/use-hotkeys'
 import { useDebouncedValue } from '@/hooks/use-debounce'
-import { SearchCount } from '@/components/shared/search-count'
+import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { MobileShell } from '@/components/mobile/mobile-shell'
 import { useBookmarks } from '@/hooks/useBookmarks'
-import { getIdFromQuery } from '@/lib/bookmark-search'
+import { useCategories } from '@/hooks/useCategories'
+import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { openInNewTab } from '@/lib/utils'
 import {
   computeGridContentWidth,
@@ -145,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 /**
  * 桌面 Shell —— 侧边栏（logo + 分类 + 用户卡片）+ 主内容区（main-top 搜索/批量/主题 + main-content 内容）。
  * 布局：grid 贴边占满，侧栏与 main 无缝隙；都透 .layout 的 glass-bg，同层无三角。
- * 搜索在 main-top，输入 300ms debounce 后同步到 store。
+ * 搜索在 main-top，输入停顿 150ms 后同步到 store。
  */
 function DesktopShell({ children }: { children: React.ReactNode }) {
   // 搜索框常驻展开（不再收缩）：input 始终 300px（= 一张卡片宽度），icon 固定左侧，
@@ -164,8 +165,17 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     toggleIdSearchMode,
   } = useUIStore()
   const [input, setInput] = useState(searchQuery)
-  const debounced = useDebouncedValue(input, 300)
+  const debounced = useDebouncedValue(input, 150)
   const { data: bmData } = useBookmarks()
+  const { data: catData } = useCategories()
+  const categoryNames = useMemo(
+    () => new Map((catData?.categories ?? []).map((category) => [category.id, category.name])),
+    [catData?.categories],
+  )
+  const searchEnterTarget = useMemo(
+    () => input === searchQuery ? getSingleSearchMatch(bmData?.bookmarks ?? [], categoryNames, input, idSearchMode) : null,
+    [bmData?.bookmarks, categoryNames, idSearchMode, input, searchQuery],
+  )
   // 顶栏搜索框/按钮组与下方卡片网格列对齐所需的左右内缩量（0 表示无网格时回退）
   const gridInset = useGridInset()
   // 设置页/帮助页是独立全屏区域，隐藏侧边栏（对齐移动端 mobile-shell.tsx:99-101 的处理）
@@ -205,13 +215,10 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                       setInput('')
                       setSearchQuery('')
                     }
-                    // 回车直达：ID 搜索命中时直接打开该书签（与点击卡片一致，新标签页）
-                    if (e.key === 'Enter') {
-                      const id = getIdFromQuery(input, idSearchMode)
-                      if (id != null && !batchMode) {
-                        const hit = bmData?.bookmarks.find((b) => b.id === id)
-                        if (hit) openInNewTab(hit.url)
-                      }
+                    // 回车直达：仅唯一搜索结果打开，与点击卡片一致（新标签页）。
+                    if (e.key === 'Enter' && !batchMode) {
+                      const hit = getSingleSearchMatch(bmData?.bookmarks ?? [], categoryNames, input, idSearchMode)
+                      if (hit) openInNewTab(hit.url)
                     }
                   }}
                 />
@@ -230,10 +237,11 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 >
                   <Search size={16} strokeWidth={2} aria-hidden="true" />
                 </button>
-                {/* 快捷键徽标：空闲时提示 Ctrl+K 聚焦搜索，有输入后隐藏（count 占同位置） */}
-                {!input && <span className="shortcut-kbd search-kbd">Ctrl K</span>}
+                {/* 等防抖搜索清空后再显示 Ctrl+K，避免与上一轮结果计数短暂重叠。 */}
+                {!input && !searchQuery && <span className="shortcut-kbd search-kbd">Ctrl+K</span>}
                 {/* 搜索结果计数：常驻显示（搜索框不再收缩）。*/}
                 <SearchCount />
+                <SearchEnterHint query={input} visible={searchEnterTarget != null} />
                 {/* 清空按钮：仅在已有输入时显示（无收起动作，故无"关闭"语义）*/}
                 {input && (
                   <button

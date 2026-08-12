@@ -202,7 +202,35 @@ select,
   white-space: nowrap;
   pointer-events: none;
 }
-/* 搜索框快捷键徽标（Ctrl K）：空闲时占 count 同位置（right 40），有输入自动隐藏不冲突 */
+.search-count,
+.search-kbd,
+.search-enter-kbd {
+  animation: popIn 0.16s ease-out both;
+}
+.search-enter-hint {
+  position: absolute;
+  top: 50%;
+  left: 44px;
+  right: 88px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transform: translateY(-50%);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: normal;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.search-enter-kbd {
+  margin-left: 8px;
+}
+.search-box:has(.search-enter-hint) input,
+.mobile-search-bar:has(.search-enter-hint) input {
+  color: transparent;
+  caret-color: var(--text-primary);
+}
+/* 搜索框快捷键徽标（Ctrl+K）：空闲时占 count 同位置（right 40），有输入自动隐藏不冲突 */
 .search-box .search-kbd {
   position: absolute;
   right: 40px;
@@ -1536,6 +1564,13 @@ select,
   }
   .mobile-search-bar input::placeholder {
     color: var(--text-muted);
+  }
+  .mobile-search-bar .search-count {
+    flex-shrink: 0;
+  }
+  .mobile-search-bar .search-enter-hint {
+    left: 52px;
+    right: 96px;
   }
   /* 右侧 × 关闭按钮：智能「清空 / 关闭」—— 永远显示，避免空内容时缺操作。
      圆形 + 半透灰底模拟液态工具按钮，hover 加深。*/

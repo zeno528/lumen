@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, Layers, Star, Folder, Bookmark } from 'lucide-react'
 import { TopbarAvatar } from '@/components/shared/topbar-avatar'
@@ -11,8 +11,8 @@ import { resolveCategoryIcon } from '@/lib/icon-map'
 import { useUIStore } from '@/stores/ui'
 import { useHotkeys } from '@/hooks/use-hotkeys'
 import { useDebouncedValue } from '@/hooks/use-debounce'
-import { SearchCount } from '@/components/shared/search-count'
-import { getIdFromQuery } from '@/lib/bookmark-search'
+import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
+import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 
@@ -53,8 +53,17 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
 
   const [input, setInput] = useState(searchQuery)
-  const debounced = useDebouncedValue(input, 300)
+  const debounced = useDebouncedValue(input, 150)
   const { data: bmData } = useBookmarks()
+  const { data: catData } = useCategories()
+  const categoryNames = useMemo(
+    () => new Map((catData?.categories ?? []).map((category) => [category.id, category.name])),
+    [catData?.categories],
+  )
+  const searchEnterTarget = useMemo(
+    () => input === searchQuery ? getSingleSearchMatch(bmData?.bookmarks ?? [], categoryNames, input, idSearchMode) : null,
+    [bmData?.bookmarks, categoryNames, idSearchMode, input, searchQuery],
+  )
   // 搜索 input 用稳定 ref（不再 inline lambda），避免每次 render 重建 ref 触发 focus 重置
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -220,17 +229,15 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
           onChange={(e) => setInput(e.target.value)}
           title="搜索（Ctrl+K）"
           onKeyDown={(e) => {
-            // 回车直达：ID 搜索命中时直接打开该书签（与点击卡片一致，新标签页）
-            if (e.key === 'Enter') {
-              const id = getIdFromQuery(input, idSearchMode)
-              if (id != null && !batchMode) {
-                const hit = bmData?.bookmarks.find((b) => b.id === id)
-                if (hit) openInNewTab(hit.url)
-              }
+            // 回车直达：仅唯一搜索结果打开，与点击卡片一致（新标签页）。
+            if (e.key === 'Enter' && !batchMode) {
+              const hit = getSingleSearchMatch(bmData?.bookmarks ?? [], categoryNames, input, idSearchMode)
+              if (hit) openInNewTab(hit.url)
             }
           }}
         />
         <SearchCount />
+        <SearchEnterHint query={input} visible={searchEnterTarget != null} />
         <button
           className="search-close-btn"
           onMouseDown={(e) => e.preventDefault()}
@@ -315,8 +322,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => {
                 // Dock "搜索"图标 toggle：取消选中 = 一次性清空搜索 query + 收起搜索栏，
-                // 等同于搜索框内 × 关闭按钮功能（区别于 × 是逐步清：先清 input 再关闭）。
-                // 这样视图从过滤态恢复、input 重置、键盘收起同步生效。
+                // 等同于搜索框内 × 关闭按钮功能；视图恢复与键盘收起同步生效。
                 if (searchOpen) {
                   setInput('')
                   setSearchQuery('')

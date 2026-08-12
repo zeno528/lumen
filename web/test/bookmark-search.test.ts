@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { bookmarkMatchesSearch, filterBookmarksBySearch, getIdFromQuery } from '../src/lib/bookmark-search.ts'
+import { bookmarkMatchesSearch, filterBookmarksBySearch, getIdFromQuery, getSingleSearchMatch } from '../src/lib/bookmark-search.ts'
 
 const bookmark = {
   id: 42,
@@ -110,4 +110,15 @@ test('getIdFromQuery parses ID targets for Enter-to-open', () => {
   assert.equal(getIdFromQuery('253', false), null)
   assert.equal(getIdFromQuery('git', true), null)
   assert.equal(getIdFromQuery('', true), null)
+})
+
+test('Enter-to-open target exists only for one non-empty search result', () => {
+  const categories = new Map<number, string>()
+  const other = { ...bookmark, id: 43, title: 'Other release notes' }
+
+  assert.equal(getSingleSearchMatch([bookmark], categories, 'release', false)?.id, 42)
+  assert.equal(getSingleSearchMatch([bookmark, other], categories, 'release', false), null)
+  assert.equal(getSingleSearchMatch([bookmark], categories, '', false), null)
+  assert.equal(getSingleSearchMatch([bookmark], categories, '42', true)?.id, 42)
+  assert.equal(getSingleSearchMatch([bookmark], categories, '#42', false)?.id, 42)
 })

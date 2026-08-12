@@ -155,7 +155,7 @@ export function TopbarAvatar({
     {
       label: '设置',
       icon: <Settings size={14} />,
-      trailing: <kbd className="shortcut-kbd">Ctrl ,</kbd>,
+      trailing: <kbd className="shortcut-kbd">Ctrl+,</kbd>,
       onClick: () => {
         setSettingsTab('account')
         setSettingsOpen(true)

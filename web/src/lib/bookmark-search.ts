@@ -96,3 +96,15 @@ export function filterBookmarksBySearch<T extends SearchableBookmark>(
       .some((field) => isSubsequence(term, field.toLowerCase())),
   )
 }
+
+/** 回车直达只在用户实际搜索且结果唯一时生效，ID 与普通搜索共用同一规则。 */
+export function getSingleSearchMatch<T extends SearchableBookmark>(
+  bookmarks: T[],
+  categoryNames: Map<number, string>,
+  query: string,
+  idSearchMode: boolean,
+): T | null {
+  if (!query.trim()) return null
+  const matches = filterBookmarksBySearch(bookmarks, categoryNames, query, idSearchMode)
+  return matches.length === 1 ? matches[0] : null
+}
