@@ -422,12 +422,14 @@ export function AiSection({
 
   const apiKeyPlaceholder = savedCurrent?.hasKey
     ? '留空保留，输入新值覆盖'
-    : '例如：sk-xxxxxxxx'
+    : '请输入 API Key'
   const customAnthropic = provider === 'custom' && apiFormat === 'anthropic'
   const formatOptions = preset?.formats ?? (provider === 'custom' ? CUSTOM_API_FORMATS : [])
   const apiFormatLabel = formatOptions.find((option) => option.value === apiFormat)?.label ?? apiFormat
-  const modelPlaceholder = '例如：deepseek-v4-flash'
-  const baseURLPlaceholder = customAnthropic ? '例如：https://api.anthropic.com' : '例如：https://api.example.com/v1'
+  const modelPlaceholder = '输入模型 ID'
+  const baseURLPlaceholder = apiFormat === 'anthropic' ? '例如：https://api.anthropic.com' : '例如：https://api.openai.com/v1'
+  const baseURLProtocol = apiFormat === 'anthropic' ? 'Anthropic Messages API' : 'OpenAI API'
+  const baseURLPath = apiFormat === 'anthropic' ? '/v1/messages' : '/chat/completions'
 
   // 编辑表单（一级已保存编辑 + 二级新增共用；二级始终显示空模板，点 provider 填入）
   const editForm = (
@@ -451,7 +453,7 @@ export function AiSection({
       </div>
       {formatOptions.length > 0 && (
         <div>
-          <Label htmlFor="ai-api-format">接口格式</Label>
+          <Label htmlFor="ai-api-format">API 格式</Label>
           <Combobox
             id="ai-api-format"
             value={apiFormatLabel}
@@ -466,28 +468,36 @@ export function AiSection({
         </div>
       )}
       <div>
-        <Label htmlFor="ai-model">模型</Label>
+        <Label htmlFor="ai-model">模型 ID</Label>
         <Combobox
           value={model}
           onChange={setModel}
           options={(customAnthropic ? ANTHROPIC_FORMAT_PRESET.modelOptions : preset?.modelOptions ?? []).map((m) => ({ value: m, label: m }))}
-          placeholder={provider === 'custom' ? modelPlaceholder : '模型 ID'}
+          placeholder={modelPlaceholder}
           inputClassName="h-11"
         />
       </div>
 
       {(!!preset?.baseUrl || provider === 'custom') && (
         <div>
-          <Label htmlFor="ai-base-url">调用地址</Label>
+          <Label htmlFor="ai-base-url">请求地址</Label>
           <Input
             id="ai-base-url"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder={provider === 'custom' ? baseURLPlaceholder : 'API Base URL'}
+            placeholder={baseURLPlaceholder}
             autoComplete="off"
             data-1p-ignore=""
             data-lpignore="true"
           />
+          <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-(--border) bg-(--bg-primary) px-2.5 py-2 text-xs leading-5 text-(--text-muted)">
+            <span className="mt-0.5 h-4 w-1 shrink-0 rounded-full bg-(--accent)" aria-hidden="true" />
+            <p className="m-0">
+              请填写兼容 <span className="text-(--text-primary)">{baseURLProtocol}</span> 的服务端基础地址，不要以斜杠结尾，
+              <code className="mx-0.5 rounded bg-(--accent-soft-bg) px-1.5 py-0.5 font-mono text-(--accent)">{baseURLPath}</code>
+              {' '}会自动补充到末尾。
+            </p>
+          </div>
         </div>
       )}
 
