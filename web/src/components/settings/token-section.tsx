@@ -8,6 +8,7 @@ import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/stores/auth'
 import { SECTION_CLASS } from './section-styles'
 import { cn } from '@/lib/utils'
+import type { ApiToken } from '@/types'
 
 const TOKEN_BOX =
   'flex flex-col gap-2 p-3.5 rounded-xl border border-(--border) bg-(--bg-primary)'
@@ -27,7 +28,19 @@ export function TokenSection() {
   })
   const createMut = useMutation({
     mutationFn: (name: string) => createToken(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tokens'] }),
+    onSuccess: (created) => {
+      qc.setQueryData<ApiToken[]>(['tokens'], (current) => [
+        ...(current ?? []),
+        {
+          id: created.id,
+          name: created.name,
+          prefix: created.prefix,
+          suffix: created.suffix,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      void qc.invalidateQueries({ queryKey: ['tokens'] })
+    },
   })
 
   const [name, setName] = useState('')
@@ -83,14 +96,18 @@ export function TokenSection() {
   }
 
   const handleDelete = async (id: number) => {
+    await qc.cancelQueries({ queryKey: ['tokens'] })
+    const previous = qc.getQueryData<ApiToken[]>(['tokens'])
+    qc.setQueryData<ApiToken[]>(['tokens'], (current) => current?.filter((token) => token.id !== id) ?? [])
+    setConfirmingDeleteId(null)
     try {
       await deleteToken(id)
-      qc.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('Token 已删除')
     } catch {
+      qc.setQueryData<ApiToken[]>(['tokens'], previous)
       toast.error('删除失败')
     } finally {
-      setConfirmingDeleteId(null)
+      void qc.invalidateQueries({ queryKey: ['tokens'] })
     }
   }
 

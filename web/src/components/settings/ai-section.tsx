@@ -169,6 +169,20 @@ export function AiSection({
             hasKey: config.hasKey || !!apiKey.trim(),
           } : config),
         }))
+      } else {
+        const newConfig: SavedConfig = {
+          id: res.configId,
+          provider,
+          displayName: displayName.trim(),
+          model: model.trim(),
+          baseUrl: baseUrl.trim(),
+          apiFormat,
+          hasKey: !!apiKey.trim(),
+        }
+        qc.setQueryData<AISettings>(['ai-settings'], (current) => ({
+          ...(current ?? {}),
+          savedConfigs: [...(current?.savedConfigs ?? []), newConfig],
+        }))
       }
       toast.resolve(feedbackID, editingConfigId > 0 ? '供应商更新成功' : '供应商添加成功', 'success')
       if (subView === 'ai-add-provider') {
@@ -323,14 +337,18 @@ export function AiSection({
     try {
       const copiedName = `${c.displayName || getProviderDisplayName(c.provider)} copy`
       const res = await copyAIConfig(c.id, c.displayName || getProviderDisplayName(c.provider))
-      await qc.invalidateQueries({ queryKey: ['ai-settings'] })
-      setEditingConfigId(res.configId)
-      setProvider(c.provider)
-      setDisplayName(copiedName)
-      setModel(c.model)
-      setBaseUrl(c.baseUrl || AI_PRESETS[c.provider]?.baseUrl || '')
-      setApiFormat(c.apiFormat || 'openai')
-      setApiKey('')
+      qc.setQueryData<AISettings>(['ai-settings'], (current) => ({
+        ...(current ?? {}),
+        savedConfigs: [
+          ...(current?.savedConfigs ?? []),
+          {
+            ...c,
+            id: res.configId,
+            displayName: copiedName,
+          },
+        ],
+      }))
+      void qc.invalidateQueries({ queryKey: ['ai-settings'] })
       toast.success('已复制配置')
     } catch (e) {
       toast.error('复制失败: ' + (e as Error).message)
