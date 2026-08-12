@@ -62,6 +62,32 @@ export function filterBookmarksBySearch<T extends SearchableBookmark>(
   if (exactMatches.length || getIdFromQuery(query, idSearchMode) != null) return exactMatches
 
   const terms = splitTerms(normalizeNumericPunctuation(query.toLowerCase().trim()))
+  // 仅在严格匹配零结果时，允许中文片段保持顺序地跨过中间文字：
+  // “设计库”可匹配“设计灵感库”；英文/数字词仍须连续命中，避免扩大误召回。
+  if (terms.some((term) => /^[\u4e00-\u9fff]+$/.test(term))) {
+    const cjkMatches = bookmarks.filter((bookmark) => {
+      const fields = [bookmark.title, bookmark.description ?? '', bookmark.url, bookmark.category_id != null ? categoryNames.get(bookmark.category_id) ?? '' : '', ...(bookmark.tags ?? [])]
+        .map((field) => normalizeNumericPunctuation(field.toLowerCase()))
+      return terms.every((term) => fields.some((field) =>
+        /^[\u4e00-\u9fff]+$/.test(term) ? isSubsequence(term, field) : field.includes(term),
+      ))
+    })
+    if (cjkMatches.length) return cjkMatches
+
+    // 最终兜底对齐书签管理的碎片化记忆：中文字符去重后只要求同一字段包含它们；
+    // 仅看标题/网址，英文/数字仍完整匹配，且只在前两层没有结果时启用。
+    const coverageMatches = bookmarks.filter((bookmark) => {
+      const fields = [bookmark.title, bookmark.url]
+        .map((field) => normalizeNumericPunctuation(field.toLowerCase()))
+      return terms.every((term) => fields.some((field) =>
+        /^[\u4e00-\u9fff]+$/.test(term)
+          ? [...new Set(term)].every((char) => field.includes(char))
+          : field.includes(term),
+      ))
+    })
+    if (coverageMatches.length) return coverageMatches
+  }
+
   const [term] = terms
   if (terms.length !== 1 || !/^[a-z0-9]{5,}$/.test(term)) return exactMatches
 

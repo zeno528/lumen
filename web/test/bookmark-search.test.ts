@@ -55,6 +55,48 @@ test('bookmark search falls back to an in-order Latin typo only when exact searc
   assert.deepEqual(filterBookmarksBySearch([openCode, bookmark], categories, 'release', false).map(({ id }) => id), [42])
 })
 
+test('bookmark search falls back to in-order CJK fragments after zero exact results', () => {
+  const uiNotes = {
+    ...bookmark,
+    id: 7,
+    title: 'UI Notes - 真实产品 UI 设计灵感库',
+    description: '',
+    url: 'https://uinotes.com/',
+    tags: [],
+  }
+
+  assert.deepEqual(
+    filterBookmarksBySearch([uiNotes], new Map(), 'ui设计库notes', false).map(({ id }) => id),
+    [7],
+  )
+})
+
+test('bookmark search uses distinct CJK character coverage only as the final fallback', () => {
+  const uiNotes = {
+    ...bookmark,
+    id: 7,
+    title: 'UI Notes - 真实产品 UI 设计灵感库',
+    description: '',
+    url: 'https://uinotes.com/',
+    tags: [],
+  }
+  const uiNotesWithMetadata = {
+    ...uiNotes,
+    id: 8,
+    description: 'UI Notes 真实产品 UI 设计灵感库很好',
+  }
+  const categories = new Map<number, string>()
+
+  assert.deepEqual(
+    filterBookmarksBySearch([uiNotes], categories, 'ui设计库notes库库真实产品', false).map(({ id }) => id),
+    [7],
+  )
+  assert.deepEqual(
+    filterBookmarksBySearch([uiNotes, uiNotesWithMetadata], categories, '设计库notes库库真实产品好', false).map(({ id }) => id),
+    [],
+  )
+})
+
 test('bookmark search preserves digit and #ID exact matching', () => {
   assert.equal(bookmarkMatchesSearch(bookmark, 'Engineering', '42', true), true)
   assert.equal(bookmarkMatchesSearch(bookmark, 'Engineering', '4', true), false)
