@@ -13,7 +13,7 @@ type AIConfig struct {
 	APIKey    string
 	Model     string
 	BaseURL   string
-	APIFormat string // custom: openai / anthropic
+	APIFormat string // openai / anthropic
 }
 
 // GitHubOAuthConfig GitHub OAuth 配置

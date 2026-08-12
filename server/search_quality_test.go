@@ -80,12 +80,32 @@ func TestFormatCategoryProfilesUsesOnlyProvidedSamples(t *testing.T) {
 	}
 }
 
-func TestUsesAnthropicFormatOnlyForCustomAnthropicSelection(t *testing.T) {
-	if !usesAnthropicFormat(AIConfig{Provider: "custom", APIFormat: "anthropic"}) {
-		t.Fatal("custom Anthropic selection must use Messages format")
+func TestUsesAnthropicFormatForSelectedProviders(t *testing.T) {
+	for _, provider := range []string{"custom", "deepseek", "zhipu"} {
+		if !usesAnthropicFormat(AIConfig{Provider: provider, APIFormat: "anthropic"}) {
+			t.Fatalf("%s Anthropic selection must use Messages format", provider)
+		}
+		if usesAnthropicFormat(AIConfig{Provider: provider, APIFormat: "openai"}) {
+			t.Fatalf("%s OpenAI selection must use Chat Completions", provider)
+		}
 	}
-	if usesAnthropicFormat(AIConfig{Provider: "custom", APIFormat: "openai"}) {
-		t.Fatal("custom OpenAI selection must use Chat Completions")
+}
+
+func TestDefaultBaseURLFollowsAPIFormat(t *testing.T) {
+	tests := []struct {
+		provider  string
+		apiFormat string
+		want      string
+	}{
+		{"deepseek", "openai", "https://api.deepseek.com/v1"},
+		{"deepseek", "anthropic", "https://api.deepseek.com/anthropic"},
+		{"zhipu", "openai", "https://open.bigmodel.cn/api/coding/paas/v4"},
+		{"zhipu", "anthropic", "https://open.bigmodel.cn/api/anthropic"},
+	}
+	for _, tt := range tests {
+		if got := defaultBaseURL(tt.provider, tt.apiFormat); got != tt.want {
+			t.Fatalf("defaultBaseURL(%q, %q) = %q, want %q", tt.provider, tt.apiFormat, got, tt.want)
+		}
 	}
 }
 

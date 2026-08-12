@@ -16,6 +16,11 @@ export interface AIProviderPreset {
   label: string
   logo: string | null
   format: string
+  formats?: Array<{
+    value: 'openai' | 'anthropic'
+    label: string
+    baseUrl: string
+  }>
 }
 
 export const AI_PRESETS: Record<string, AIProviderPreset> = {
@@ -25,15 +30,23 @@ export const AI_PRESETS: Record<string, AIProviderPreset> = {
     baseUrl: 'https://api.deepseek.com/v1',
     label: 'DeepSeek',
     logo: '/providers/deepseek.svg',
-    format: 'OpenAI 格式',
+    format: 'OpenAI / Anthropic 格式',
+    formats: [
+      { value: 'openai', label: 'OpenAI Chat Completions 格式', baseUrl: 'https://api.deepseek.com/v1' },
+      { value: 'anthropic', label: 'Anthropic Messages 格式', baseUrl: 'https://api.deepseek.com/anthropic' },
+    ],
   },
   zhipu: {
-    model: 'glm-4.7-flash',
-    modelOptions: ['glm-4.7-flash', 'glm-4.7', 'glm-5'],
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    model: 'glm-5-turbo',
+    modelOptions: ['glm-5-turbo', 'glm-5.2'],
+    baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
     label: '智谱 GLM',
     logo: '/providers/zhipu.svg',
-    format: 'OpenAI/Anthropic 兼容',
+    format: 'OpenAI / Anthropic 格式',
+    formats: [
+      { value: 'openai', label: 'OpenAI Chat Completions 格式', baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4' },
+      { value: 'anthropic', label: 'Anthropic Messages 格式', baseUrl: 'https://open.bigmodel.cn/api/anthropic' },
+    ],
   },
   minimax: {
     model: 'MiniMax-M3',

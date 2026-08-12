@@ -137,16 +137,15 @@ export function TopbarAIButton({
     })),
   })
 
-  // 预加载所有 provider logo：刷新后首次展开下拉，非激活项 logo 已进 HTTP 缓存，img 秒显不闪
+  // 顶栏挂载后立即预热 logo，不等 ai-settings 返回，避免刷新后首次展开菜单时才开始加载
   useEffect(() => {
-    savedConfigs.forEach((c) => {
-      const logo = AI_PRESETS[c.provider]?.logo
-      if (logo) {
-        const img = new Image()
-        img.src = logo
-      }
-    })
-  }, [savedConfigs])
+    for (const logo of new Set(Object.values(AI_PRESETS).map((preset) => preset.logo).filter((logo): logo is string => Boolean(logo)))) {
+      const img = new Image()
+      img.decoding = 'sync'
+      img.src = logo
+      img.decode?.().catch(() => {})
+    }
+  }, [])
 
   // 没配置任何配置不渲染（无可切换项）。hooks 全在上方，return 顺序合法。
   if (savedConfigs.length === 0) return null
@@ -174,7 +173,7 @@ export function TopbarAIButton({
       return {
         label: c.displayName || c.model || AI_PRESETS[c.provider]?.label || c.provider,
         icon: logo ? (
-          <img src={logo} alt="" className="w-4 h-4 object-contain" />
+          <img src={logo} alt="" loading="eager" decoding="sync" fetchPriority="high" className="w-4 h-4 object-contain" />
         ) : (
           <Bot size={14} />
         ),
@@ -214,7 +213,7 @@ export function TopbarAIButton({
           )}
         >
           {activeLogo ? (
-            <img src={activeLogo} alt="" className="w-[22px] h-[22px] object-contain" />
+            <img src={activeLogo} alt="" loading="eager" decoding="sync" fetchPriority="high" className="w-[22px] h-[22px] object-contain" />
           ) : (
             <Bot size={22} />
           )}

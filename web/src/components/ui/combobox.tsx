@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from './input'
 
@@ -24,6 +24,7 @@ export interface ComboboxOption {
 }
 
 export interface ComboboxProps {
+  id?: string
   value: string
   onChange: (value: string) => void
   options: ComboboxOption[]
@@ -31,6 +32,8 @@ export interface ComboboxProps {
   emptyText?: string
   className?: string
   inputClassName?: string
+  /** 仅使用统一下拉视觉，不允许直接编辑输入值 */
+  readOnly?: boolean
   /** 回车回调：分类框按回车触发保存（与 URL/标题框一致，Ctrl+Enter 由全局快捷键处理）*/
   onEnter?: () => void
   /** 下拉列表最大高度（px），超出滚动。默认 240，分类框传较小值收窄只露几项 */
@@ -38,6 +41,7 @@ export interface ComboboxProps {
 }
 
 export function Combobox({
+  id,
   value,
   onChange,
   options,
@@ -45,6 +49,7 @@ export function Combobox({
   emptyText = '无匹配项',
   className,
   inputClassName,
+  readOnly = false,
   onEnter,
   listMaxHeight = 240,
 }: ComboboxProps) {
@@ -129,10 +134,7 @@ export function Combobox({
       {filtered.map((o) => (
         <div
           key={o.value}
-          className={cn(
-            'dropdown-option',
-            o.label === value && 'active',
-          )}
+          className="dropdown-option"
           onMouseDown={(e) => {
             // mousedown 比 click 早，且不会丢 input 焦点
             e.preventDefault()
@@ -141,6 +143,11 @@ export function Combobox({
           role="option"
           aria-selected={o.label === value}
         >
+          {o.label === value ? (
+            <Check size={16} className="text-(--accent) shrink-0" />
+          ) : (
+            <span className="w-4 h-4 shrink-0" aria-hidden />
+          )}
           {o.icon && (
             <span className="dropdown-option-prefix">
               <span className="w-5 h-5 inline-flex items-center justify-center shrink-0">
@@ -165,47 +172,61 @@ export function Combobox({
   return (
     <div className={cn('combobox relative', className)}>
       <div ref={triggerRef} className="relative">
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onMouseDown={() => {
-            // 点击输入框关闭下拉：用户点输入框 = 要输入/搜索，列表保持展开不符合逻辑
-            if (open) setOpen(false)
-          }}
-          onKeyDown={(e) => {
-            // 回车触发保存（与 URL/标题框一致）；Ctrl+Enter 由全局快捷键处理
-            if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && onEnter) {
-              e.preventDefault()
-              setOpen(false)
-              onEnter()
-            }
-          }}
-          placeholder={placeholder}
-          className={cn('combobox-input pr-[52px]', inputClassName)}
-        />
-        {value && (
+        {readOnly ? (
           <button
+            id={id}
             type="button"
-            className="input-clear-btn absolute right-8 top-1/2 -translate-y-1/2 text-(--text-muted) hover:text-(--text-primary) p-0.5 transition-colors z-[1]"
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => onChange('')}
-            tabIndex={-1}
+            className={cn('dropdown-trigger', open && 'open', !value && 'placeholder', inputClassName)}
+            onClick={() => setOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={open}
           >
-            <X size={14} />
+            <span className="dropdown-trigger-label">{value || placeholder}</span>
+            <ChevronDown size={14} className="dropdown-trigger-chevron" />
           </button>
+        ) : (
+          <>
+            <Input
+              id={id}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onMouseDown={() => setOpen(true)}
+              onKeyDown={(e) => {
+                // 回车触发保存（与 URL/标题框一致）；Ctrl+Enter 由全局快捷键处理
+                if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && onEnter) {
+                  e.preventDefault()
+                  setOpen(false)
+                  onEnter()
+                }
+              }}
+              placeholder={placeholder}
+              className={cn('combobox-input pr-[52px]', inputClassName)}
+            />
+            {value && (
+              <button
+                type="button"
+                className="input-clear-btn absolute right-8 top-1/2 -translate-y-1/2 text-(--text-muted) hover:text-(--text-primary) p-0.5 transition-colors z-[1]"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => onChange('')}
+                tabIndex={-1}
+              >
+                <X size={14} />
+              </button>
+            )}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={open ? '收起选项' : '展开选项'}
+              className="absolute right-0 top-0 bottom-0 w-[52px] flex items-center justify-end pr-3 cursor-pointer text-(--text-muted) hover:text-(--text-primary) transition-colors"
+              onClick={() => setOpen((o) => !o)}
+            >
+              <ChevronDown
+                size={14}
+                className={cn('transition-transform duration-200', open && 'rotate-180')}
+              />
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={open ? '收起选项' : '展开选项'}
-          className="absolute right-0 top-0 bottom-0 w-[52px] flex items-center justify-end pr-3 cursor-pointer text-(--text-muted) hover:text-(--text-primary) transition-colors"
-          onClick={() => setOpen((o) => !o)}
-        >
-          <ChevronDown
-            size={14}
-            className={cn('transition-transform duration-200', open && 'rotate-180')}
-          />
-        </button>
       </div>
       {listbox && createPortal(listbox, document.body)}
     </div>

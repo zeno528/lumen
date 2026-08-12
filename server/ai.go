@@ -200,12 +200,12 @@ func callAI(cfg AIConfig, prompt string) (string, error) {
 	return callOpenAIProvider(cfg, prompt)
 }
 
-// usesAnthropicFormat custom 配置只依赖显式保存的协议，预设供应商保留既有端点兼容逻辑。
+// usesAnthropicFormat 预设供应商也尊重显式保存的协议；旧配置仍按 Anthropic 端点兼容判断。
 func usesAnthropicFormat(cfg AIConfig) bool {
-	if cfg.Provider == "custom" {
+	if cfg.Provider == "custom" || cfg.Provider == "deepseek" || cfg.Provider == "zhipu" {
 		return cfg.APIFormat == "anthropic"
 	}
-	return cfg.Provider == "anthropic" || strings.Contains(cfg.BaseURL, "/anthropic")
+	return cfg.APIFormat == "anthropic" || cfg.Provider == "anthropic" || strings.Contains(cfg.BaseURL, "/anthropic")
 }
 
 // parseAIResult 从 AI 响应文本中提取 JSON 结果
@@ -447,7 +447,7 @@ func openAIRequestBody(cfg AIConfig, prompt string) map[string]any {
 		"max_tokens":  1024,
 	}
 	// 关闭思考模式，避免 thinking 挤占输出致 JSON 解析失败、回退本地英文兜底：
-	// - deepseek / zhipu: DeepSeek 官方 / 智谱 GLM-4.7+ 默认开 thinking，用 thinking.type=disabled 关闭
+	// - deepseek / zhipu: DeepSeek 官方 / 智谱 GLM 默认开 thinking，用 thinking.type=disabled 关闭
 	// - siliconflow: Qwen3.x 默认开 thinking，用 chat_template_kwargs.enable_thinking=false（vLLM 标准）
 	//   + 顶层 enable_thinking=false（硅基流动适配）双保险关闭
 	switch cfg.Provider {

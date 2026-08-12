@@ -21,13 +21,25 @@ var allowedProviders = map[string]bool{
 
 // 预设厂商默认值
 var providerDefaults = map[string]struct {
-	Model   string
-	BaseURL string
+	Model            string
+	BaseURL          string
+	AnthropicBaseURL string
 }{
-	"deepseek":    {"deepseek-v4-flash", "https://api.deepseek.com/v1"},
-	"zhipu":       {"glm-4.7-flash", "https://open.bigmodel.cn/api/paas/v4"},
-	"minimax":     {"MiniMax-M3", "https://api.minimaxi.com/anthropic"},
-	"siliconflow": {"Qwen/Qwen3.5-122B-A10B", "https://api.siliconflow.cn/v1"},
+	"deepseek":    {"deepseek-v4-flash", "https://api.deepseek.com/v1", "https://api.deepseek.com/anthropic"},
+	"zhipu":       {"glm-5-turbo", "https://open.bigmodel.cn/api/coding/paas/v4", "https://open.bigmodel.cn/api/anthropic"},
+	"minimax":     {"MiniMax-M3", "https://api.minimaxi.com/anthropic", ""},
+	"siliconflow": {"Qwen/Qwen3.5-122B-A10B", "https://api.siliconflow.cn/v1", ""},
+}
+
+func defaultBaseURL(provider, apiFormat string) string {
+	defaults, ok := providerDefaults[provider]
+	if !ok {
+		return ""
+	}
+	if apiFormat == "anthropic" && defaults.AnthropicBaseURL != "" {
+		return defaults.AnthropicBaseURL
+	}
+	return defaults.BaseURL
 }
 
 // maskKey 对 API 密钥做掩码处理，前8位明文 + 后4位明文，中间掩码（显示 sk-9fef2 这种前缀便于辨认是哪个 key）
@@ -140,7 +152,7 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "不支持的提供商"})
 		return
 	}
-	if input.Provider == "custom" && input.APIFormat != "anthropic" {
+	if input.APIFormat != "anthropic" {
 		input.APIFormat = "openai"
 	}
 
@@ -150,7 +162,7 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 			input.Model = defaults.Model
 		}
 		if input.BaseURL == "" {
-			input.BaseURL = defaults.BaseURL
+			input.BaseURL = defaultBaseURL(input.Provider, input.APIFormat)
 		}
 	}
 

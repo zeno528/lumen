@@ -20,7 +20,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SecretInput } from '@/components/shared/secret-input'
 import { Combobox } from '@/components/ui/combobox'
-import { Select } from '@/components/ui/select'
 import {
   AI_PRESETS,
   AI_PROVIDER_ORDER,
@@ -123,6 +122,12 @@ export function AiSection({
   }
 
   const preset = AI_PRESETS[provider]
+  const onApiFormatChange = (format: string) => {
+    setApiFormat(format)
+    const next = preset?.formats?.find((option) => option.value === format)
+    if (next) setBaseUrl(next.baseUrl)
+  }
+
   // 当前编辑的已存配置（新增态 editingConfigId=0 -> undefined）
   const savedCurrent = aiData?.savedConfigs?.find((c) => c.id === editingConfigId)
   const save = async () => {
@@ -391,12 +396,20 @@ export function AiSection({
     ? '留空保留，输入新值覆盖'
     : '例如：sk-xxxxxxxx'
   const customAnthropic = provider === 'custom' && apiFormat === 'anthropic'
+  const formatOptions = preset?.formats ?? (provider === 'custom' ? CUSTOM_API_FORMATS : [])
+  const apiFormatLabel = formatOptions.find((option) => option.value === apiFormat)?.label ?? apiFormat
   const modelPlaceholder = '例如：deepseek-v4-flash'
   const baseURLPlaceholder = customAnthropic ? '例如：https://api.anthropic.com' : '例如：https://api.example.com/v1'
 
   // 编辑表单（一级已保存编辑 + 二级新增共用；二级始终显示空模板，点 provider 填入）
   const editForm = (
-    <>
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save()
+      }}
+    >
       <div>
         <Label htmlFor="ai-display-name">供应商名称</Label>
         <Input
@@ -408,14 +421,19 @@ export function AiSection({
           className="h-12 text-base"
         />
       </div>
-      {provider === 'custom' && (
+      {formatOptions.length > 0 && (
         <div>
           <Label htmlFor="ai-api-format">接口格式</Label>
-          <Select
+          <Combobox
             id="ai-api-format"
-            value={apiFormat}
-            onChange={(e) => setApiFormat(e.target.value)}
-            options={CUSTOM_API_FORMATS}
+            value={apiFormatLabel}
+            onChange={(label) => {
+              const next = formatOptions.find((option) => option.label === label)
+              if (next) onApiFormatChange(next.value)
+            }}
+            options={formatOptions.map(({ label }) => ({ value: label, label }))}
+            readOnly
+            inputClassName="h-11"
           />
         </div>
       )}
@@ -464,8 +482,9 @@ export function AiSection({
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        <Button onClick={save} disabled={aiSaving}>保存</Button>
+        <Button type="submit" disabled={aiSaving}>保存</Button>
         <Button
+          type="button"
           variant="outline"
           onClick={onAITest}
           aria-label={activeTests['edit'] ? '取消测试' : '测试连接'}
@@ -474,7 +493,7 @@ export function AiSection({
           {activeTests['edit'] ? '取消测试' : '测试连接'}
         </Button>
       </div>
-    </>
+    </form>
   )
 
   // ========== 二级界面：新增配置（网格 + 编辑表单同时常驻）==========
