@@ -191,12 +191,9 @@ select,
   white-space: nowrap;
   pointer-events: none;
 }
-/* 搜索框快捷键徽标（Ctrl K）：空闲时占 count 同位置（right 40），有输入自动隐藏不冲突 */
-.search-box .search-kbd {
-  position: absolute;
-  right: 40px;
-  top: 50%;
-  transform: translateY(-50%);
+/* 快捷键徽标：搜索框与菜单共用同一视觉语言。 */
+.shortcut-kbd {
+  font-family: inherit;
   font-size: 0.65rem;
   padding: 1px 6px;
   border-radius: 6px;
@@ -204,6 +201,13 @@ select,
   color: var(--text-muted);
   white-space: nowrap;
   pointer-events: none;
+}
+/* 搜索框快捷键徽标（Ctrl K）：空闲时占 count 同位置（right 40），有输入自动隐藏不冲突 */
+.search-box .search-kbd {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 /* Logo */
 .logo {

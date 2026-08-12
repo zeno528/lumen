@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Palette, Check, Sun, Moon, Monitor } from 'lucide-react'
+import { Palette, Check, Sun, Moon, Monitor, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   applyAccent,
   getSavedAccent,
   type Accent,
 } from '@/components/shared/theme-toggle'
-import { applyTheme, getSavedTheme, type Theme } from '@/lib/theme'
+import { applyTheme, getSavedTheme, THEME_OPTIONS, type Theme } from '@/lib/theme'
 import { SECTION_CLASS } from './section-styles'
 
 /**
@@ -21,6 +21,12 @@ const ACCENTS: { id: Accent; name: string; desc: string; light: string; dark: st
   { id: 'indigo', name: '靛蓝', desc: '深邃冷静', light: '#635bff', dark: '#8183ff' },
   { id: 'blue', name: '海洋蓝', desc: '清亮明快', light: '#007aff', dark: '#0a84ff' },
 ]
+
+const THEME_ICONS: Record<Theme, LucideIcon> = {
+  system: Monitor,
+  light: Sun,
+  'notion-dark': Moon,
+}
 
 /**
  * 外观设置 section -- 主题深浅 + 主题配色。
@@ -57,32 +63,31 @@ export function AppearanceSection() {
       </h3>
       <div className={SECTION_CLASS}>
 
-        {/* 主题深浅：与顶栏同步，状态由 dataset.theme 单一真值源驱动 */}
-        <div className="flex flex-col gap-2">
-          <h4 className="text-sm font-medium text-(--text-secondary)">主题</h4>
-          <div className="grid grid-cols-3 gap-2.5">
-            <ThemeCard
-              value="system"
-              icon={<Monitor size={16} />}
-              label="跟随系统"
-              selected={theme === 'system'}
-              onSelect={handleSelectTheme}
-            />
-            <ThemeCard
-              value="light"
-              icon={<Sun size={16} />}
-              label="浅色"
-              selected={theme === 'light'}
-              onSelect={handleSelectTheme}
-            />
-            <ThemeCard
-              value="notion-dark"
-              icon={<Moon size={16} />}
-              label="深色"
-              selected={theme === 'notion-dark'}
-              onSelect={handleSelectTheme}
-            />
-          </div>
+        {/* 主题深浅：紧凑分段控件，三种偏好一步直选。 */}
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-(--border) bg-(--bg-input) p-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-(--text-primary)">主题</span>
+            <span className="block text-xs text-(--text-muted)">控制界面深浅</span>
+          </span>
+          <span className="inline-flex shrink-0 gap-1 rounded-lg border border-(--border) bg-(--bg-secondary) p-1" role="group" aria-label="主题">
+            {THEME_OPTIONS.map(({ value, label }) => {
+              const Icon = THEME_ICONS[value]
+              return <button
+                key={value}
+                type="button"
+                className={cn(
+                  'flex h-8 w-9 items-center justify-center rounded-md text-(--text-secondary) transition-colors hover:bg-(--bg-card-hover) hover:text-(--text-primary)',
+                  theme === value && 'bg-(--accent-soft-bg) text-(--accent)',
+                )}
+                onClick={() => handleSelectTheme(value)}
+                aria-label={label}
+                aria-pressed={theme === value}
+                title={label}
+              >
+                <Icon size={16} />
+              </button>
+            })}
+          </span>
         </div>
 
         {/* 配色方案：选项与主题深浅独立，可自由组合 */}
@@ -101,40 +106,6 @@ export function AppearanceSection() {
         </div>
       </div>
     </section>
-  )
-}
-
-/** 主题深浅卡片（浅 / 深二选一，视觉与配色卡片统一）。 */
-function ThemeCard({
-  value,
-  icon,
-  label,
-  selected,
-  onSelect,
-}: {
-  value: Theme
-  icon: React.ReactNode
-  label: string
-  selected: boolean
-  onSelect: (next: Theme) => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      className={cn(
-        'flex items-center gap-3 p-3 rounded-xl border transition-colors text-left cursor-pointer',
-        selected
-          ? 'border-(--accent) bg-(--accent-soft-bg)'
-          : 'border-(--border) hover:border-(--border-hover) hover:bg-(--bg-card-hover)',
-      )}
-    >
-      <span className="shrink-0 text-(--text-secondary)">{icon}</span>
-      <span className="flex-1 min-w-0">
-        <span className="block text-sm font-medium text-(--text-primary)">{label}</span>
-      </span>
-      {selected && <Check size={16} className="text-(--accent) shrink-0" />}
-    </button>
   )
 }
 

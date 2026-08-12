@@ -231,7 +231,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                   <Search size={16} strokeWidth={2} aria-hidden="true" />
                 </button>
                 {/* 快捷键徽标：空闲时提示 Ctrl+K 聚焦搜索，有输入后隐藏（count 占同位置） */}
-                {!input && <span className="search-kbd">Ctrl K</span>}
+                {!input && <span className="shortcut-kbd search-kbd">Ctrl K</span>}
                 {/* 搜索结果计数：常驻显示（搜索框不再收缩）。*/}
                 <SearchCount />
                 {/* 清空按钮：仅在已有输入时显示（无收起动作，故无"关闭"语义）*/}

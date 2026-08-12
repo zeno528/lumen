@@ -16,8 +16,8 @@ export interface MenuItem {
   active?: boolean
   /** 末尾额外节点（label 后、Check 前），如 AI 连通性状态点 */
   trailing?: ReactNode
-  /** 行内控件；用于同一菜单行内的独立选择，不与外层 button 嵌套。 */
-  control?: ReactNode
+  /** 点击后保持当前菜单打开，用于进入同卡片的二级视图。 */
+  keepOpen?: boolean
 }
 
 /**
@@ -169,12 +169,6 @@ export function ContextMenu({
               {item.trailing && <span className="shrink-0">{item.trailing}</span>}
             </div>
           )
-        ) : item.control ? (
-          <div key={i} className="context-menu-item context-menu-control" role="group" aria-label={item.label}>
-            {item.icon && <span className="icon">{item.icon}</span>}
-            <span className="flex-1 min-w-0 truncate" style={{ color: item.labelColor }}>{item.label}</span>
-            {item.control}
-          </div>
         ) : (
           <button
             key={i}
@@ -186,7 +180,7 @@ export function ContextMenu({
             )}
             onClick={() => {
               item.onClick?.()
-              onClose()
+              if (!item.keepOpen) onClose()
             }}
           >
             {item.icon && <span className="icon">{item.icon}</span>}

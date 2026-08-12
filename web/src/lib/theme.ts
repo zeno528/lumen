@@ -1,6 +1,12 @@
 export type Theme = 'light' | 'notion-dark' | 'system'
 export type ResolvedTheme = Exclude<Theme, 'system'>
 
+export const THEME_OPTIONS = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'light', label: '浅色' },
+  { value: 'notion-dark', label: '深色' },
+] as const satisfies readonly { value: Theme; label: string }[]
+
 export const THEME_CHANGE_EVENT = 'lumen:theme-change'
 
 export function parseThemePreference(value: string | null): Theme {

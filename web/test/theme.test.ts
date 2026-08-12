@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseThemePreference, resolveTheme } from '../src/lib/theme.ts'
+import { THEME_OPTIONS, parseThemePreference, resolveTheme } from '../src/lib/theme.ts'
+
+test('theme pickers expose the three explicit choices with system first', () => {
+  assert.deepEqual(
+    THEME_OPTIONS.map(({ value, label }) => [value, label]),
+    [
+      ['system', '跟随系统'],
+      ['light', '浅色'],
+      ['notion-dark', '深色'],
+    ],
+  )
+})
 
 test('theme preference keeps explicit choices and migrates the legacy dark value', () => {
   assert.equal(parseThemePreference('light'), 'light')

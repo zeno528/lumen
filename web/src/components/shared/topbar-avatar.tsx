@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { HelpCircle, LogOut, Moon, Settings, Sun, Monitor, Cat } from 'lucide-react'
+import { ChevronLeft, ChevronRight, HelpCircle, LogOut, Moon, Settings, Sun, Monitor, Cat, type LucideIcon } from 'lucide-react'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
-import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT, type Theme } from '@/lib/theme'
+import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT, THEME_OPTIONS, type Theme } from '@/lib/theme'
 import { useAvatar } from '@/hooks/use-avatar'
 import { resolveAvatarIcon, getCustomAvatarUrl } from '@/lib/avatar-icons'
 import { useAuthStore } from '@/stores/auth'
@@ -12,6 +12,13 @@ import { getNickname } from '@/api/settings'
 import { cn, openInNewTab } from '@/lib/utils'
 
 const CLOSE_DELAY = 150
+const AVATAR_MENU_WIDTH = 184
+
+const THEME_ICONS: Record<Theme, LucideIcon> = {
+  system: Monitor,
+  light: Sun,
+  'notion-dark': Moon,
+}
 
 /** WS 连接状态 → 角标颜色/脉冲/标签（颜色走 theme.css token，复用 .ai-status-dot 语义）*/
 const WS_DOT: Record<string, { color: string; pulse: boolean; label: string }> = {
@@ -43,6 +50,7 @@ export function TopbarAvatar({
 
   const [theme, setTheme] = useState<Theme>(getSavedTheme)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [menuView, setMenuView] = useState<'main' | 'theme'>('main')
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const customUrl = getCustomAvatarUrl(avatarData?.avatar, avatarData?.avatarImage)
@@ -76,9 +84,14 @@ export function TopbarAvatar({
     setMenu({ x, y })
   }, [cancelClose])
 
-  const closeMenu = useCallback(() => {
-    closeTimer.current = setTimeout(() => setMenu(null), CLOSE_DELAY)
+  const dismissMenu = useCallback(() => {
+    setMenu(null)
+    setMenuView('main')
   }, [])
+
+  const closeMenu = useCallback(() => {
+    closeTimer.current = setTimeout(dismissMenu, CLOSE_DELAY)
+  }, [dismissMenu])
 
   const handleButtonClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -119,11 +132,30 @@ export function TopbarAvatar({
     applyTheme(next)
   }, [])
 
-  const items: MenuItem[] = [
+  const activeTheme = THEME_OPTIONS.find((option) => option.value === theme)!
+  const ActiveThemeIcon = THEME_ICONS[theme]
+  const items: MenuItem[] = menuView === 'theme' ? [
+    {
+      label: '返回',
+      icon: <ChevronLeft size={14} />,
+      onClick: () => setMenuView('main'),
+      keepOpen: true,
+    },
+    { separator: true, label: '' },
+    ...THEME_OPTIONS.map(({ value, label }) => {
+      const Icon = THEME_ICONS[value]
+      return {
+        label,
+        icon: <Icon size={14} />,
+        active: theme === value,
+        onClick: () => selectTheme(value),
+      }
+    }),
+  ] : [
     {
       label: '设置',
       icon: <Settings size={14} />,
-      trailing: <kbd className="text-[10px] text-(--text-muted) whitespace-nowrap">Ctrl + ,</kbd>,
+      trailing: <kbd className="shortcut-kbd">Ctrl ,</kbd>,
       onClick: () => {
         setSettingsTab('account')
         setSettingsOpen(true)
@@ -131,28 +163,10 @@ export function TopbarAvatar({
     },
     {
       label: '主题',
-      icon: theme === 'notion-dark' ? <Moon size={14} /> : theme === 'system' ? <Monitor size={14} /> : <Sun size={14} />,
-      control: (
-        <span className="theme-menu-options">
-          {([
-            ['system', Monitor, '跟随系统'],
-            ['light', Sun, '浅色'],
-            ['notion-dark', Moon, '深色'],
-          ] as const).map(([value, Icon, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={cn('theme-menu-option', theme === value && 'active')}
-              onClick={() => selectTheme(value)}
-              aria-label={label}
-              aria-pressed={theme === value}
-              title={label}
-            >
-              <Icon size={14} />
-            </button>
-          ))}
-        </span>
-      ),
+      icon: <ActiveThemeIcon size={14} />,
+      trailing: <span className="inline-flex items-center gap-1 text-xs text-(--text-muted)">{activeTheme.label}<ChevronRight size={14} /></span>,
+      onClick: () => setMenuView('theme'),
+      keepOpen: true,
     },
     { separator: true, label: '' },
     {
@@ -202,7 +216,7 @@ export function TopbarAvatar({
       </button>
       <ContextMenu
         open={!!menu}
-        onClose={() => setMenu(null)}
+        onClose={dismissMenu}
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
         items={items}
@@ -210,6 +224,7 @@ export function TopbarAvatar({
         onMouseLeave={closeMenu}
         anchor="center"
         alignY="top"
+        minWidth={AVATAR_MENU_WIDTH}
       />
     </>
   )
