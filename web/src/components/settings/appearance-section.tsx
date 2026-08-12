@@ -63,31 +63,31 @@ export function AppearanceSection() {
       </h3>
       <div className={SECTION_CLASS}>
 
-        {/* 主题深浅：紧凑分段控件，三种偏好一步直选。 */}
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-(--border) bg-(--bg-input) p-3">
-          <span className="min-w-0">
-            <span className="block text-sm font-medium text-(--text-primary)">主题</span>
-            <span className="block text-xs text-(--text-muted)">控制界面深浅</span>
-          </span>
-          <span className="inline-flex shrink-0 gap-1 rounded-lg border border-(--border) bg-(--bg-secondary) p-1" role="group" aria-label="主题">
+        {/* 主题深浅：与下方配色方案共用卡片选择语言。 */}
+        <div className="flex flex-col gap-2">
+          <h4 className="text-sm font-medium text-(--text-secondary)">主题</h4>
+          <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="主题">
             {THEME_OPTIONS.map(({ value, label }) => {
               const Icon = THEME_ICONS[value]
               return <button
                 key={value}
                 type="button"
                 className={cn(
-                  'flex h-8 w-9 items-center justify-center rounded-md text-(--text-secondary) transition-colors hover:bg-(--bg-card-hover) hover:text-(--text-primary)',
-                  theme === value && 'bg-(--accent-soft-bg) text-(--accent)',
+                  'flex items-center justify-center gap-2 p-3 rounded-xl border transition-colors text-(--text-secondary) cursor-pointer',
+                  theme === value
+                    ? 'border-(--accent) bg-(--accent-soft-bg) text-(--accent)'
+                    : 'border-(--border) hover:border-(--border-hover) hover:bg-(--bg-card-hover)',
                 )}
                 onClick={() => handleSelectTheme(value)}
                 aria-label={label}
                 aria-pressed={theme === value}
                 title={label}
               >
-                <Icon size={16} />
+                <Icon size={16} className="shrink-0" />
+                <span className="text-xs font-medium sm:text-sm">{label}</span>
               </button>
             })}
-          </span>
+          </div>
         </div>
 
         {/* 配色方案：选项与主题深浅独立，可自由组合 */}
