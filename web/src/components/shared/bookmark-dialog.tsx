@@ -345,10 +345,9 @@ export function BookmarkDialog({
         toast.resolve(tid, feedback.message, 'success', feedback.action)
         return
       }
-      // 回填：按 标题→描述→标签 依次填充（每步 200ms），配合输入框内指示器逐格消失
-      const fillSteps: Array<[string, () => void]> = []
-      if (finalTitle) fillSteps.push(['title', () => setTitle(finalTitle)])
-      if (finalDesc) fillSteps.push(['desc', () => setDesc(finalDesc)])
+      // 同一次结果必须原子回填，不能让逐字段动画留下“标题/描述有了，分类/标签没有”的半成品状态。
+      if (finalTitle) setTitle(finalTitle)
+      if (finalDesc) setDesc(finalDesc)
       // tags：后端返回逗号分隔字符串，split + 过滤已有分类名
       if (meta.tags) {
         const catNames = new Set(categories.map((c) => c.name.trim()))
@@ -356,27 +355,10 @@ export function BookmarkDialog({
           .split(',')
           .map((t) => t.trim())
           .filter((t) => t && !catNames.has(t))
-        if (filtered.length) fillSteps.push(['tags', () => setTags(filtered.join(', '))])
+        if (filtered.length) setTags(filtered.join(', '))
       }
       if (suggestedCategory) setCategoryName(suggestedCategory)
-      // 没有数据返回的字段：指示器立即收掉
-      const noData = ['title', 'desc', 'tags'].filter((k) => !fillSteps.some(([fk]) => fk === k))
-      setAiFilling((prev) => {
-        const next = { ...prev }
-        noData.forEach((k) => delete next[k])
-        return next
-      })
-      fillSteps.forEach(([key, fill], i) => {
-        const t = window.setTimeout(() => {
-          fill()
-          setAiFilling((prev) => {
-            const next = { ...prev }
-            delete next[key]
-            return next
-          })
-        }, 200 * (i + 1))
-        aiFillTimers.current.push(t)
-      })
+      setAiFilling({})
       // 成功 toast 带 usedSerper 提示（智能获取是否调用了搜索工具）
       const usedSerper = meta.usedSerper === 'true'
       toast.resolve(

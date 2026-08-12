@@ -26,17 +26,57 @@ func TestParseAIResultDropsGenericPageSuffix(t *testing.T) {
 	}
 }
 
-func TestNormalizeAITagsKeepsFourSimpleChineseTerms(t *testing.T) {
+func TestNormalizeAITagsKeepsThreeSimpleChineseTerms(t *testing.T) {
 	got := normalizeAITags("提示词库, Prompt, DeepSeek, 代码助手, 写作助手, 角色扮演, 代码助手")
-	if got != "提示词库,代码助手,写作助手,角色扮演" {
+	if got != "提示词库,代码助手,写作助手" {
 		t.Fatalf("normalizeAITags() = %q, want four simple Chinese terms", got)
 	}
 }
 
 func TestNormalizeAITagsStripsAIPrefix(t *testing.T) {
 	got := normalizeAITags("AI 排行,模型评测,AI评测,人工智能助手,大模型")
-	if got != "排行,模型评测,评测,助手" {
+	if got != "排行,模型评测,评测" {
 		t.Fatalf("normalizeAITags() = %q, want AI prefixes stripped and deduped", got)
+	}
+}
+
+func TestValidateAIResultRequiresEvidenceAndExistingCategory(t *testing.T) {
+	evidence := "OpenClaw is a personal AI assistant that connects models, tools, and messaging channels."
+	valid := map[string]string{
+		"title_cn":          "OpenClaw - 个人智能助手",
+		"description_cn":    "在本地设备与常用聊天渠道运行的个人智能助手，可连接模型、工具和消息服务。",
+		"tags":              "个人助手,智能代理,本地运行",
+		"category":          "分类甲",
+		"category_evidence": "personal AI assistant",
+	}
+	if err := validateAIResult(valid, []string{"分类甲", "分类乙"}, evidence); err != nil {
+		t.Fatal(err)
+	}
+
+	valid["tags"] = "个人助手,智能代理"
+	if err := validateAIResult(valid, []string{"分类甲", "分类乙"}, evidence); err == nil {
+		t.Fatal("expected fewer than three tags to be rejected")
+	}
+
+	invalid := map[string]string{
+		"title_cn":       "Your own personal AI assistant",
+		"description_cn": "Your own personal AI assistant. Any OS. Any platform.",
+		"tags":           "",
+		"category":       "未知分类",
+	}
+	if err := validateAIResult(invalid, []string{"分类甲", "分类乙"}, evidence); err == nil {
+		t.Fatal("expected incomplete English result to be rejected")
+	}
+}
+
+func TestFormatCategoryProfilesUsesOnlyProvidedSamples(t *testing.T) {
+	profiles := []categoryProfile{{
+		Name:     "分类甲",
+		Examples: []string{"例子标题：例子描述", "第二个例子"},
+	}}
+	got := formatCategoryProfiles(profiles)
+	if !strings.Contains(got, "分类甲") || !strings.Contains(got, "例子标题") {
+		t.Fatalf("profile text = %q, want category and its examples", got)
 	}
 }
 
