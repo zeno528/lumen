@@ -15,6 +15,7 @@ type ProviderConfig struct {
 	Model           string
 	APIKeyEncrypted string
 	BaseURL         string
+	APIFormat       string
 	KeyCreatedAt    string
 	KeyLastUsedAt   string
 }
@@ -26,6 +27,7 @@ type SavedConfigSummary struct {
 	DisplayName  string `json:"displayName"`
 	Model        string `json:"model"`
 	BaseURL      string `json:"baseUrl"`
+	APIFormat    string `json:"apiFormat"`
 	HasKey       bool   `json:"hasKey"`
 	KeyHint      string `json:"keyHint"`
 	KeyCreatedAt string `json:"keyCreatedAt"`
@@ -33,7 +35,7 @@ type SavedConfigSummary struct {
 
 // saveProviderConfig 写入/更新配置。id=0 新增（生成 id 并返回），id>0 更新。
 // 空 key：优先当前配置 key（编辑），否则从 sourceConfigID 复制加密 key（复制场景）。
-func (s *Server) saveProviderConfig(id int64, provider, displayName, model, apiKeyPlain, baseURL string, sourceConfigID int64) (int64, error) {
+func (s *Server) saveProviderConfig(id int64, provider, displayName, model, apiKeyPlain, baseURL, apiFormat string, sourceConfigID int64) (int64, error) {
 	encryptedKey := ""
 	createdAt := ""
 
@@ -64,9 +66,9 @@ func (s *Server) saveProviderConfig(id int64, provider, displayName, model, apiK
 		// 更新
 		_, err := s.db.Exec(`
 			UPDATE ai_provider_configs SET
-				provider = ?, display_name = ?, model = ?, api_key_encrypted = ?, base_url = ?, key_created_at = ?, updated_at = CURRENT_TIMESTAMP
+				provider = ?, display_name = ?, model = ?, api_key_encrypted = ?, base_url = ?, api_format = ?, key_created_at = ?, updated_at = CURRENT_TIMESTAMP
 			WHERE id = ?
-		`, provider, displayName, model, encryptedKey, baseURL, createdAt, id)
+		`, provider, displayName, model, encryptedKey, baseURL, apiFormat, createdAt, id)
 		if err != nil {
 			return 0, err
 		}
@@ -75,9 +77,9 @@ func (s *Server) saveProviderConfig(id int64, provider, displayName, model, apiK
 
 	// 新增
 	res, err := s.db.Exec(`
-		INSERT INTO ai_provider_configs (provider, display_name, model, api_key_encrypted, base_url, key_created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-	`, provider, displayName, model, encryptedKey, baseURL, createdAt)
+		INSERT INTO ai_provider_configs (provider, display_name, model, api_key_encrypted, base_url, api_format, key_created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	`, provider, displayName, model, encryptedKey, baseURL, apiFormat, createdAt)
 	if err != nil {
 		return 0, err
 	}
@@ -95,9 +97,9 @@ func (s *Server) getProviderConfig(id int64) *ProviderConfig {
 	}
 	var cfg ProviderConfig
 	err := s.db.QueryRow(
-		"SELECT id, provider, display_name, model, api_key_encrypted, base_url, key_created_at, key_last_used_at FROM ai_provider_configs WHERE id = ?",
+		"SELECT id, provider, display_name, model, api_key_encrypted, base_url, api_format, key_created_at, key_last_used_at FROM ai_provider_configs WHERE id = ?",
 		id,
-	).Scan(&cfg.ID, &cfg.Provider, &cfg.DisplayName, &cfg.Model, &cfg.APIKeyEncrypted, &cfg.BaseURL, &cfg.KeyCreatedAt, &cfg.KeyLastUsedAt)
+	).Scan(&cfg.ID, &cfg.Provider, &cfg.DisplayName, &cfg.Model, &cfg.APIKeyEncrypted, &cfg.BaseURL, &cfg.APIFormat, &cfg.KeyCreatedAt, &cfg.KeyLastUsedAt)
 	if err != nil {
 		return nil
 	}
@@ -106,7 +108,7 @@ func (s *Server) getProviderConfig(id int64) *ProviderConfig {
 
 // listProviderConfigs 列出所有配置摘要（含 id，按 id 排序）
 func (s *Server) listProviderConfigs() []SavedConfigSummary {
-	rows, err := s.db.Query("SELECT id, provider, display_name, model, base_url, api_key_encrypted, key_created_at FROM ai_provider_configs ORDER BY id")
+	rows, err := s.db.Query("SELECT id, provider, display_name, model, base_url, api_format, api_key_encrypted, key_created_at FROM ai_provider_configs ORDER BY id")
 	if err != nil {
 		return nil
 	}
@@ -115,8 +117,8 @@ func (s *Server) listProviderConfigs() []SavedConfigSummary {
 	var result []SavedConfigSummary
 	for rows.Next() {
 		var id int64
-		var provider, displayName, model, baseURL, encKey, createdAt string
-		if err := rows.Scan(&id, &provider, &displayName, &model, &baseURL, &encKey, &createdAt); err != nil {
+		var provider, displayName, model, baseURL, apiFormat, encKey, createdAt string
+		if err := rows.Scan(&id, &provider, &displayName, &model, &baseURL, &apiFormat, &encKey, &createdAt); err != nil {
 			continue
 		}
 		summary := SavedConfigSummary{
@@ -125,6 +127,7 @@ func (s *Server) listProviderConfigs() []SavedConfigSummary {
 			DisplayName:  displayName,
 			Model:        model,
 			BaseURL:      baseURL,
+			APIFormat:    apiFormat,
 			HasKey:       encKey != "",
 			KeyCreatedAt: createdAt,
 		}
@@ -180,6 +183,7 @@ func (s *Server) setActiveConfig(id int64) error {
 	s.config.AI.Provider = cfg.Provider
 	s.config.AI.Model = cfg.Model
 	s.config.AI.BaseURL = cfg.BaseURL
+	s.config.AI.APIFormat = cfg.APIFormat
 	if cfg.APIKeyEncrypted != "" {
 		if dec, err := Decrypt(cfg.APIKeyEncrypted); err == nil {
 			s.config.AI.APIKey = dec

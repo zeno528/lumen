@@ -55,17 +55,9 @@ export const AI_PRESETS: Record<string, AIProviderPreset> = {
     logo: '/providers/siliconcloud-siliconflow.svg',
     format: 'OpenAI 格式',
   },
-  anthropic: {
-    model: '',
-    modelOptions: ['claude-opus-4-8', 'claude-sonnet-5'],
-    baseUrl: 'https://api.anthropic.com',
-    label: 'Anthropic',
-    logo: '/providers/claude.svg',
-    format: 'Anthropic 格式',
-  },
 }
 
-/** 自定义厂商（用户手动填 baseUrl/key）-- 复用同一渲染逻辑 */
+/** 自定义厂商（可显式选择 OpenAI / Anthropic 协议）-- 复用同一渲染逻辑 */
 export const CUSTOM_PROVIDER_PRESET: AIProviderPreset = {
   model: '',
   baseUrl: '',
@@ -78,7 +70,6 @@ export const CUSTOM_PROVIDER_PRESET: AIProviderPreset = {
 export const AI_APPLY_URLS: Record<string, string> = {
   deepseek: 'https://platform.deepseek.com',
   zhipu: 'https://open.bigmodel.cn',
-  anthropic: 'https://console.anthropic.com',
   minimax: 'https://platform.minimaxi.com',
   siliconflow: 'https://cloud.siliconflow.cn/i/3SOwJUoq',
 }
@@ -89,6 +80,16 @@ export const AI_PROVIDER_ORDER = [
   'zhipu',
   'minimax',
   'siliconflow',
-  'anthropic',
   'custom',
 ]
+
+export const CUSTOM_API_FORMATS = [
+  { value: 'openai', label: 'OpenAI 格式' },
+  { value: 'anthropic', label: 'Anthropic 格式' },
+]
+
+export const ANTHROPIC_FORMAT_PRESET = {
+  baseUrl: 'https://api.anthropic.com',
+  modelOptions: ['claude-opus-4-8', 'claude-sonnet-5'],
+  keyURL: 'https://console.anthropic.com',
+}

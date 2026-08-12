@@ -154,6 +154,7 @@ export interface SavedConfig {
   displayName?: string
   model: string
   baseUrl: string
+  apiFormat: string
   hasKey: boolean
   keyHint?: string
   keyCreatedAt?: string
@@ -184,6 +185,7 @@ export function updateAISettings(body: {
   model: string
   apiKey: string
   baseUrl: string
+  apiFormat: string
 }): Promise<{ ok: boolean; configId: number; message: string }> {
   return api('/ai-settings', {
     method: 'PUT',
@@ -263,6 +265,7 @@ export function testAIConnection(
     model: string
     apiKey?: string
     baseUrl?: string
+    apiFormat?: string
   },
   signal?: AbortSignal,
 ): Promise<{ ok: boolean; latency?: number; error?: string; statusCode?: number }> {

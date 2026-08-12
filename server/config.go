@@ -8,11 +8,12 @@ import (
 
 // AIConfig AI 提供商配置
 type AIConfig struct {
-	ConfigID int64  // 当前激活配置 id（0=env 模式，>0=db 模式）
-	Provider string // deepseek / zhipu / minimax / siliconflow / anthropic / custom
-	APIKey   string
-	Model    string
-	BaseURL  string
+	ConfigID  int64  // 当前激活配置 id（0=env 模式，>0=db 模式）
+	Provider  string // deepseek / zhipu / minimax / siliconflow / custom
+	APIKey    string
+	Model     string
+	BaseURL   string
+	APIFormat string // custom: openai / anthropic
 }
 
 // GitHubOAuthConfig GitHub OAuth 配置
@@ -39,7 +40,6 @@ type Config struct {
 }
 
 // defaultJWTSecret 开发环境兜底用的 JWT 密钥。生产环境禁止使用——该值还派生 AES 密钥加密 AI/Serper key，
-// 
 const defaultJWTSecret = "lumen-default-secret-change-me"
 
 // resolveJWTSecret 规范化运行环境并解析 JWT 密钥（纯函数，便于测试）。

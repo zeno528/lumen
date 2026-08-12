@@ -117,7 +117,7 @@ export function TopbarAIButton({
         // 10s 自动 abort：正常 2~5s 应答，10s 覆盖抖动 + 给真黑洞/端点下线明确"超时"信号
         const { signal: reqSignal } = createTimeoutSignal(signal, 10000)
         return testAIConnection(
-          { configId: c.id, provider: c.provider, model: c.model, baseUrl: c.baseUrl },
+          { configId: c.id, provider: c.provider, model: c.model, baseUrl: c.baseUrl, apiFormat: c.apiFormat },
           reqSignal,
         )
       },

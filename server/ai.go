@@ -194,10 +194,18 @@ URL: %s
 
 // callAI 根据 provider 调用对应的 API，返回响应文本
 func callAI(cfg AIConfig, prompt string) (string, error) {
-	if strings.Contains(cfg.BaseURL, "/anthropic") || cfg.Provider == "anthropic" {
+	if usesAnthropicFormat(cfg) {
 		return callAnthropicProvider(cfg, prompt)
 	}
 	return callOpenAIProvider(cfg, prompt)
+}
+
+// usesAnthropicFormat custom 配置只依赖显式保存的协议，预设供应商保留既有端点兼容逻辑。
+func usesAnthropicFormat(cfg AIConfig) bool {
+	if cfg.Provider == "custom" {
+		return cfg.APIFormat == "anthropic"
+	}
+	return cfg.Provider == "anthropic" || strings.Contains(cfg.BaseURL, "/anthropic")
 }
 
 // parseAIResult 从 AI 响应文本中提取 JSON 结果
@@ -577,11 +585,12 @@ func extractFieldsFromText(text string) map[string]string {
 // handleAITest POST /api/ai-test — 测试 AI 连通性（max_tokens=1 最小化请求）
 func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ConfigID int64  `json:"configId"`
-		Provider string `json:"provider"`
-		Model    string `json:"model"`
-		APIKey   string `json:"apiKey"`
-		BaseURL  string `json:"baseUrl"`
+		ConfigID  int64  `json:"configId"`
+		Provider  string `json:"provider"`
+		Model     string `json:"model"`
+		APIKey    string `json:"apiKey"`
+		BaseURL   string `json:"baseUrl"`
+		APIFormat string `json:"apiFormat"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效请求"})
@@ -595,7 +604,7 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 
 	apiKey := req.APIKey
 	if apiKey == "" {
-		// 输入框未填：优先按 configId 取（编辑已保存），再按 provider 取（新建复用同 provider 已存 key）
+		// 输入框未填：优先按 configId 取（编辑已保存），再按 provider 与协议取匹配的已存 key。
 		if req.ConfigID > 0 {
 			cfg := s.getProviderConfig(req.ConfigID)
 			if cfg != nil && cfg.APIKeyEncrypted != "" {
@@ -606,7 +615,11 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 		}
 		if apiKey == "" && req.Provider != "" {
 			var encKey string
-			s.db.QueryRow("SELECT api_key_encrypted FROM ai_provider_configs WHERE provider = ? AND api_key_encrypted != '' LIMIT 1", req.Provider).Scan(&encKey)
+			apiFormat := req.APIFormat
+			if req.Provider == "custom" && apiFormat != "anthropic" {
+				apiFormat = "openai"
+			}
+			s.db.QueryRow("SELECT api_key_encrypted FROM ai_provider_configs WHERE provider = ? AND api_format = ? AND api_key_encrypted != '' LIMIT 1", req.Provider, apiFormat).Scan(&encKey)
 			if encKey != "" {
 				if decrypted, err := Decrypt(encKey); err == nil {
 					apiKey = decrypted
@@ -625,7 +638,7 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 	var err error
 	httpStatus := 0 // 非 200 时记 provider 返回的状态码（透传前端区分 401 key错 / 402 欠费），网络错误保持 0
 
-	if strings.Contains(baseURL, "/anthropic") || req.Provider == "anthropic" {
+	if usesAnthropicFormat(AIConfig{Provider: req.Provider, BaseURL: baseURL, APIFormat: req.APIFormat}) {
 		apiURL := strings.TrimRight(baseURL, "/") + "/v1/messages"
 		reqBody := map[string]any{
 			"model": req.Model,

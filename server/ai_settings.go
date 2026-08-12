@@ -16,7 +16,6 @@ var allowedProviders = map[string]bool{
 	"zhipu":       true,
 	"minimax":     true,
 	"siliconflow": true,
-	"anthropic":   true,
 	"custom":      true,
 }
 
@@ -29,7 +28,6 @@ var providerDefaults = map[string]struct {
 	"zhipu":       {"glm-4.7-flash", "https://open.bigmodel.cn/api/paas/v4"},
 	"minimax":     {"MiniMax-M3", "https://api.minimaxi.com/anthropic"},
 	"siliconflow": {"Qwen/Qwen3.5-122B-A10B", "https://api.siliconflow.cn/v1"},
-	"anthropic":   {"", "https://api.anthropic.com"},
 }
 
 // maskKey 对 API 密钥做掩码处理，前8位明文 + 后4位明文，中间掩码（显示 sk-9fef2 这种前缀便于辨认是哪个 key）
@@ -124,6 +122,7 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 		Model       string `json:"model"`
 		APIKey      string `json:"apiKey"`
 		BaseURL     string `json:"baseUrl"`
+		APIFormat   string `json:"apiFormat"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -135,10 +134,14 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Model = strings.TrimSpace(input.Model)
 	input.BaseURL = strings.TrimSpace(input.BaseURL)
+	input.APIFormat = strings.TrimSpace(input.APIFormat)
 
 	if !allowedProviders[input.Provider] {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "不支持的提供商"})
 		return
+	}
+	if input.Provider == "custom" && input.APIFormat != "anthropic" {
+		input.APIFormat = "openai"
 	}
 
 	// 预设厂商自动填充默认值
@@ -162,7 +165,7 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	newID, err := s.saveProviderConfig(input.ConfigID, input.Provider, input.DisplayName, input.Model, input.APIKey, input.BaseURL, 0)
+	newID, err := s.saveProviderConfig(input.ConfigID, input.Provider, input.DisplayName, input.Model, input.APIKey, input.BaseURL, input.APIFormat, 0)
 	if err != nil {
 		log.Printf("保存配置失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存设置失败"})
@@ -201,7 +204,7 @@ func (s *Server) handleCopyConfig(w http.ResponseWriter, r *http.Request) {
 		newName = src.Provider
 	}
 	newName += " copy"
-	newID, err := s.saveProviderConfig(0, src.Provider, newName, src.Model, "", src.BaseURL, src.ID)
+	newID, err := s.saveProviderConfig(0, src.Provider, newName, src.Model, "", src.BaseURL, src.APIFormat, src.ID)
 	if err != nil {
 		log.Printf("复制配置失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "复制失败"})

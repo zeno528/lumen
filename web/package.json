@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n be,fe -c blue,green \"cd .. && air -c .air.toml\" \"vite\"",
-    "dev:be": "cd .. && air -c .air.toml",
+    "dev": "concurrently -k -n be,fe -c blue,green \"pnpm run dev:be\" \"vite\"",
+    "dev:be": "cd .. && pwsh -NoProfile -NonInteractive -WindowStyle Hidden -Command \"air -c .air.toml\"",
     "dev:fe": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

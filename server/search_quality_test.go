@@ -80,6 +80,15 @@ func TestFormatCategoryProfilesUsesOnlyProvidedSamples(t *testing.T) {
 	}
 }
 
+func TestUsesAnthropicFormatOnlyForCustomAnthropicSelection(t *testing.T) {
+	if !usesAnthropicFormat(AIConfig{Provider: "custom", APIFormat: "anthropic"}) {
+		t.Fatal("custom Anthropic selection must use Messages format")
+	}
+	if usesAnthropicFormat(AIConfig{Provider: "custom", APIFormat: "openai"}) {
+		t.Fatal("custom OpenAI selection must use Chat Completions")
+	}
+}
+
 func TestBookmarkSearchIncludesCategoriesTermsAndLiteralWildcards(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)

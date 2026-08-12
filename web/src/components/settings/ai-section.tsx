@@ -19,7 +19,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SecretInput } from '@/components/shared/secret-input'
 import { Combobox } from '@/components/ui/combobox'
-import { AI_PRESETS, AI_APPLY_URLS, AI_PROVIDER_ORDER, CUSTOM_PROVIDER_PRESET } from '@/lib/ai-providers'
+import { Select } from '@/components/ui/select'
+import {
+  AI_PRESETS,
+  AI_APPLY_URLS,
+  AI_PROVIDER_ORDER,
+  ANTHROPIC_FORMAT_PRESET,
+  CUSTOM_API_FORMATS,
+  CUSTOM_PROVIDER_PRESET,
+} from '@/lib/ai-providers'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { createTimeoutSignal } from '@/lib/abort'
@@ -68,6 +76,7 @@ export function AiSection({
   const [displayName, setDisplayName] = useState('')
   const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
+  const [apiFormat, setApiFormat] = useState('openai')
   const [apiKey, setApiKey] = useState('')
   const [serperKey, setSerperKey] = useState('')
   // 正在进行的测试（key -> true）。卡片行 key=`cfg-${id}`，编辑表单 key='edit'，Serper key='serper'。
@@ -86,6 +95,7 @@ export function AiSection({
     setDisplayName('')
     setModel('')
     setBaseUrl('')
+    setApiFormat('openai')
     setApiKey('')
   }
 
@@ -96,6 +106,7 @@ export function AiSection({
     setDisplayName(c.displayName || getProviderDisplayName(c.provider))
     setModel(c.model || '')
     setBaseUrl(c.baseUrl || AI_PRESETS[c.provider]?.baseUrl || '')
+    setApiFormat(c.apiFormat || 'openai')
     setApiKey('')
   }
 
@@ -107,6 +118,7 @@ export function AiSection({
     setDisplayName(getProviderDisplayName(p))
     setModel(preset?.model || '')
     setBaseUrl(preset?.baseUrl || '')
+    setApiFormat('openai')
     setApiKey('')
   }
 
@@ -136,15 +148,9 @@ export function AiSection({
         model: model.trim(),
         apiKey,
         baseUrl: baseUrl.trim(),
+        apiFormat,
       })
-      // 精确反馈：区分首次保存 / 密钥保留 / 密钥更新
-      if (apiKey.trim() && savedCurrent?.hasKey) {
-        toast.success('密钥已更新')
-      } else if (apiKey.trim()) {
-        toast.success('密钥已保存')
-      } else {
-        toast.success('密钥保留，其他设置已保存')
-      }
+      toast.success(editingConfigId > 0 ? '供应商更新成功' : '供应商添加成功')
       if (subView === 'ai-add-provider') {
         // 二级新增：保存后回一级（useEffect 监听 subView 离开会 resetForm）
         onSubView(null)
@@ -218,21 +224,21 @@ export function AiSection({
     }
     await runCancellableTest('edit', model.trim(), (signal) =>
       testAIConnection(
-        { configId: editingConfigId || undefined, provider, model: model.trim(), apiKey, baseUrl: baseUrl.trim() },
+        { configId: editingConfigId || undefined, provider, model: model.trim(), apiKey, baseUrl: baseUrl.trim(), apiFormat },
         signal,
       ),
     )
   }
 
   // 卡片行延迟测试：测已保存配置（传已存 baseUrl，后端不再回退默认）。再点同一行 = 中断。
-  const onTestLatency = async (configId: number, p: string, m: string, url: string) => {
+  const onTestLatency = async (configId: number, p: string, m: string, url: string, format: string) => {
     const key = `cfg-${configId}`
     if (activeTestRef.current.has(key)) {
       cancelTest(key)
       return
     }
     await runCancellableTest(key, m, (signal) =>
-      testAIConnection({ configId, provider: p, model: m, baseUrl: url }, signal),
+      testAIConnection({ configId, provider: p, model: m, baseUrl: url, apiFormat: format }, signal),
     )
   }
 
@@ -295,6 +301,7 @@ export function AiSection({
       setDisplayName(copiedName)
       setModel(c.model)
       setBaseUrl(c.baseUrl || AI_PRESETS[c.provider]?.baseUrl || '')
+      setApiFormat(c.apiFormat || 'openai')
       setApiKey('')
       toast.success('已复制配置')
     } catch (e) {
@@ -360,6 +367,8 @@ export function AiSection({
   const apiKeyPlaceholder = savedCurrent?.hasKey
     ? '留空保留，输入新值覆盖'
     : '输入 API 密钥'
+  const customAnthropic = provider === 'custom' && apiFormat === 'anthropic'
+  const applyURL = customAnthropic ? ANTHROPIC_FORMAT_PRESET.keyURL : AI_APPLY_URLS[provider]
 
   // 编辑表单（一级已保存编辑 + 二级新增共用；二级始终显示空模板，点 provider 填入）
   const editForm = (
@@ -376,11 +385,26 @@ export function AiSection({
         />
       </div>
       <div>
+        {provider === 'custom' && (
+          <>
+            <Label htmlFor="ai-api-format">接口格式</Label>
+            <Select
+              id="ai-api-format"
+              value={apiFormat}
+              onChange={(e) => {
+                const next = e.target.value
+                setApiFormat(next)
+                if (next === 'anthropic' && !baseUrl.trim()) setBaseUrl(ANTHROPIC_FORMAT_PRESET.baseUrl)
+              }}
+              options={CUSTOM_API_FORMATS}
+            />
+          </>
+        )}
         <Label htmlFor="ai-model">模型</Label>
         <Combobox
           value={model}
           onChange={setModel}
-          options={(preset?.modelOptions ?? []).map((m) => ({ value: m, label: m }))}
+          options={(customAnthropic ? ANTHROPIC_FORMAT_PRESET.modelOptions : preset?.modelOptions ?? []).map((m) => ({ value: m, label: m }))}
           placeholder="模型 ID"
           inputClassName="h-11"
         />
@@ -419,9 +443,9 @@ export function AiSection({
         />
       </div>
 
-      {AI_APPLY_URLS[provider] && (
+      {applyURL && (
         <a
-          href={AI_APPLY_URLS[provider]}
+          href={applyURL}
           target="_blank"
           rel="noreferrer"
           className="text-xs text-(--accent) inline-flex items-center gap-1 hover:underline w-fit"
@@ -621,7 +645,7 @@ export function AiSection({
                             <Button
                               variant="outline"
                               size="icon-sm"
-                              onClick={() => onTestLatency(c.id, c.provider, c.model, c.baseUrl)}
+                              onClick={() => onTestLatency(c.id, c.provider, c.model, c.baseUrl, c.apiFormat)}
                               aria-label={
                                 activeTests[testKey]
                                   ? `取消测试 ${cLabel}`
