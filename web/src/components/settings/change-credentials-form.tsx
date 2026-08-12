@@ -10,6 +10,13 @@ import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { SECTION_CLASS } from './section-styles'
 
+const PASSWORD_VERIFY_WINDOW_MS = 10 * 60 * 1000
+let passwordVerifiedAt = 0
+let passwordVerifiedToken: string | null = null
+
+const hasLocalPasswordVerification = (token: string | null) =>
+  !!token && passwordVerifiedToken === token && Date.now() - passwordVerifiedAt < PASSWORD_VERIFY_WINDOW_MS
+
 /**
  * 修改账号 / 修改密码（Master-Detail 子视图）。
  * 流程：当前会话在 10 分钟验证时效内（登录/验证密码后）直接进入编辑表单；
@@ -29,8 +36,8 @@ export function ChangeCredentialsForm({
 }) {
   const qc = useQueryClient()
   const setToken = useAuthStore((s) => s.setToken)
-  const [step, setStep] = useState<'verify' | 'edit'>('verify')
-  const [statusLoading, setStatusLoading] = useState(true)
+  const token = useAuthStore((s) => s.token)
+  const [step, setStep] = useState<'verify' | 'edit'>(() => hasLocalPasswordVerification(token) ? 'edit' : 'verify')
   const [currentPw, setCurrentPw] = useState('')
   const [username, setUsername] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -44,21 +51,23 @@ export function ChangeCredentialsForm({
 
   // 会话已验证（10 分钟时效内）→ 直接跳过验证步骤，避免重复输入当前密码
   useEffect(() => {
+    if (hasLocalPasswordVerification(token)) return
     let cancelled = false
     getPasswordVerified()
       .then((s) => {
-        if (!cancelled && s.verified) setStep('edit')
+        if (s.verified) {
+          passwordVerifiedAt = Date.now()
+          passwordVerifiedToken = token
+          if (!cancelled) setStep('edit')
+        }
       })
       .catch(() => {
         /* 状态拉取失败按未验证处理，走验证步骤 */
       })
-      .finally(() => {
-        if (!cancelled) setStatusLoading(false)
-      })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [token])
 
   // 子视图 mount / 切换步骤后兜底 focus（autoFocus 在 Portal/条件渲染时时机不对）
   useEffect(() => {
@@ -75,6 +84,8 @@ export function ChangeCredentialsForm({
     setError('')
     try {
       await verifyPassword(currentPw)
+      passwordVerifiedAt = Date.now()
+      passwordVerifiedToken = token
       setStep('edit')
     } catch (e) {
       setError((e as Error).message)
@@ -123,6 +134,7 @@ export function ChangeCredentialsForm({
         newPassword: mode === 'password' ? newPw : undefined, // 只改账号时不传新密码
         username: mode === 'username' ? username.trim() : undefined,
       })
+      passwordVerifiedToken = data.token
       setToken(data.token) // 替换为新版本 token：当前会话保留，其他设备旧 token 已失效
       qc.invalidateQueries({ queryKey: ['auth-username'] })
       toast.success(mode === 'username' ? '账号已更新' : '密码已更新')
@@ -130,12 +142,14 @@ export function ChangeCredentialsForm({
     } catch (e) {
       const msg = (e as Error).message
       setError(msg)
-      if (msg.includes('请先验证')) setStep('verify') // 时效过期兜底：回到验证步骤
+      if (msg.includes('请先验证')) {
+        passwordVerifiedAt = 0
+        passwordVerifiedToken = null
+        setStep('verify')
+      } // 时效过期兜底：回到验证步骤
       setBusy(false)
     }
   }
-
-  if (statusLoading) return null
 
   return (
     <div className={cn(SECTION_CLASS, 'gap-4')}>
