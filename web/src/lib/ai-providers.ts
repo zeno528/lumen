@@ -66,14 +66,6 @@ export const CUSTOM_PROVIDER_PRESET: AIProviderPreset = {
   format: '兼容 OpenAI / Anthropic 格式',
 }
 
-/** 各 provider 密钥申请地址（custom 无，前端隐藏链接）*/
-export const AI_APPLY_URLS: Record<string, string> = {
-  deepseek: 'https://platform.deepseek.com',
-  zhipu: 'https://open.bigmodel.cn',
-  minimax: 'https://platform.minimaxi.com',
-  siliconflow: 'https://cloud.siliconflow.cn/i/3SOwJUoq',
-}
-
 /** 下拉顺序（custom 在最后）*/
 export const AI_PROVIDER_ORDER = [
   'deepseek',
@@ -84,12 +76,10 @@ export const AI_PROVIDER_ORDER = [
 ]
 
 export const CUSTOM_API_FORMATS = [
-  { value: 'openai', label: 'OpenAI 格式' },
-  { value: 'anthropic', label: 'Anthropic 格式' },
+  { value: 'openai', label: 'OpenAI Chat Completions 兼容格式' },
+  { value: 'anthropic', label: 'Anthropic Messages 格式' },
 ]
 
 export const ANTHROPIC_FORMAT_PRESET = {
-  baseUrl: 'https://api.anthropic.com',
   modelOptions: ['claude-opus-4-8', 'claude-sonnet-5'],
-  keyURL: 'https://console.anthropic.com',
 }

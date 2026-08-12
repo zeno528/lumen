@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient, useQueries } from '@tanstack/react-query'
 import { Bot } from 'lucide-react'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
-import { getAISettings, switchAIProvider, testAIConnection } from '@/api/settings'
+import { getAISettings, switchAIProvider, testAIConnection, type AISettings } from '@/api/settings'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
@@ -85,13 +85,23 @@ export function TopbarAIButton({
   )
 
   const onSwitch = useCallback(
-    async (configId: number, provider: string) => {
+    async (configId: number, provider: string, displayName?: string) => {
+      const previous = qc.getQueryData<AISettings>(['ai-settings'])
+      await qc.cancelQueries({ queryKey: ['ai-settings'] })
+      qc.setQueryData<AISettings>(['ai-settings'], (current) => current && ({
+        ...current,
+        activeConfigId: configId,
+        activeProvider: provider,
+      }))
+      const label = displayName || AI_PRESETS[provider]?.label || provider
+      const feedbackID = toast.loading(`正在切换到 ${label}…`)
       try {
         await switchAIProvider(configId)
-        await qc.invalidateQueries({ queryKey: ['ai-settings'] })
-        toast.success('已切换到 ' + (AI_PRESETS[provider]?.label || provider))
+        qc.invalidateQueries({ queryKey: ['ai-settings'] })
+        toast.resolve(feedbackID, `已切换到 ${label}`, 'success')
       } catch (e) {
-        toast.error('切换失败: ' + (e as Error).message)
+        qc.setQueryData(['ai-settings'], previous)
+        toast.resolve(feedbackID, '切换失败: ' + (e as Error).message, 'error')
       }
     },
     [qc],
@@ -175,7 +185,7 @@ export function TopbarAIButton({
             title={dot.title}
           />
         ),
-        onClick: () => onSwitch(c.id, c.provider),
+        onClick: () => onSwitch(c.id, c.provider, c.displayName),
       }
     }),
   ]

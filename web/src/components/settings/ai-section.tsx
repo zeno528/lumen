@@ -12,6 +12,7 @@ import {
   deleteSerperKey,
   testSerperKey,
   testAIConnection,
+  type AISettings,
   type SavedConfig,
 } from '@/api/settings'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,6 @@ import { Combobox } from '@/components/ui/combobox'
 import { Select } from '@/components/ui/select'
 import {
   AI_PRESETS,
-  AI_APPLY_URLS,
   AI_PROVIDER_ORDER,
   ANTHROPIC_FORMAT_PRESET,
   CUSTOM_API_FORMATS,
@@ -115,7 +115,7 @@ export function AiSection({
     const preset = AI_PRESETS[p]
     setEditingConfigId(0)
     setProvider(p)
-    setDisplayName(getProviderDisplayName(p))
+    setDisplayName(p === 'custom' ? '' : getProviderDisplayName(p))
     setModel(preset?.model || '')
     setBaseUrl(preset?.baseUrl || '')
     setApiFormat('openai')
@@ -140,6 +140,7 @@ export function AiSection({
       return
     }
     setAiSaving(true)
+    const feedbackID = toast.loading(editingConfigId > 0 ? '正在更新供应商…' : '正在添加供应商…')
     try {
       const res = await updateAISettings({
         configId: editingConfigId,
@@ -150,7 +151,21 @@ export function AiSection({
         baseUrl: baseUrl.trim(),
         apiFormat,
       })
-      toast.success(editingConfigId > 0 ? '供应商更新成功' : '供应商添加成功')
+      if (editingConfigId > 0) {
+        qc.setQueryData<AISettings>(['ai-settings'], (current) => current && ({
+          ...current,
+          savedConfigs: current.savedConfigs?.map((config) => config.id === res.configId ? {
+            ...config,
+            provider,
+            displayName: displayName.trim(),
+            model: model.trim(),
+            baseUrl: baseUrl.trim(),
+            apiFormat,
+            hasKey: config.hasKey || !!apiKey.trim(),
+          } : config),
+        }))
+      }
+      toast.resolve(feedbackID, editingConfigId > 0 ? '供应商更新成功' : '供应商添加成功', 'success')
       if (subView === 'ai-add-provider') {
         // 二级新增：保存后回一级（useEffect 监听 subView 离开会 resetForm）
         onSubView(null)
@@ -161,7 +176,7 @@ export function AiSection({
       }
       qc.invalidateQueries({ queryKey: ['ai-settings'] })
     } catch (e) {
-      toast.error('保存失败: ' + (e as Error).message)
+      toast.resolve(feedbackID, '保存失败: ' + (e as Error).message, 'error')
     } finally {
       setAiSaving(false)
     }
@@ -269,15 +284,23 @@ export function AiSection({
   // 开关切换激活：点未激活的 -> 激活它；点已激活的 -> 取消激活（关开关）。
   const onToggleActive = async (configId: number) => {
     const willActivate = aiData?.activeConfigId !== configId
+    const config = aiData?.savedConfigs?.find((item) => item.id === configId)
+    const label = config?.displayName || AI_PRESETS[config?.provider ?? '']?.label || config?.provider
+    const previous = qc.getQueryData<AISettings>(['ai-settings'])
+    await qc.cancelQueries({ queryKey: ['ai-settings'] })
+    qc.setQueryData<AISettings>(['ai-settings'], (current) => current && ({
+      ...current,
+      activeConfigId: willActivate ? configId : undefined,
+      activeProvider: willActivate ? config?.provider : undefined,
+    }))
+    const feedbackID = toast.loading(willActivate ? `正在启用 ${label}…` : '正在停用 AI…')
     try {
       await switchAIProvider(willActivate ? configId : 0)
       qc.invalidateQueries({ queryKey: ['ai-settings'] })
-      const c = aiData?.savedConfigs?.find((x) => x.id === configId)
-      toast.success(
-        willActivate ? `已激活 ${c?.displayName || AI_PRESETS[c?.provider ?? '']?.label || c?.provider}` : '已停用 AI',
-      )
+      toast.resolve(feedbackID, willActivate ? `已启用 ${label}` : '已停用 AI', 'success')
     } catch (e) {
-      toast.error('操作失败: ' + (e as Error).message)
+      qc.setQueryData(['ai-settings'], previous)
+      toast.resolve(feedbackID, '操作失败: ' + (e as Error).message, 'error')
     }
   }
 
@@ -366,9 +389,10 @@ export function AiSection({
 
   const apiKeyPlaceholder = savedCurrent?.hasKey
     ? '留空保留，输入新值覆盖'
-    : '输入 API 密钥'
+    : '例如：sk-xxxxxxxx'
   const customAnthropic = provider === 'custom' && apiFormat === 'anthropic'
-  const applyURL = customAnthropic ? ANTHROPIC_FORMAT_PRESET.keyURL : AI_APPLY_URLS[provider]
+  const modelPlaceholder = '例如：deepseek-v4-flash'
+  const baseURLPlaceholder = customAnthropic ? '例如：https://api.anthropic.com' : '例如：https://api.example.com/v1'
 
   // 编辑表单（一级已保存编辑 + 二级新增共用；二级始终显示空模板，点 provider 填入）
   const editForm = (
@@ -379,33 +403,29 @@ export function AiSection({
           id="ai-display-name"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="供应商名称"
+          placeholder="例如：DeepSeek 官方"
           autoComplete="off"
           className="h-12 text-base"
         />
       </div>
+      {provider === 'custom' && (
+        <div>
+          <Label htmlFor="ai-api-format">接口格式</Label>
+          <Select
+            id="ai-api-format"
+            value={apiFormat}
+            onChange={(e) => setApiFormat(e.target.value)}
+            options={CUSTOM_API_FORMATS}
+          />
+        </div>
+      )}
       <div>
-        {provider === 'custom' && (
-          <>
-            <Label htmlFor="ai-api-format">接口格式</Label>
-            <Select
-              id="ai-api-format"
-              value={apiFormat}
-              onChange={(e) => {
-                const next = e.target.value
-                setApiFormat(next)
-                if (next === 'anthropic' && !baseUrl.trim()) setBaseUrl(ANTHROPIC_FORMAT_PRESET.baseUrl)
-              }}
-              options={CUSTOM_API_FORMATS}
-            />
-          </>
-        )}
         <Label htmlFor="ai-model">模型</Label>
         <Combobox
           value={model}
           onChange={setModel}
           options={(customAnthropic ? ANTHROPIC_FORMAT_PRESET.modelOptions : preset?.modelOptions ?? []).map((m) => ({ value: m, label: m }))}
-          placeholder="模型 ID"
+          placeholder={provider === 'custom' ? modelPlaceholder : '模型 ID'}
           inputClassName="h-11"
         />
       </div>
@@ -417,7 +437,7 @@ export function AiSection({
             id="ai-base-url"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="API Base URL"
+            placeholder={provider === 'custom' ? baseURLPlaceholder : 'API Base URL'}
             autoComplete="off"
             data-1p-ignore=""
             data-lpignore="true"
@@ -442,17 +462,6 @@ export function AiSection({
           placeholder={apiKeyPlaceholder}
         />
       </div>
-
-      {applyURL && (
-        <a
-          href={applyURL}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-(--accent) inline-flex items-center gap-1 hover:underline w-fit"
-        >
-          <ExternalLink size={12} /> 获取密钥
-        </a>
-      )}
 
       <div className="flex gap-2 flex-wrap">
         <Button onClick={save} disabled={aiSaving}>保存</Button>
@@ -530,8 +539,8 @@ export function AiSection({
         <Button
           size="sm"
           onClick={() => {
-            resetForm()
-            setSelectedProvider(null)
+            fillProvider('custom')
+            setSelectedProvider('custom')
             onSubView('ai-add-provider')
           }}
           className="shrink-0"
