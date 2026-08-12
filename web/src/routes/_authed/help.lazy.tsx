@@ -386,6 +386,7 @@ function HelpPage() {
               { keys: ['Ctrl', 'K'], action: '聚焦搜索框' },
               { keys: ['Ctrl', 'I'], action: '新建书签' },
               { keys: ['Ctrl', 'Shift', 'I'], action: '新建分类' },
+              { keys: ['Ctrl', ','], action: '打开设置中心' },
               { keys: ['Ctrl', 'B'], action: '书签批量模式（再按一次或 Esc 退出）' },
               { keys: ['Ctrl', 'Shift', 'B'], action: '分类批量模式（再按一次或 Esc 退出）' },
               { keys: ['Enter'], action: '弹窗内输入框保存（描述框除外）/ ID 搜索命中时直达打开' },

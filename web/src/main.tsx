@@ -9,12 +9,11 @@ import './styles/main.css'
 import { setAuthQueryClient } from '@/stores/auth'
 import { readAvatarCache } from '@/lib/avatar-cache'
 import { getCustomAvatarUrl, preloadAvatarImage } from '@/lib/avatar-upload'
+import { applyTheme, getSavedTheme } from '@/lib/theme'
 import { router } from './router'
 
 /* 初始化主题（深浅 data-theme + 配色 data-accent），避免首屏闪烁 */
-const savedTheme = localStorage.getItem('theme') || 'light'
-document.documentElement.dataset.theme =
-  savedTheme === 'dark' ? 'notion-dark' : savedTheme
+applyTheme(getSavedTheme())
 document.documentElement.dataset.accent = localStorage.getItem('accent') || 'terracotta'
 
 const root = document.getElementById('root')

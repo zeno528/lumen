@@ -319,6 +319,36 @@ body:hover,
 .context-menu-item.active:hover {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
+.context-menu-control {
+  cursor: default;
+}
+.theme-menu-options {
+  display: inline-flex;
+  gap: 2px;
+}
+.theme-menu-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+.theme-menu-option:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, black 6%, transparent);
+}
+[data-theme='notion-dark'] .theme-menu-option:hover {
+  background: color-mix(in srgb, white 8%, transparent);
+}
+.theme-menu-option.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .context-menu-item i,
 .context-menu-item .icon {
   width: 16px;

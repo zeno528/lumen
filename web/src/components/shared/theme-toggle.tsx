@@ -1,23 +1,9 @@
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { applyTheme, getSavedTheme, type Theme } from '@/lib/theme'
 
 /** 主题深浅：light / notion-dark。导航栏按钮和设置中心「外观」页共享，跨组件复用此类型，别各自重定义。 */
-export type Theme = 'light' | 'notion-dark'
-
-function getSavedTheme(): Theme {
-  let saved = localStorage.getItem('theme') || 'light'
-  if (saved === 'dark') saved = 'notion-dark'
-  return saved === 'light' ? 'light' : 'notion-dark'
-}
-
-/**
- * 应用主题到 document.documentElement 与 localStorage。
- * 组件外部也用它做初始化同步。
- */
-export function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme
-  localStorage.setItem('theme', theme)
-}
+export { applyTheme, getSavedTheme, type Theme } from '@/lib/theme'
 
 /**
  * 配色方案：赤陶为默认。加新配色 = 在此联合类型加值 + theme.css 加 [data-accent] 块 + AppearanceSection 加卡片。
@@ -51,10 +37,9 @@ export function ThemeToggle({
   className?: string
   variant?: 'icon' | 'pill'
 }) {
-  const [theme, setTheme] = useState<'notion-dark' | 'light'>(() => {
+  const [theme, setTheme] = useState<Theme>(() => {
     if (typeof document === 'undefined') return 'light'
     return (
-      (document.documentElement.dataset.theme as 'notion-dark' | 'light') ||
       getSavedTheme()
     )
   })
@@ -79,7 +64,7 @@ export function ThemeToggle({
     doApply()
   }
 
-  const label = theme === 'light' ? '浅色' : '深色'
+  const label = theme === 'system' ? '跟随系统' : theme === 'light' ? '浅色' : '深色'
 
   return (
     <button

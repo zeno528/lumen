@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useUIStore } from '@/stores/ui'
+import { isSettingsShortcut } from '@/lib/hotkeys'
 
 /**
  * 全局快捷键 hook —— 挂在 AppShell 层监听 document keydown。
@@ -9,6 +10,7 @@ import { useUIStore } from '@/stores/ui'
  * - Ctrl/Cmd + Shift + I → 打开新建分类 dialog（⚠ 占用浏览器 DevTools 键，开发时开 DevTools 请用 F12）
  * - Ctrl/Cmd + B -> 切换书签批量模式
  * - Ctrl/Cmd + Shift + B -> 切换分类批量模式
+ * - Ctrl + , → 打开账号设置
  * - Ctrl/Cmd + Enter → 触发当前 dialog 保存
  * - Esc → Dialog 自管 > 退出批量模式 > 清空搜索
  */
@@ -32,11 +34,20 @@ export function useHotkeys({
     submitBookmarkDialog,
     submitCategoryDialog,
     submitBatchDialog,
+    setSettingsOpen,
+    setSettingsTab,
   } = useUIStore()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const meta = e.ctrlKey || e.metaKey
+
+      if (isSettingsShortcut(e)) {
+        e.preventDefault()
+        setSettingsTab('account')
+        setSettingsOpen(true)
+        return
+      }
 
       if (e.key === 'Escape') {
         // 任何 Dialog 打开（导出/确认/编辑/分类等）→ 让 Dialog 自管 ESC，不退出批量/清搜索
@@ -121,5 +132,7 @@ export function useHotkeys({
     submitBookmarkDialog,
     submitCategoryDialog,
     submitBatchDialog,
+    setSettingsOpen,
+    setSettingsTab,
   ])
 }

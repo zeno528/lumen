@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { HelpCircle, LogOut, Moon, Settings, Sun, Cat } from 'lucide-react'
+import { HelpCircle, LogOut, Moon, Settings, Sun, Monitor, Cat } from 'lucide-react'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
-import { applyTheme } from '@/components/shared/theme-toggle'
+import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT, type Theme } from '@/lib/theme'
 import { useAvatar } from '@/hooks/use-avatar'
 import { resolveAvatarIcon, getCustomAvatarUrl } from '@/lib/avatar-icons'
 import { useAuthStore } from '@/stores/auth'
@@ -18,11 +18,6 @@ const WS_DOT: Record<string, { color: string; pulse: boolean; label: string }> =
   connected:    { color: 'var(--status-ok)',   pulse: false, label: '已连接' },
   reconnecting: { color: 'var(--status-warn)', pulse: true,  label: '重连中' },
   disconnected: { color: 'var(--destructive)', pulse: false, label: '已断开' },
-}
-
-function getInitialTheme(): 'notion-dark' | 'light' {
-  if (typeof document === 'undefined') return 'light'
-  return (document.documentElement.dataset.theme as 'notion-dark' | 'light') || 'light'
 }
 
 /**
@@ -46,7 +41,7 @@ export function TopbarAvatar({
     queryFn: getNickname,
   })
 
-  const [theme, setTheme] = useState<'notion-dark' | 'light'>(getInitialTheme)
+  const [theme, setTheme] = useState<Theme>(getSavedTheme)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -58,14 +53,15 @@ export function TopbarAvatar({
   const initialConnection = wsStatus === 'initial'
   const dot = WS_DOT[wsStatus] ?? WS_DOT.connected
 
-  // 监听 storage 事件：其他标签页或 ThemeToggle 切换主题时同步 label/icon。
+  // 监听同页和跨标签页主题变化，避免菜单显示旧的选中态。
   useEffect(() => {
-    const sync = () => {
-      const t = (document.documentElement.dataset.theme as 'notion-dark' | 'light') || 'light'
-      setTheme(t)
-    }
+    const sync = () => setTheme(getSavedTheme())
     window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
+    window.addEventListener(THEME_CHANGE_EVENT, sync)
+    return () => {
+      window.removeEventListener('storage', sync)
+      window.removeEventListener(THEME_CHANGE_EVENT, sync)
+    }
   }, [])
 
   const cancelClose = useCallback(() => {
@@ -118,25 +114,45 @@ export function TopbarAvatar({
     [closeMenu],
   )
 
-  const toggleTheme = useCallback(() => {
-    const next = theme === 'notion-dark' ? 'light' : 'notion-dark'
+  const selectTheme = useCallback((next: Theme) => {
     setTheme(next)
     applyTheme(next)
-  }, [theme])
+  }, [])
 
   const items: MenuItem[] = [
     {
       label: '设置',
       icon: <Settings size={14} />,
+      trailing: <kbd className="text-[10px] text-(--text-muted) whitespace-nowrap">Ctrl + ,</kbd>,
       onClick: () => {
         setSettingsTab('account')
         setSettingsOpen(true)
       },
     },
     {
-      label: theme === 'notion-dark' ? '浅色' : '深色',
-      icon: theme === 'notion-dark' ? <Sun size={14} /> : <Moon size={14} />,
-      onClick: toggleTheme,
+      label: '主题',
+      icon: theme === 'notion-dark' ? <Moon size={14} /> : theme === 'system' ? <Monitor size={14} /> : <Sun size={14} />,
+      control: (
+        <span className="theme-menu-options">
+          {([
+            ['system', Monitor, '跟随系统'],
+            ['light', Sun, '浅色'],
+            ['notion-dark', Moon, '深色'],
+          ] as const).map(([value, Icon, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={cn('theme-menu-option', theme === value && 'active')}
+              onClick={() => selectTheme(value)}
+              aria-label={label}
+              aria-pressed={theme === value}
+              title={label}
+            >
+              <Icon size={14} />
+            </button>
+          ))}
+        </span>
+      ),
     },
     { separator: true, label: '' },
     {

@@ -1,20 +1,13 @@
 import { useState } from 'react'
-import { Palette, Check, Sun, Moon } from 'lucide-react'
+import { Palette, Check, Sun, Moon, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   applyAccent,
-  applyTheme,
   getSavedAccent,
   type Accent,
-  type Theme,
 } from '@/components/shared/theme-toggle'
+import { applyTheme, getSavedTheme, type Theme } from '@/lib/theme'
 import { SECTION_CLASS } from './section-styles'
-
-/** 读取已应用的主题：与顶栏一致走 dataset.theme（真值源是 html 节点），localStorage 仅作持久化。 */
-function getCurrentTheme(): Theme {
-  const v = document.documentElement.dataset.theme
-  return v === 'notion-dark' ? 'notion-dark' : 'light'
-}
 
 /**
  * 配色方案清单 -- 加新配色在此加一条 + theme.css 加 [data-accent='xxx'] 块 + theme-toggle.tsx 的 Accent 联合类型加值。
@@ -42,7 +35,7 @@ export function AppearanceSection() {
     // 兜底：若 saved 不在 ACCENTS 里（删配色后的 localStorage 僵尸值 / 外部污染），回退赤陶选中
     return ACCENTS.some((a) => a.id === saved) ? saved : 'terracotta'
   })
-  const [theme, setTheme] = useState<Theme>(() => getCurrentTheme())
+  const [theme, setTheme] = useState<Theme>(getSavedTheme)
 
   const handleSelectAccent = (id: Accent) => {
     if (id === accent) return
@@ -67,7 +60,14 @@ export function AppearanceSection() {
         {/* 主题深浅：与顶栏同步，状态由 dataset.theme 单一真值源驱动 */}
         <div className="flex flex-col gap-2">
           <h4 className="text-sm font-medium text-(--text-secondary)">主题</h4>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5">
+            <ThemeCard
+              value="system"
+              icon={<Monitor size={16} />}
+              label="跟随系统"
+              selected={theme === 'system'}
+              onSelect={handleSelectTheme}
+            />
             <ThemeCard
               value="light"
               icon={<Sun size={16} />}
