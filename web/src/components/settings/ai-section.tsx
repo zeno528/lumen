@@ -340,14 +340,24 @@ export function AiSection({
   const onDeleteConfig = async () => {
     if (confirmingDelete === null) return
     const id = confirmingDelete
+    await qc.cancelQueries({ queryKey: ['ai-settings'] })
+    const previous = qc.getQueryData<AISettings>(['ai-settings'])
+    qc.setQueryData<AISettings>(['ai-settings'], (current) => current && ({
+      ...current,
+      activeConfigId: current.activeConfigId === id ? undefined : current.activeConfigId,
+      activeProvider: current.activeConfigId === id ? undefined : current.activeProvider,
+      savedConfigs: current.savedConfigs?.filter((config) => config.id !== id),
+    }))
+    setConfirmingDelete(null)
+    if (editingConfigId === id) resetForm()
     try {
       await deleteAIProviderConfig(id)
       toast.success('已删除配置')
-      if (editingConfigId === id) resetForm()
-      setConfirmingDelete(null)
-      qc.invalidateQueries({ queryKey: ['ai-settings'] })
     } catch {
+      qc.setQueryData<AISettings>(['ai-settings'], previous)
       toast.error('删除失败')
+    } finally {
+      qc.invalidateQueries({ queryKey: ['ai-settings'] })
     }
   }
 

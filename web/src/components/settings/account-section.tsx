@@ -159,43 +159,46 @@ export function AccountSection({
           </div>
 
           {/* 昵称（inline edit） */}
-          <div>
+          <div className="divide-y divide-(--border)">
             {nickEditing ? (
-              <div className="space-y-1.5">
-                <Input
-                  value={nickDraft}
-                  onChange={(e) => setNickDraft(Array.from(e.target.value).slice(0, 12).join(''))}
-                  onFocus={(e) => e.currentTarget.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void commitNickEdit()
-                    if (e.key === 'Escape') {
-                      // 拦截冒泡：SettingsDialog 的 ESC 退子视图/关 Dialog，nick 编辑态应先取消编辑
-                      e.preventDefault()
-                      e.stopPropagation()
-                      cancelNickEdit()
-                    }
-                  }}
-                  onBlur={() => void commitNickEdit()}
-                  disabled={nickPending}
-                  autoFocus
-                  className="h-9 rounded-lg text-sm border-(--border-hover) focus:shadow-none focus:ring-4 focus:ring-(--accent)/15"
-                  aria-label="编辑昵称"
-                  aria-invalid={!!nickError}
-                />
-                {nickError && (
-                  <p role="alert" className="text-xs text-(--destructive)">
-                    {nickError}
-                  </p>
-                )}
-                <p className="text-xs text-(--text-muted)">回车或失焦时自动保存，ESC 取消</p>
+              <div className="py-3">
+                <div className="text-sm font-medium text-(--text-primary)">昵称</div>
+                <div className="relative mt-0.5">
+                  <Input
+                    value={nickDraft}
+                    onChange={(e) => setNickDraft(Array.from(e.target.value).slice(0, 12).join(''))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void commitNickEdit()
+                      if (e.key === 'Escape') {
+                        // 拦截冒泡：SettingsDialog 的 ESC 退子视图/关 Dialog，nick 编辑态应先取消编辑
+                        e.preventDefault()
+                        e.stopPropagation()
+                        cancelNickEdit()
+                      }
+                    }}
+                    onBlur={() => void commitNickEdit()}
+                    disabled={nickPending}
+                    autoFocus
+                    title="回车或失焦时自动保存，ESC 取消"
+                    className="h-7 rounded-lg text-xs border-(--border-hover) focus:shadow-none focus:ring-4 focus:ring-(--accent)/15"
+                    aria-label="编辑昵称"
+                    aria-invalid={!!nickError}
+                  />
+                  {nickError && (
+                    <p role="alert" className="absolute left-0 top-full z-10 mt-1 rounded bg-(--bg-secondary) px-1 text-xs text-(--destructive)">
+                      {nickError}
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-(--text-muted)">昵称</span>
+              <div className="py-3">
+                <div className="text-sm font-medium text-(--text-primary)">昵称</div>
                 <button
                   type="button"
                   onClick={startNickEdit}
-                  className="group inline-flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm text-(--text-primary) transition-colors hover:bg-(--hover) hover:text-(--accent)"
+                  className="group inline-flex h-7 min-w-0 items-center gap-1.5 mt-0.5 text-xs text-(--text-muted) transition-colors hover:text-(--accent)"
                   title="编辑昵称"
                 >
                   <span className="truncate">{nickCommitted ?? '-'}</span>
@@ -203,10 +206,8 @@ export function AccountSection({
                 </button>
               </div>
             )}
-          </div>
 
           {/* 账号 / 密码（修改入口，X 风格行） */}
-          <div className="divide-y divide-(--border)">
             <button
               type="button"
               onClick={() => onSubView('change-username')}
@@ -229,21 +230,19 @@ export function AccountSection({
               </div>
               <ChevronRight size={16} className="shrink-0 text-(--text-muted) transition-colors group-hover:text-(--accent)" />
             </button>
-          </div>
-
-          {/* 退出登录 */}
-          <div className="pt-2 mt-1 border-t border-(--border)">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                logout()
-                navigate({ to: '/login' })
-              }}
-            >
-              <LogOut size={14} className="text-(--destructive)" />
-              退出登录
-            </Button>
+            <div className="py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  logout()
+                  navigate({ to: '/login' })
+                }}
+              >
+                <LogOut size={14} className="text-(--destructive)" />
+                退出登录
+              </Button>
+            </div>
           </div>
       </div>
     </section>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useQuery, useQueryClient, useQueries } from '@tanstack/react-query'
 import { Bot } from 'lucide-react'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
@@ -9,10 +9,8 @@ import { cn } from '@/lib/utils'
 import { createTimeoutSignal } from '@/lib/abort'
 import { useUIStore } from '@/stores/ui'
 
-const CLOSE_DELAY = 150
-
 /**
- * 顶栏 AI 模型快速切换按钮 —— 交互照搬 TopbarAvatar（桌面悬停展开下拉，触摸走点击）。
+ * 顶栏 AI 模型快速切换按钮 —— 点击展开，点击空白处关闭。
  *
  * - 按钮：36×36 圆形，显示当前 activeProvider 的 logo（一眼看到当前模型），无 logo 用 Sparkles。
  * - 下拉：header「模型管理」（点击跳设置 AI tab）+ 每个 savedConfig 一项（供应商 logo + 模型名 + 当前激活 Check）。
@@ -31,57 +29,23 @@ export function TopbarAIButton({
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
   const setSettingsTab = useUIStore((s) => s.setSettingsTab)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const cancelClose = useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current)
-      closeTimer.current = null
-    }
-  }, [])
 
   const openMenu = useCallback(
     (x: number, y: number) => {
-      cancelClose()
       setMenu({ x, y })
     },
-    [cancelClose],
+    [],
   )
-
-  const closeMenu = useCallback(() => {
-    closeTimer.current = setTimeout(() => setMenu(null), CLOSE_DELAY)
-  }, [])
 
   const handleButtonClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       const r = e.currentTarget.getBoundingClientRect()
       // 移动端（<=768）右对齐到视口右边（与头像 / 分类卡片视觉统一靠右），桌面保持 center（在按钮下方）
       const isMobile = window.innerWidth <= 768
-      if (menu) closeMenu()
+      if (menu) setMenu(null)
       else openMenu(isMobile ? window.innerWidth - 10 : r.left + r.width / 2, r.bottom + 6)
     },
-    [menu, openMenu, closeMenu],
-  )
-
-  const handleButtonEnter = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      // 仅鼠标悬停展开；触摸走 click 路径（同 TopbarAvatar，否则 tap 合成 mouseenter 先开菜单、
-      // 紧随的 click 被 ContextMenu 点外监听捕获 -> 菜单瞬间关掉）
-      if (e.pointerType !== 'mouse') return
-      if (menu) return
-      const r = e.currentTarget.getBoundingClientRect()
-      const isMobile = window.innerWidth <= 768
-      openMenu(isMobile ? window.innerWidth - 10 : r.left + r.width / 2, r.bottom + 6)
-    },
     [menu, openMenu],
-  )
-
-  const handleButtonLeave = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (e.pointerType !== 'mouse') return
-      closeMenu()
-    },
-    [closeMenu],
   )
 
   const onSwitch = useCallback(
@@ -200,8 +164,6 @@ export function TopbarAIButton({
           className,
         )}
         onClick={handleButtonClick}
-        onPointerEnter={handleButtonEnter}
-        onPointerLeave={handleButtonLeave}
         aria-label="切换 AI 模型"
         aria-expanded={!!menu}
       >
@@ -225,8 +187,6 @@ export function TopbarAIButton({
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
         items={items}
-        onMouseEnter={cancelClose}
-        onMouseLeave={closeMenu}
         anchor={isMobile ? 'right' : 'center'}
         alignY="top"
       />

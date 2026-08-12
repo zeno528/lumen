@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, HelpCircle, LogOut, Moon, Settings, Sun, Monitor, Cat, type LucideIcon } from 'lucide-react'
@@ -11,7 +11,6 @@ import { useUIStore } from '@/stores/ui'
 import { getNickname } from '@/api/settings'
 import { cn, openInNewTab } from '@/lib/utils'
 
-const CLOSE_DELAY = 150
 const AVATAR_MENU_WIDTH = 184
 
 const THEME_ICONS: Record<Theme, LucideIcon> = {
@@ -28,10 +27,9 @@ const WS_DOT: Record<string, { color: string; pulse: boolean; label: string }> =
 }
 
 /**
- * 顶栏用户头像 —— 点击或悬停展开下拉卡片。
+ * 顶栏用户头像 —— 点击展开，点击空白处关闭下拉卡片。
  *
- * - 桌面：鼠标悬停头像展开，移出关闭；点击可显式 toggle。
- * - 移动端：无 hover，点击展开，点外部/菜单项关闭。
+ * - 点击头像展开/关闭；点外部或菜单项关闭。
  * - 菜单包含：主题切换、设置、帮助、登出。
  * - 头像优先显示用户自定义图片；未选自定义时显示内置图标。
  */
@@ -51,7 +49,6 @@ export function TopbarAvatar({
   const [theme, setTheme] = useState<Theme>(getSavedTheme)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [menuView, setMenuView] = useState<'main' | 'theme'>('main')
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const customUrl = getCustomAvatarUrl(avatarData?.avatar, avatarData?.avatarImage)
   const AvatarIcon = resolveAvatarIcon(avatarData?.avatar) ?? Cat
@@ -72,59 +69,26 @@ export function TopbarAvatar({
     }
   }, [])
 
-  const cancelClose = useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current)
-      closeTimer.current = null
-    }
-  }, [])
-
   const openMenu = useCallback((x: number, y: number) => {
-    cancelClose()
     setMenu({ x, y })
-  }, [cancelClose])
+  }, [])
 
   const dismissMenu = useCallback(() => {
     setMenu(null)
     setMenuView('main')
   }, [])
 
-  const closeMenu = useCallback(() => {
-    closeTimer.current = setTimeout(dismissMenu, CLOSE_DELAY)
-  }, [dismissMenu])
-
   const handleButtonClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       const r = e.currentTarget.getBoundingClientRect()
       if (menu) {
-        closeMenu()
+        dismissMenu()
       } else {
         // 头像正下方 + 水平居中：x=头像水平中心，y=头像底部；配合 anchor="center" + alignY="top"
         openMenu(r.left + r.width / 2, r.bottom + 6)
       }
     },
-    [menu, openMenu, closeMenu],
-  )
-
-  const handleButtonEnter = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      // 仅鼠标悬停展开；触摸走 click 路径。否则 tap 合成的 mouseenter 会先打开菜单、
-      // 紧随其后的 click 被 ContextMenu 的 document 关闭监听捕获 -> 菜单瞬间关掉
-      if (e.pointerType !== 'mouse') return
-      if (menu) return
-      const r = e.currentTarget.getBoundingClientRect()
-      // 与 click 同一套坐标：头像正下方 + 水平居中
-      openMenu(r.left + r.width / 2, r.bottom + 6)
-    },
-    [menu, openMenu],
-  )
-
-  const handleButtonLeave = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (e.pointerType !== 'mouse') return
-      closeMenu()
-    },
-    [closeMenu],
+    [menu, openMenu, dismissMenu],
   )
 
   const selectTheme = useCallback((next: Theme) => {
@@ -195,8 +159,6 @@ export function TopbarAvatar({
           className,
         )}
         onClick={handleButtonClick}
-        onPointerEnter={handleButtonEnter}
-        onPointerLeave={handleButtonLeave}
         aria-label={`用户菜单 · 实时同步：${initialConnection ? '初始连接中' : dot.label}`}
         aria-expanded={!!menu}
       >
@@ -220,8 +182,6 @@ export function TopbarAvatar({
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
         items={items}
-        onMouseEnter={cancelClose}
-        onMouseLeave={closeMenu}
         anchor="center"
         alignY="top"
         minWidth={AVATAR_MENU_WIDTH}

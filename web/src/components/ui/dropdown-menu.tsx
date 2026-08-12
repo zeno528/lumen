@@ -172,6 +172,7 @@ export function ContextMenu({
         ) : (
           <button
             key={i}
+            title={item.label}
             className={cn(
               'context-menu-item',
               item.variant === 'edit' && 'edit',

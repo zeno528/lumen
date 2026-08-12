@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, User, KeyRound, Bot, Palette, Trash2, Home, ImageUp, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, User, KeyRound, Bot, Palette, Trash2, X, ImageUp, type LucideIcon } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
@@ -255,7 +255,7 @@ export function SettingsDialog() {
         settingsOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
       )}
     >
-      {/* header 始终显示：左侧一级「设置中心」/ 二级「返回+标题」，右侧 Home 始终关闭设置中心回书签页 */}
+      {/* header 始终显示：左侧一级「设置中心」/ 二级「返回+标题」，右侧 X 关闭设置中心 */}
       <header className="divider-fade-bottom flex items-center justify-between px-4 py-3 shrink-0">
         {subView ? (
           <button
@@ -272,11 +272,11 @@ export function SettingsDialog() {
         )}
         <button
           onClick={handleClose}
-          aria-label="返回书签"
-          title="返回书签"
-          className="flex items-center justify-center w-9 h-9 -mr-1 rounded-full text-(--text-secondary) active:bg-(--bg-secondary) active:scale-95 transition-all cursor-pointer"
+          aria-label="关闭设置"
+          title="关闭设置"
+          className="modal-close"
         >
-          <Home size={20} />
+          <X size={18} />
         </button>
       </header>
       <div className="flex-1 flex flex-col overflow-hidden p-4 pr-0">
