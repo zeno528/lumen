@@ -202,10 +202,20 @@ select,
   white-space: nowrap;
   pointer-events: none;
 }
+@keyframes searchBadgeIn {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
 .search-count,
 .search-kbd,
 .search-enter-kbd {
-  animation: popIn 0.16s ease-out both;
+  animation: searchBadgeIn 0.16s ease-out both;
 }
 .search-enter-hint {
   position: absolute;
