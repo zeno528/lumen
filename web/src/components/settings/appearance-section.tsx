@@ -63,20 +63,20 @@ export function AppearanceSection() {
       </h3>
       <div className={SECTION_CLASS}>
 
-        {/* 主题深浅：与下方配色方案共用卡片选择语言。 */}
+        {/* 主题深浅：三项互斥选择，使用横向分段控件。 */}
         <div className="flex flex-col gap-2">
           <h4 className="text-sm font-medium text-(--text-secondary)">主题</h4>
-          <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="主题">
+          <div className="flex w-full items-center gap-1 rounded-xl border border-(--border) bg-(--bg-secondary) p-1.5" role="group" aria-label="主题">
             {THEME_OPTIONS.map(({ value, label }) => {
               const Icon = THEME_ICONS[value]
               return <button
                 key={value}
                 type="button"
                 className={cn(
-                  'flex items-center justify-center gap-2 p-3 rounded-xl border transition-colors text-(--text-secondary) cursor-pointer',
+                  'flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm text-(--text-secondary) transition-colors cursor-pointer hover:bg-(--accent-soft-bg) hover:text-(--accent)',
                   theme === value
-                    ? 'border-(--accent) bg-(--accent-soft-bg) text-(--accent)'
-                    : 'border-(--border) hover:border-(--border-hover) hover:bg-(--bg-card-hover)',
+                    ? 'bg-(--accent) text-white shadow-sm'
+                    : undefined,
                 )}
                 onClick={() => handleSelectTheme(value)}
                 aria-label={label}
