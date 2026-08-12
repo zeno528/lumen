@@ -399,40 +399,11 @@ type openaiAPIResponse struct {
 }
 
 func callOpenAIProvider(cfg AIConfig, prompt string) (string, error) {
-	apiURL := strings.TrimRight(cfg.BaseURL, "/") + "/chat/completions"
-
-	reqBody := map[string]any{
-		"model": cfg.Model,
-		"messages": []map[string]string{
-			{"role": "system", "content": aiSystemPrompt},
-			{"role": "user", "content": prompt},
-		},
-		"temperature": 0.6,
-		"max_tokens":  1024,
-	}
-	// 关闭思考模式，避免 thinking 挤占输出致 JSON 解析失败、回退本地英文兜底：
-	// - deepseek / zhipu: DeepSeek 官方 / 智谱 GLM-4.7+ 默认开 thinking，用 thinking.type=disabled 关闭
-	// - siliconflow: Qwen3.x 默认开 thinking，用 chat_template_kwargs.enable_thinking=false（vLLM 标准）
-	//   + 顶层 enable_thinking=false（硅基流动适配）双保险关闭
-	switch cfg.Provider {
-	case "deepseek", "zhipu":
-		reqBody["thinking"] = map[string]string{"type": "disabled"}
-	case "siliconflow":
-		reqBody["chat_template_kwargs"] = map[string]bool{"enable_thinking": false}
-		reqBody["enable_thinking"] = false
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
+	reqBody := openAIRequestBody(cfg, prompt)
+	req, err := newOpenAIRequest(cfg, reqBody)
 	if err != nil {
 		return "", err
 	}
-
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(bodyBytes)))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
 	resp, err := aiClient.Do(req)
 	if err != nil {
@@ -463,6 +434,50 @@ func callOpenAIProvider(cfg AIConfig, prompt string) (string, error) {
 	}
 
 	return openaiResp.Choices[0].Message.Content, nil
+}
+
+func openAIRequestBody(cfg AIConfig, prompt string) map[string]any {
+	reqBody := map[string]any{
+		"model": cfg.Model,
+		"messages": []map[string]string{
+			{"role": "system", "content": aiSystemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"temperature": 0.6,
+		"max_tokens":  1024,
+	}
+	// 关闭思考模式，避免 thinking 挤占输出致 JSON 解析失败、回退本地英文兜底：
+	// - deepseek / zhipu: DeepSeek 官方 / 智谱 GLM-4.7+ 默认开 thinking，用 thinking.type=disabled 关闭
+	// - siliconflow: Qwen3.x 默认开 thinking，用 chat_template_kwargs.enable_thinking=false（vLLM 标准）
+	//   + 顶层 enable_thinking=false（硅基流动适配）双保险关闭
+	switch cfg.Provider {
+	case "deepseek", "zhipu":
+		reqBody["thinking"] = map[string]string{"type": "disabled"}
+	case "custom":
+		// 自定义直连 DeepSeek 时复用其预设分支；否则不能向通用 OpenAI 兼容端点注入私有参数。
+		if strings.HasPrefix(strings.TrimRight(cfg.BaseURL, "/"), "https://api.deepseek.com") {
+			reqBody["thinking"] = map[string]string{"type": "disabled"}
+		}
+	case "siliconflow":
+		reqBody["chat_template_kwargs"] = map[string]bool{"enable_thinking": false}
+		reqBody["enable_thinking"] = false
+	}
+	return reqBody
+}
+
+// newOpenAIRequest 是所有 Chat Completions 调用的唯一入口，避免自定义配置和连通性测试漂移。
+func newOpenAIRequest(cfg AIConfig, body map[string]any) (*http.Request, error) {
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", strings.TrimRight(cfg.BaseURL, "/")+"/chat/completions", strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	return req, nil
 }
 
 // ==================== Anthropic Provider ====================
@@ -666,7 +681,6 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		apiURL := strings.TrimRight(baseURL, "/") + "/chat/completions"
 		reqBody := map[string]any{
 			"model": req.Model,
 			"messages": []map[string]string{
@@ -674,12 +688,14 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 			},
 			"max_tokens": 1,
 		}
-		bodyBytes, _ := json.Marshal(reqBody)
-		httpReq, _ := http.NewRequest("POST", apiURL, strings.NewReader(string(bodyBytes)))
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-		resp, doErr := aiTestClient.Do(httpReq)
+		httpReq, reqErr := newOpenAIRequest(AIConfig{APIKey: apiKey, BaseURL: baseURL}, reqBody)
+		var resp *http.Response
+		var doErr error
+		if reqErr != nil {
+			doErr = reqErr
+		} else {
+			resp, doErr = aiTestClient.Do(httpReq)
+		}
 		if doErr != nil {
 			err = fmt.Errorf("请求失败: %v", doErr)
 		} else {

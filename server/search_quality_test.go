@@ -89,6 +89,35 @@ func TestUsesAnthropicFormatOnlyForCustomAnthropicSelection(t *testing.T) {
 	}
 }
 
+func TestCustomOpenAIRequestUsesChatCompletionsTransport(t *testing.T) {
+	req, err := newOpenAIRequest(AIConfig{
+		Provider: "custom",
+		APIKey:   "test-key",
+		BaseURL:  "https://api.deepseek.com/v1/",
+	}, map[string]any{"model": "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.URL.String() != "https://api.deepseek.com/v1/chat/completions" {
+		t.Fatalf("URL = %q", req.URL)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer test-key" {
+		t.Fatalf("Authorization = %q", got)
+	}
+}
+
+func TestCustomDeepSeekDisablesThinkingForMetadataFill(t *testing.T) {
+	body := openAIRequestBody(AIConfig{
+		Provider: "custom",
+		Model:    "deepseek-v4-flash",
+		BaseURL:  "https://api.deepseek.com/v1",
+	}, "test")
+	thinking, ok := body["thinking"].(map[string]string)
+	if !ok || thinking["type"] != "disabled" {
+		t.Fatalf("thinking = %#v, want disabled", body["thinking"])
+	}
+}
+
 func TestBookmarkSearchIncludesCategoriesTermsAndLiteralWildcards(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)

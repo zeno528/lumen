@@ -211,6 +211,10 @@ func main() {
 
 		r.Patch("/api/bookmarks/{id}/favorite", srv.handleToggleFavorite)
 
+		// 书签 favicon：同源 <img> 自动携带登录 cookie（AuthMiddleware 接受 token cookie），
+		// 陌生人 curl 直接 401，堵掉未认证枚举书签集合的隐私泄露。
+		r.Get("/api/bookmarks/{id}/favicon", srv.handleBookmarkFavicon)
+
 		// 导入导出
 		r.Get("/api/export", srv.handleExport)
 		r.With(srv.rateLimit(5, time.Minute)).Post("/api/import", srv.handleImport)
@@ -243,9 +247,6 @@ func main() {
 		}
 		return srv.consumeWSTicket(claims.ID) // jti 一次性：5s 内重用拒绝
 	}, strings.Fields(os.Getenv("CORS_ORIGINS"))))
-
-	// 书签 favicon（无需认证，img 标签无法带 Authorization header）
-	r.Get("/api/bookmarks/{id}/favicon", srv.handleBookmarkFavicon)
 
 	// 静态文件服务（前端）
 	staticDir := config.StaticDir

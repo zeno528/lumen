@@ -464,7 +464,7 @@ func (s *Server) handleBookmarkFavicon(w http.ResponseWriter, r *http.Request) {
 				decoded = normalizeSVG(decoded)
 			}
 			w.Header().Set("Content-Type", mime)
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Header().Set("Cache-Control", "private, max-age=31536000")
 			w.Write(decoded)
 		} else {
 			// URL 编码格式（如 SVG）
@@ -478,7 +478,7 @@ func (s *Server) handleBookmarkFavicon(w http.ResponseWriter, r *http.Request) {
 				decoded = string(normalizeSVG([]byte(decoded)))
 			}
 			w.Header().Set("Content-Type", mime)
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Header().Set("Cache-Control", "private, max-age=31536000")
 			w.Write([]byte(decoded))
 		}
 		return
@@ -513,7 +513,7 @@ func (s *Server) handleBookmarkFavicon(w http.ResponseWriter, r *http.Request) {
 			data = normalizeSVG(data)
 		}
 		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "public, max-age=604800")
+		w.Header().Set("Cache-Control", "private, max-age=604800")
 		w.Write(data)
 		return
 	}

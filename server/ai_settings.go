@@ -300,6 +300,7 @@ func (s *Server) ReloadAIConfig() {
 	s.config.AI.Provider = cfg.Provider
 	s.config.AI.Model = cfg.Model
 	s.config.AI.BaseURL = cfg.BaseURL
+	s.config.AI.APIFormat = cfg.APIFormat
 	if cfg.APIKeyEncrypted != "" {
 		if dec, err := Decrypt(cfg.APIKeyEncrypted); err == nil {
 			s.config.AI.APIKey = dec

@@ -172,7 +172,7 @@ export function TopbarAIButton({
       const logo = AI_PRESETS[c.provider]?.logo
       const dot = dotFor(i)
       return {
-        label: c.model || AI_PRESETS[c.provider]?.label || c.provider,
+        label: c.displayName || c.model || AI_PRESETS[c.provider]?.label || c.provider,
         icon: logo ? (
           <img src={logo} alt="" className="w-4 h-4 object-contain" />
         ) : (
