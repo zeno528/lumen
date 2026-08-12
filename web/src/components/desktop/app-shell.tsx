@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Search, CheckCheck, X, Settings } from 'lucide-react'
+import { Search, CheckCheck, X } from 'lucide-react'
 import { useRouterState } from '@tanstack/react-router'
 import { Sidebar } from './sidebar'
 import { AddBookmarkFab } from './add-bookmark-fab'
@@ -162,7 +162,6 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     toggleBatchMode,
     idSearchMode,
     toggleIdSearchMode,
-    setSettingsOpen,
   } = useUIStore()
   const [input, setInput] = useState(searchQuery)
   const debounced = useDebouncedValue(input, 300)
@@ -270,19 +269,8 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                     <span>批量</span>
                   </button>
                   <TopbarAIButton className="w-8 h-8" />
-                  <button
-                    type="button"
-                    className="group w-8 h-8 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors duration-200 ease-out hover:bg-(--bg-primary) hover:text-(--accent) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) text-(--text-secondary)"
-                    onClick={() => setSettingsOpen(true)}
-                    aria-label="设置"
-                    title="设置"
-                  >
-                    <span className="flex items-center justify-center transition-transform duration-200 ease-out group-hover:scale-105">
-                      <Settings size={18} strokeWidth={2} />
-                    </span>
-                  </button>
                 </div>
-                <TopbarAvatar hideSettings className="h-10" />
+                <TopbarAvatar className="h-10" />
               </div>
             </div>
           </div>

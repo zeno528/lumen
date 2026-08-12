@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { HelpCircle, LogOut, Moon, Settings, Sun, Cat, User, Radio } from 'lucide-react'
+import { HelpCircle, LogOut, Moon, Settings, Sun, Cat } from 'lucide-react'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
 import { applyTheme } from '@/components/shared/theme-toggle'
 import { useAvatar } from '@/hooks/use-avatar'
@@ -34,9 +34,8 @@ function getInitialTheme(): 'notion-dark' | 'light' {
  * - 头像优先显示用户自定义图片；未选自定义时显示内置图标。
  */
 export function TopbarAvatar({
-  hideSettings = false,
   className,
-}: { hideSettings?: boolean; className?: string } = {}) {
+}: { className?: string } = {}) {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
@@ -127,36 +126,18 @@ export function TopbarAvatar({
 
   const items: MenuItem[] = [
     {
-      header: true,
-      label: nickname,
-      icon: <User size={14} />,
+      label: '设置',
+      icon: <Settings size={14} />,
       onClick: () => {
         setSettingsTab('account')
         setSettingsOpen(true)
       },
     },
-    { separator: true, label: '' },
-    {
-      header: true,
-      label: initialConnection ? '连接中' : dot.label,
-      icon: <Radio size={14} />,
-      labelColor: dot.color,
-    },
-    { separator: true, label: '' },
     {
       label: theme === 'notion-dark' ? '浅色' : '深色',
       icon: theme === 'notion-dark' ? <Sun size={14} /> : <Moon size={14} />,
       onClick: toggleTheme,
     },
-    ...(hideSettings
-      ? []
-      : [
-          {
-            label: '设置',
-            icon: <Settings size={14} />,
-            onClick: () => setSettingsOpen(true),
-          },
-        ]),
     { separator: true, label: '' },
     {
       label: '帮助',

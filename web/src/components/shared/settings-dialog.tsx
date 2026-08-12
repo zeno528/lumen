@@ -89,7 +89,7 @@ export function SettingsDialog() {
       return
     }
     setSettingsOpen(false)
-    // 关闭后 blur 触发元素（齿轮按钮），避免 ESC 键盘关闭后残留 focus-visible 描边
+    // 关闭后 blur 触发元素，避免 ESC 键盘关闭后残留 focus-visible 描边
     ;(document.activeElement as HTMLElement | null)?.blur()
   }
 
