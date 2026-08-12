@@ -12,9 +12,21 @@ function splitTerms(normalized: string): string[] {
   return normalized.match(/[a-z0-9.]+|[\u4e00-\u9fff]+/g) ?? []
 }
 
+function normalizeNumericPunctuation(value: string): string {
+  return value.replace(/(\d)[,.](\d)/g, '$1$2')
+}
+
+function isSubsequence(needle: string, haystack: string): boolean {
+  let index = 0
+  for (const char of haystack) {
+    if (char === needle[index]) index++
+  }
+  return index === needle.length
+}
+
 /** 解析 ID 搜索目标：ID 模式纯数字或 #N；非 ID 查询返回 null（回车直达 / 匹配共用） */
 export function getIdFromQuery(query: string, idSearchMode: boolean): number | null {
-  const normalized = query.toLowerCase().trim()
+  const normalized = normalizeNumericPunctuation(query.toLowerCase().trim())
   if (!normalized) return null
   if (idSearchMode && /^\d+$/.test(normalized)) return Number(normalized)
   const idMatch = normalized.match(/^#(\d+)$/)
@@ -28,13 +40,13 @@ export function bookmarkMatchesSearch(
   query: string,
   idSearchMode: boolean,
 ): boolean {
-  const normalized = query.toLowerCase().trim()
+  const normalized = normalizeNumericPunctuation(query.toLowerCase().trim())
   if (!normalized) return true
   const targetId = getIdFromQuery(normalized, idSearchMode)
   if (targetId != null) return bookmark.id === targetId
 
   const fields = [bookmark.title, bookmark.description ?? '', bookmark.url, categoryName ?? '', ...(bookmark.tags ?? [])]
-    .map((field) => field.toLowerCase())
+    .map((field) => normalizeNumericPunctuation(field.toLowerCase()))
   return splitTerms(normalized).every((term) => fields.some((field) => field.includes(term)))
 }
 
@@ -44,7 +56,17 @@ export function filterBookmarksBySearch<T extends SearchableBookmark>(
   query: string,
   idSearchMode: boolean,
 ): T[] {
-  return bookmarks.filter((bookmark) =>
+  const exactMatches = bookmarks.filter((bookmark) =>
     bookmarkMatchesSearch(bookmark, bookmark.category_id != null ? categoryNames.get(bookmark.category_id) : undefined, query, idSearchMode),
+  )
+  if (exactMatches.length || getIdFromQuery(query, idSearchMode) != null) return exactMatches
+
+  const terms = splitTerms(normalizeNumericPunctuation(query.toLowerCase().trim()))
+  const [term] = terms
+  if (terms.length !== 1 || !/^[a-z0-9]{5,}$/.test(term)) return exactMatches
+
+  return bookmarks.filter((bookmark) =>
+    [bookmark.title, bookmark.url.split(/[?#]/, 1)[0], ...(bookmark.tags ?? [])]
+      .some((field) => isSubsequence(term, field.toLowerCase())),
   )
 }

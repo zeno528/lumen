@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { bookmarkMatchesSearch, getIdFromQuery } from '../src/lib/bookmark-search.ts'
+import { bookmarkMatchesSearch, filterBookmarksBySearch, getIdFromQuery } from '../src/lib/bookmark-search.ts'
 
 const bookmark = {
   id: 42,
@@ -33,6 +33,26 @@ test('bookmark search splits CJK/Latin keywords without spaces', () => {
   // 版本号等带点的连续串保持为一个词，不被误拆
   const versioned = { ...mixed, title: 'React18.2 指南' }
   assert.equal(bookmarkMatchesSearch(versioned, undefined, 'react18.2指南', false), true)
+})
+
+test('bookmark search ignores punctuation inside numbers', () => {
+  const priced = {
+    ...bookmark,
+    title: 'OpenCode Go 编码套餐',
+    description: 'DeepSeek V4 Pro\t3,450\t8,550\t17,150',
+  }
+  assert.equal(bookmarkMatchesSearch(priced, undefined, 'go套餐8550', false), true)
+  assert.equal(bookmarkMatchesSearch(priced, undefined, 'go套餐8,550', false), true)
+})
+
+test('bookmark search falls back to an in-order Latin typo only when exact search has no result', () => {
+  const openCode = { ...bookmark, id: 7318, title: 'OpenCode Go 编码套餐', description: '', tags: [] }
+  const descriptionOnly = { ...bookmark, id: 99, title: '无关书签', description: 'open good', tags: [] }
+  const categories = new Map<number, string>()
+
+  assert.deepEqual(filterBookmarksBySearch([openCode, descriptionOnly], categories, 'opengo', false).map(({ id }) => id), [7318])
+  assert.deepEqual(filterBookmarksBySearch([openCode], categories, 'opengo', true).map(({ id }) => id), [7318])
+  assert.deepEqual(filterBookmarksBySearch([openCode, bookmark], categories, 'release', false).map(({ id }) => id), [42])
 })
 
 test('bookmark search preserves digit and #ID exact matching', () => {

@@ -97,6 +97,9 @@ export function BookmarkDialog({
   const faviconAbortRef = useRef<AbortController | null>(null)
   // URL 输入框 ref（新增模式打开 dialog 时 focus 用，替代 document.querySelector）
   const urlInputRef = useRef<HTMLInputElement>(null)
+  // 保存过程可能触发父级重渲染，使 editingBookmark 暂时变为 null；保留本次打开的编辑目标，
+  // 以便本地重复检查始终排除自身。
+  const editingBookmarkIdRef = useRef<number | undefined>(undefined)
 
   /* textarea 自适应高度 */
   useLayoutEffect(() => {
@@ -143,6 +146,7 @@ export function BookmarkDialog({
     if (!open) return
     aiSaveRequestedRef.current = false
     if (editingBookmark) {
+      editingBookmarkIdRef.current = editingBookmark.id
       setUrl(editingBookmark.url)
       const cat = categories.find((c) => c.id === editingBookmark.category_id)
       setCategoryName(cat ? cat.name : '')
@@ -150,6 +154,7 @@ export function BookmarkDialog({
       setDesc(editingBookmark.description ?? '')
       setTags(editingBookmark.tags?.join(', ') ?? '')
     } else {
+      editingBookmarkIdRef.current = undefined
       setUrl('')
       setTitle('')
       setDesc('')
@@ -451,7 +456,7 @@ export function BookmarkDialog({
     if (aiLoading) {
       const normalized = requireUrl(url)
       if (!normalized) return
-      const duplicate = findDuplicateBookmark(bookmarks, normalized, editingBookmark?.id)
+      const duplicate = findDuplicateBookmark(bookmarks, normalized, editingBookmarkIdRef.current)
       if (duplicate) {
         setUrlDuplicate(true)
         setDuplicateBookmark(duplicate)
@@ -472,7 +477,7 @@ export function BookmarkDialog({
       toast.warning('请填写网址和标题')
       return
     }
-    const dup = findDuplicateBookmark(bookmarks, normalizedUrl, editingBookmark?.id)
+    const dup = findDuplicateBookmark(bookmarks, normalizedUrl, editingBookmarkIdRef.current)
     if (dup) {
       setUrlDuplicate(true)
       setDuplicateBookmark(dup)
