@@ -289,14 +289,17 @@ body:hover,
   width: 100%;
   text-align: left;
 }
-.context-menu-item:hover {
-  /* 跟侧栏 .sidebar-item:hover 同款中性灰（layout.css:486）—— 普通项 hover 用黑/白低不透度，
-     让高亮块在玻璃菜单上能明显看出；删除项 hover 仍走下方红色。 */
-  background: color-mix(in srgb, black 6%, transparent);
-}
+/* 仅真实鼠标设备显示悬停反馈；触摸屏会把最后一次触碰保留为 :hover，菜单不应出现伪选中态。 */
+@media (hover: hover) {
+  .context-menu-item:hover {
+    /* 跟侧栏 .sidebar-item:hover 同款中性灰（layout.css:486）—— 普通项 hover 用黑/白低不透度，
+       让高亮块在玻璃菜单上能明显看出；删除项 hover 仍走下方红色。 */
+    background: color-mix(in srgb, black 6%, transparent);
+  }
 
-[data-theme='notion-dark'] .context-menu-item:hover {
-  background: color-mix(in srgb, white 8%, transparent);
+  [data-theme='notion-dark'] .context-menu-item:hover {
+    background: color-mix(in srgb, white 8%, transparent);
+  }
 }
 /* 激活态（当前选中项，如 AI 模型切换的当前 provider）：accent 文字 + accent/10 底，
    复用 ai-section 快速切换的 accent/10 高亮语言。 */
@@ -316,8 +319,10 @@ body:hover,
   width: 3px;
   background: var(--accent);
 }
-.context-menu-item.active:hover {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+@media (hover: hover) {
+  .context-menu-item.active:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
 }
 .context-menu-item i,
 .context-menu-item .icon {
@@ -335,8 +340,10 @@ body:hover,
 .context-menu-item.delete .icon {
   color: var(--destructive);
 }
-.context-menu-item.delete:hover {
-  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+@media (hover: hover) {
+  .context-menu-item.delete:hover {
+    background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  }
 }
 
 /* AI 连通性状态点（顶栏 AI 切换下拉每项末尾 trailing）。
