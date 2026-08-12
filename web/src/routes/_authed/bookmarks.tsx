@@ -15,6 +15,8 @@ import {
   Bookmark as BookmarkIcon,
   SearchX,
   Plus,
+  Layers,
+  Folder,
 } from 'lucide-react'
 import {
   useBookmarks,
@@ -185,6 +187,18 @@ function BookmarksPage() {
   )
 
   const q = searchQuery.toLowerCase().trim()
+  const activeCategory = typeof currentCategory === 'number'
+    ? categories.find((category) => category.id === currentCategory)
+    : undefined
+  const ActiveCategoryIcon = activeCategory ? resolveCategoryIcon(activeCategory.icon) : null
+  const viewTitle =
+    currentCategory === 'all'
+      ? '全部书签'
+      : currentCategory === '__favorites__'
+        ? '收藏'
+        : currentCategory === '__uncategorized__'
+          ? '未分类'
+          : activeCategory?.name ?? '全部书签'
 
   const filtered = useMemo(() => {
     let bookmarks = allBookmarks
@@ -602,7 +616,23 @@ function BookmarksPage() {
 
   return (
     <>
-      {/* 顶部不再放「X 条结果」——搜索计数胶囊统一在搜索框内显示（桌面/移动端共用 SearchCount）。*/}
+      {!q && (
+        <div className="bookmarks-grid bookmarks-view-header">
+          <h1 className="bookmarks-view-title">
+            {currentCategory === 'all' ? (
+              <Layers size={18} style={{ color: 'var(--icon-all)' }} aria-hidden="true" />
+            ) : currentCategory === '__favorites__' ? (
+              <Star size={18} style={{ color: 'var(--favorite-star)', fill: 'var(--favorite-star)' }} aria-hidden="true" />
+            ) : currentCategory === '__uncategorized__' ? (
+              <Folder size={18} style={{ color: 'var(--icon-uncategorized)', fill: 'var(--icon-uncategorized)' }} aria-hidden="true" />
+            ) : ActiveCategoryIcon ? (
+              <ActiveCategoryIcon size={18} style={{ color: activeCategory?.color || 'var(--text-muted)' }} aria-hidden="true" />
+            ) : null}
+            <span>{viewTitle}</span>
+            <span className="bookmarks-view-count">{filtered.length}</span>
+          </h1>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div

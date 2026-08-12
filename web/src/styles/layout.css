@@ -990,6 +990,25 @@ select,
   overscroll-behavior-y: contain;
   padding: 10px 12px 12px;
 }
+.bookmarks-view-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 8px;
+  color: var(--text-primary);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  font-optical-sizing: auto;
+}
+.bookmarks-view-count {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
 
 /* 卡片网格 */
 .bookmarks-grid {
@@ -1186,6 +1205,9 @@ select,
 
 /* ===== 移动端（≤768px）===== */
 @media (max-width: 768px) {
+  .bookmarks-view-header {
+    display: none;
+  }
   .layout {
     display: flex;
     flex-direction: column;

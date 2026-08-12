@@ -66,7 +66,8 @@ function useGridInset() {
     if (!mainContent) return
 
     const compute = () => {
-      const grid = mainContent.querySelector('.bookmarks-grid') as HTMLElement | null
+      const grid = Array.from(mainContent.querySelectorAll<HTMLElement>('.bookmarks-grid'))
+        .find((candidate) => candidate.querySelector('.bookmark-card')) ?? null
       const card = grid?.querySelector('.bookmark-card') as HTMLElement | null
       const searchWrap = document.querySelector('.main-top-inner .search-wrap') as HTMLElement | null
       const actions = document.querySelector('.main-top-inner .main-top-actions') as HTMLElement | null
