@@ -568,8 +568,13 @@ export function BookmarkDialog({
     submitRef.current = submit
   }, [submit])
   const bookmarkDialogSubmitToken = useUIStore((s) => s.bookmarkDialogSubmitToken)
+  // 保存快捷键的 token 是全局递增信号，不会在关闭弹窗时归零。
+  // 记录已消费值，避免下一次打开时重放上一轮 Ctrl/Cmd+Enter，造成弹窗退场遮罩残留。
+  const consumedSubmitTokenRef = useRef(bookmarkDialogSubmitToken)
   useEffect(() => {
-    if (!open || bookmarkDialogSubmitToken === 0) return
+    if (bookmarkDialogSubmitToken === consumedSubmitTokenRef.current) return
+    consumedSubmitTokenRef.current = bookmarkDialogSubmitToken
+    if (!open) return
     submitRef.current()
   }, [open, bookmarkDialogSubmitToken])
 
