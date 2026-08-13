@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useShallow } from 'zustand/react/shallow'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -43,7 +43,6 @@ import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
-import { categoryFilterFromSearch, parseBookmarkSearch } from '@/lib/bookmark-route'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { AI_PRESETS } from '@/lib/ai-providers'
@@ -63,13 +62,10 @@ import type { AISettings } from '@/api/settings'
  */
 export const Route = createFileRoute('/_authed/bookmarks')({
   head: () => ({ meta: [{ title: 'Lumen · 书签' }] }),
-  validateSearch: parseBookmarkSearch,
   component: BookmarksPage,
 })
 
 function BookmarksPage() {
-  const navigate = useNavigate()
-  const routeSearch = Route.useSearch()
   const { data: bmData, isLoading, error } = useBookmarks()
   const { data: catData } = useCategories()
   const toggleFav = useToggleFavorite()
@@ -173,10 +169,6 @@ function BookmarksPage() {
       closeBookmarkDialog: s.closeBookmarkDialog,
     })),
   )
-  const routeCategory = categoryFilterFromSearch(routeSearch)
-  useEffect(() => {
-    if (currentCategory !== routeCategory) setCurrentCategory(routeCategory)
-  }, [currentCategory, routeCategory, setCurrentCategory])
 
   // 容器入场动画门控：只在「首载 / 切分类」时挂 animate-enter，
   // 让整批卡片同步 fadeInUp 一次，300ms（fadeInUp 时长）后移除；之后后台 refetch 增量进来的
@@ -294,9 +286,8 @@ function BookmarksPage() {
       !categories.some((c) => c.id === currentCategory)
     ) {
       setCurrentCategory('all')
-      navigate({ to: '/bookmarks', search: {}, replace: true })
     }
-  }, [q, currentCategory, filtered.length, allBookmarks.length, categories, setCurrentCategory, navigate])
+  }, [q, currentCategory, filtered.length, allBookmarks.length, categories, setCurrentCategory])
 
   // 滚动位置记忆：刷新/登录后恢复上次滚动位置（书签首次加载完成后恢复）
   const scrollRestored = useRef(false)

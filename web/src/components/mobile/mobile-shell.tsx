@@ -15,7 +15,6 @@ import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
 import { getCategoryCount, getChildCategories, getTopLevelCategories } from '@/lib/category-tree'
-import { categoryFilterToSearch } from '@/lib/bookmark-route'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 
 /**
@@ -386,7 +385,6 @@ function MobileCategorySelect() {
   const { data: catData } = useCategories()
   const { data: bmData } = useBookmarks()
   const { currentCategory, setCurrentCategory } = useUIStore()
-  const navigate = useNavigate()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [childMenuParent, setChildMenuParent] = useState<number | null>(null)
 
@@ -405,7 +403,6 @@ function MobileCategorySelect() {
     getCategoryCount(bookmarks, categories, id)
   const selectCategory = (category: typeof currentCategory) => {
     setCurrentCategory(category)
-    navigate({ to: '/bookmarks', search: categoryFilterToSearch(category) })
   }
 
   // 当前分类信息
