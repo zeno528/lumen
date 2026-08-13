@@ -5,10 +5,8 @@ type DragTarget = { id: number; name: string } | null
 type BookmarkDragState = {
   sourceId: number | null
   target: DragTarget
-  childMenuOpen: boolean
   start: (sourceId: number) => void
   setTarget: (target: DragTarget) => void
-  setChildMenuOpen: (open: boolean) => void
   clear: () => void
 }
 
@@ -16,13 +14,11 @@ type BookmarkDragState = {
 export const useBookmarkDragStore = create<BookmarkDragState>()((set) => ({
   sourceId: null,
   target: null,
-  childMenuOpen: false,
-  start: (sourceId) => set({ sourceId, target: null, childMenuOpen: false }),
+  start: (sourceId) => set({ sourceId, target: null }),
   setTarget: (target) => set((state) => state.target?.id === target?.id ? state : { target }),
-  setChildMenuOpen: (open) => set((state) => (state.childMenuOpen === open ? state : { childMenuOpen: open })),
   clear: () => set((state) =>
-    state.sourceId == null && state.target == null && !state.childMenuOpen
+    state.sourceId == null && state.target == null
       ? state
-      : { sourceId: null, target: null, childMenuOpen: false },
+      : { sourceId: null, target: null },
   ),
 }))

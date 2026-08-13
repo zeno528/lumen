@@ -15,8 +15,8 @@
 </p>
 
 <p>
-  <img width="49%" alt="Lumen 浅色主题" src="docs/images/lumen-desktop-light.png#gh-light-mode-only" />
-  <img width="49%" alt="Lumen 深色主题" src="docs/images/lumen-desktop-dark.png#gh-dark-mode-only" />
+  <img src="docs/images/lumen-light.png" width="49%" alt="Lumen 桌面端浅色" />
+  <img src="docs/images/lumen-dark.png" width="49%" alt="Lumen 桌面端深色" />
 </p>
 
 </div>
@@ -34,10 +34,7 @@
 - 🪶 **轻量到极致** — 单一 Go 二进制 + 静态前端，512 MB 内存小机即可运行，空闲内存约 19 MiB
 - 📱 **桌面与移动均可用** — 响应式界面，手机与桌面访问均流畅
 
-<p align="center">
-  <img width="32%" alt="Lumen 移动端浅色视图" src="docs/images/lumen-mobile-light.png#gh-light-mode-only" />
-  <img width="32%" alt="Lumen 移动端深色视图" src="docs/images/lumen-mobile-dark.png#gh-dark-mode-only" />
-</p>
+<img src="docs/images/lumen-mobile-light.png" width="40%" />&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;<img src="docs/images/lumen-mobile-dark.png" width="40%" />
 
 ## 快速开始
 

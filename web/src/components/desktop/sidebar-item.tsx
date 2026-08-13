@@ -52,6 +52,7 @@ export function SidebarItem({
   childCount = 0,
   expanded = false,
   onExpand,
+  dragResult = false,
 }: {
   icon: React.ReactNode
   label: string
@@ -88,6 +89,8 @@ export function SidebarItem({
   childCount?: number
   expanded?: boolean
   onExpand?: (e: React.MouseEvent) => void
+  /** 拖拽完成后的落位标记：独立于 hover 的着重色描边 */
+  dragResult?: boolean
 }) {
   // dragOver：null=未悬停 / 'cat'=分类排序悬停(带 before|after 落点) / 'bookmark'=书签拖入悬停
   // cat.pos 决定顶部线(before)还是底部线(after)高亮，所见即所得，
@@ -165,6 +168,13 @@ export function SidebarItem({
     setDragOver({ kind: 'cat', action })
   }
   const handleDragLeave = (e: React.DragEvent) => {
+    // 拖拽中 dragleave 的 relatedTarget 经常为 null（Chrome 的 drag 事件怪癖），
+    // 若当成"离开"会取消子分类浮层的打开 timer → 浮层弹不出/高频闪烁。
+    // null 时只清插入线高亮，浮层关闭交给「确实离开到别的元素」或拖拽结束兜底。
+    if (e.relatedTarget == null) {
+      setDragOver(null)
+      return
+    }
     // 只在真正离开时移除，忽略子元素冒泡
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDragOver(null)
@@ -197,6 +207,7 @@ export function SidebarItem({
         // pop-in 在 animationend 后移除（showPopIn），避免 pointer-events: none 锁 1.5s
         showPopIn && 'pop-in',
         selected && 'selected',
+        dragResult && 'drag-result',
       )}
       onClick={onSelect ? (e) => onSelect(e, category!.id) : onClick}
       onContextMenu={

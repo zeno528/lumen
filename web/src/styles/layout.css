@@ -682,6 +682,10 @@ select,
 [data-theme='notion-dark'] .sidebar-item:hover .sidebar-icon-category {
   transform: scale(1.12);
 }
+/* 拖拽完成后的落位标记：与 hover 独立的着重色描边（参考 Edge 书签拖拽），互不打架 */
+.sidebar-item.drag-result {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 .sidebar-item.active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
@@ -754,8 +758,9 @@ select,
    - cat-drag-over-bookmark：书签拖入目标，绿色调区别用途
    虚拟分类（all/favorites/uncategorized）在 JS 层拒绝拖入。*/
 .sidebar-item.cat-dragging {
-  background: var(--accent-soft-bg);
-  box-shadow: inset 0 0 0 2px var(--accent);
+  /* 来源分类做“幽灵态”（整体降透明）：与目标位的 accent 整卡高亮（cat-drag-over-inside）明确区分 */
+  opacity: 0.45;
+  background: transparent;
 }
 /* 排序只显示弧形插入线，不借用“归入父级”的整卡片高亮。 */
 .sidebar-item.cat-drag-over-before::before,
@@ -836,8 +841,10 @@ select,
   pointer-events: none;
   transition: opacity 0.16s ease;
 }
-.bookmark-drag-preview.bookmark-drag-preview-fading {
-  opacity: 0;
+/* 拖拽预览常驻挂载（不随 dragging 增删节点，防 Chromium 拖拽崩溃），未拖拽时隐藏 */
+.category-drag-preview.drag-preview-hidden,
+.bookmark-drag-preview.drag-preview-hidden {
+  visibility: hidden;
 }
 .category-drag-preview span,
 .bookmark-drag-preview span {
@@ -899,15 +906,6 @@ select,
 .bookmark-drag-preview .bookmark-tag.category-tag.bookmark-drag-preview-category-target {
   background: var(--accent);
   color: var(--bg-primary);
-}
-.category-release-dropzone {
-  margin: 8px 11px 0;
-  padding: 9px 12px;
-  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
-  border-radius: 8px;
-  color: var(--accent);
-  font-size: 0.82rem;
-  text-align: center;
 }
 .sidebar-icon {
   width: 26px;
@@ -1248,8 +1246,8 @@ select,
 }
 /* ===== 书签卡片 =====
    覆盖 bookmark-card.tsx 里的内联 Tailwind 样式，让描述/URL 显示更宽。
-   关键约束：hover 视觉必须**完全等价** scale(1.04) —— 用户明说
-   "微微放大"就是 1.04 倍，禁自定义增强（如 translateY）。 */
+   关键约束：hover 视觉必须**完全等价** scale(1.03)（用户定的 3% 微微放大），
+   禁自定义增强（如 translateY / 更大倍率）。 */
 .bookmark-card {
   background: var(--bg-card);
   border-radius: 20px;
@@ -1269,7 +1267,7 @@ select,
     box-shadow 0.25s ease, background 0.2s ease;
 }
 .bookmark-card:hover {
-  transform: scale(1.04);
+  transform: scale(1.03);
   background: var(--bg-card-hover);
   box-shadow: 0 0 0 1px var(--border-hover), 0 14px 32px rgba(0, 0, 0, 0.22),
     0 6px 12px rgba(0, 0, 0, 0.1);
