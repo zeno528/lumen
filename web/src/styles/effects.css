@@ -55,6 +55,13 @@ a:focus-visible {
   animation: liquidGlassIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* 拖拽期间禁用毛玻璃（is-dragging 由 stores/bookmark-drag.ts 的 dragstart/dragend 维护）：
+   拖拽预览反复扫过模糊层会让 backdrop-filter 逐帧重算，长时间拖动可耗尽 GPU 内存、
+   拖垮整个浏览器。拖拽结束即恢复，视觉仅在拖拽进行中略微变化。 */
+html.is-dragging .liquid-glass {
+  backdrop-filter: none;
+}
+
 @keyframes liquidGlassIn {
   /* 入场动画只动 opacity + transform，不动画 backdrop-filter：
      1. blur 0→20px 渐变本身就是闪烁源（背景从透变糊，0.22s 内明显跳变）
@@ -812,7 +819,7 @@ body:hover,
 @keyframes fadeInUp {
   0% {
     opacity: 0;
-    transform: translate3d(0, 20px, 0);
+    transform: translate3d(0, 15px, 0);
   }
   100% {
     opacity: 1;

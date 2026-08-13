@@ -10,6 +10,8 @@ import {
   batchAddTags,
   reorderBookmarks,
 } from '@/api/bookmarks'
+import { toast } from '@/components/ui/toast'
+import { moveBookmarkInList, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
 import { deleteFavicon } from '@/lib/favicon-cache'
 import { createOptimisticMutation } from '@/lib/optimistic-mutation'
 import type { BookmarkInput, Bookmark } from '@/types'
@@ -196,19 +198,41 @@ export function useClearAllFavorites() {
 export function useBatchMove() {
   const qc = useQueryClient()
   return useMutation(
-    createOptimisticMutation<{ ids: number[]; categoryId: number | null }>(qc, {
-      mutationFn: ({ ids, categoryId }) => batchMoveBookmarks(ids, categoryId),
+    createOptimisticMutation<{
+      ids: number[]
+      categoryId: number | null
+      targetBookmarkId?: number
+      position?: 'before' | 'after'
+    }>(qc, {
+      mutationFn: ({ ids, categoryId, targetBookmarkId, position }) =>
+        batchMoveBookmarks(ids, categoryId, targetBookmarkId, position),
       targets: [
         {
           queryKey: BOOKMARKS_KEY,
-          apply: (old, { ids, categoryId }) => {
+          apply: (old, { ids, categoryId, targetBookmarkId, position }) => {
             if (!old) return old
             const idSet = new Set(ids)
+            const byId = new Map(old.bookmarks.map((bookmark: Bookmark) => [bookmark.id, bookmark]))
+            const moving = ids.map((id) => byId.get(id)).filter((bookmark): bookmark is Bookmark => !!bookmark)
+            const remaining = old.bookmarks.filter((bookmark: Bookmark) => bookmark.category_id === categoryId && !idSet.has(bookmark.id))
+            let insertAt = remaining.length
+            if (targetBookmarkId != null) {
+              const targetIndex = remaining.findIndex((bookmark: Bookmark) => bookmark.id === targetBookmarkId)
+              if (targetIndex >= 0) insertAt = targetIndex + (position === 'after' ? 1 : 0)
+            }
+            const targetOrder = [...remaining.slice(0, insertAt), ...moving, ...remaining.slice(insertAt)]
+            const sortOrderById = new Map(targetOrder.map((bookmark, index) => [bookmark.id, index]))
             return {
               ...old,
-              bookmarks: old.bookmarks.map((b: Bookmark) =>
-                idSet.has(b.id) ? { ...b, category_id: categoryId } : b,
-              ),
+              bookmarks: old.bookmarks
+                .map((bookmark: Bookmark) =>
+                  idSet.has(bookmark.id)
+                    ? { ...bookmark, category_id: categoryId, sort_order: sortOrderById.get(bookmark.id) ?? bookmark.sort_order }
+                    : sortOrderById.has(bookmark.id)
+                      ? { ...bookmark, sort_order: sortOrderById.get(bookmark.id)! }
+                      : bookmark,
+                )
+                .sort((a: Bookmark, b: Bookmark) => a.sort_order - b.sort_order || b.id - a.id),
             }
           },
         },
@@ -258,21 +282,17 @@ export function useReorderBookmarks() {
     // onMutate 已 await + 重排 cache（React Query 源码：await onMutate 完成后才跑 mutationFn）。
     // 直接用 cache 的 id 序列发 API —— 不能再 computeReorderedIds：那会基于重排后的 cache 再重排一次，
     // 得到错误 order → 后端存错 sort_order → 刷新后顺序与拖动不一致（排序失效）。
-    mutationFn: (_vars: { fromId: number; toId: number }) => {
+    mutationFn: (_vars: { fromId: number; toId: number; position: BookmarkDropPosition }) => {
       const data = qc.getQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY)
       return reorderBookmarks((data?.bookmarks ?? []).map((b: Bookmark) => b.id))
     },
-    onMutate: async ({ fromId, toId }) => {
+    onMutate: async ({ fromId, toId, position }) => {
       await qc.cancelQueries({ queryKey: BOOKMARKS_KEY })
       const prev = qc.getQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY)
       qc.setQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY, (old) => {
         if (!old) return old
-        const next = [...old.bookmarks]
-        const fromIdx = next.findIndex((b: Bookmark) => b.id === fromId)
-        const toIdx = next.findIndex((b: Bookmark) => b.id === toId)
-        if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return old
-        const [moved] = next.splice(fromIdx, 1)
-        next.splice(toIdx, 0, moved)
+        const next = moveBookmarkInList(old.bookmarks, fromId, toId, position)
+        if (next === old.bookmarks) return old
         return { ...old, bookmarks: next }
       })
       return { prev }
@@ -308,4 +328,23 @@ export function applyBatchMoveToCache(
       ),
     }
   })
+}
+
+/**
+ * 批量移动后的统一反馈尾巴：成功 toast + 批量清选中，失败 toast。
+ * 书签网格卡片落点、聚合分组落点、侧栏分类落点三处共用。
+ */
+export function notifyBatchMove(
+  promise: Promise<unknown>,
+  count: number,
+  categoryName: string,
+  isBatch: boolean,
+  clearSelection: () => void,
+) {
+  void promise
+    .then(() => {
+      toast.success(`已移动 ${count} 个书签到「${categoryName}」`)
+      if (isBatch) clearSelection()
+    })
+    .catch((error: Error) => toast.error('移动失败: ' + error.message))
 }

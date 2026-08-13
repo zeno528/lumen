@@ -72,10 +72,12 @@ export function batchDeleteBookmarks(ids: number[]): Promise<BatchResult> {
 export function batchMoveBookmarks(
   ids: number[],
   categoryId: number | null,
+  targetBookmarkId?: number,
+  position?: 'before' | 'after',
 ): Promise<BatchResult> {
   return api('/bookmarks/batch-move', {
     method: 'PUT',
-    body: JSON.stringify({ ids, category_id: categoryId }),
+    body: JSON.stringify({ ids, category_id: categoryId, target_bookmark_id: targetBookmarkId, position }),
   })
 }
 

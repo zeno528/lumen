@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getCategoryDropAction, getDragId, setDragId } from '../src/lib/category-dnd.ts'
+import { getCategoryDropAction, getDragId, hasDragType, setDragId } from '../src/lib/category-dnd.ts'
 
 test('category drop uses card edges for reorder and its center for nesting', () => {
   assert.deepEqual(getCategoryDropAction(4, 40, true), { kind: 'reorder', position: 'before' })
@@ -22,4 +22,10 @@ test('drag payload keeps its dedicated MIME type with a plain-text fallback', ()
   setDragId(dataTransfer, 'application/x-category-id', 7)
   assert.equal(getDragId(dataTransfer, 'application/x-category-id'), 7)
   assert.equal(dataTransfer.getData('text/plain'), '7')
+})
+
+test('bookmark drag remains distinguishable when it shares a plain-text fallback with categories', () => {
+  const types = ['application/x-bookmark-id', 'text/plain']
+  assert.equal(hasDragType(types, 'application/x-bookmark-id'), true)
+  assert.equal(hasDragType(types, 'application/x-category-id'), false)
 })

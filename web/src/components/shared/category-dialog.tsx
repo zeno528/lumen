@@ -150,7 +150,7 @@ export function CategoryDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={editingCategory ? '编辑分类' : parentId != null ? '新建子分类' : '添加分类'}
+      title={editingCategory ? (editingCategory.parent_id != null ? '编辑子分类' : '编辑分类') : parentId != null ? '新建子分类' : '添加分类'}
       headerExtra={
         editingCategory ? (
           <span

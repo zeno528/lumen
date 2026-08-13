@@ -27,6 +27,11 @@ export function setDragId(dataTransfer: DataTransfer, type: typeof DRAG_TYPE_BOO
   dataTransfer.setData('text/plain', value)
 }
 
+/** 只用专属 MIME 判断拖拽来源；text/plain 仅能在 drop 时读取 ID，不能区分对象类型。 */
+export function hasDragType(types: readonly string[], type: typeof DRAG_TYPE_BOOKMARK | typeof DRAG_TYPE_CATEGORY) {
+  return types.includes(type)
+}
+
 export function getDragId(dataTransfer: DataTransfer, type: typeof DRAG_TYPE_BOOKMARK | typeof DRAG_TYPE_CATEGORY) {
   const id = Number(dataTransfer.getData(type) || dataTransfer.getData('text/plain'))
   return Number.isSafeInteger(id) && id > 0 ? id : null

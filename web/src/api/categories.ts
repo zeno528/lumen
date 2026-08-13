@@ -26,11 +26,16 @@ export function updateCategory(
   })
 }
 
-/** PUT /api/categories/{id}/parent —— 仅调整分类层级。 */
-export function moveCategory(id: number, parentId: number | null): Promise<{ ok: boolean }> {
+/** PUT /api/categories/{id}/parent —— 调整层级；带落点时同时插入目标分类前/后。 */
+export function moveCategory(
+  id: number,
+  parentId: number | null,
+  targetId?: number,
+  position?: 'before' | 'after',
+): Promise<{ ok: boolean }> {
   return api(`/categories/${id}/parent`, {
     method: 'PUT',
-    body: JSON.stringify({ parent_id: parentId }),
+    body: JSON.stringify({ parent_id: parentId, target_id: targetId, position }),
   })
 }
 

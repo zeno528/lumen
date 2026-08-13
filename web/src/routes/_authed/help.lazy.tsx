@@ -269,9 +269,9 @@ function HelpPage() {
 
         <Section id="categories" index={4} icon={Layers} title="分类管理" registerRef={registerSection}>
           <H3>创建分类</H3>
-          <p>点击侧边栏分类标题旁的 <Kbd>+</Kbd> 按钮，输入名称并选择图标和颜色。</p>
+          <p>点击侧边栏分类标题旁的「新建」按钮，输入名称并选择图标和颜色。</p>
           <H3>右键菜单</H3>
-          <p>右键分类名称可进行编辑、复制 ID、批量删除和删除。右键「收藏」分类可选择「全部取消收藏」，右键「未分类」可选择「清空未分类」。</p>
+          <p>右键分类名称可进行编辑、复制 ID 和删除。右键「收藏」分类可选择「全部取消收藏」，右键「未分类」可选择「清空未分类」。</p>
           <H3>未分类书签</H3>
           <p>没有分配分类的书签会自动归入「未分类」分组。</p>
         </Section>
@@ -301,7 +301,7 @@ function HelpPage() {
           </ol>
           <H3>分类批量</H3>
           <ol className="list-decimal pl-5 space-y-1">
-            <li>右键侧边栏分类 -&gt;「批量删除」，或按 <Kbd>Ctrl</Kbd> + <Kbd>Shift</Kbd> + <Kbd>B</Kbd> 进入分类批量模式</li>
+            <li>点击侧边栏分类标题旁「新建」右侧的菜单按钮，选择「批量管理分类」；也可按 <Kbd>Ctrl</Kbd> + <Kbd>Shift</Kbd> + <Kbd>B</Kbd></li>
             <li>点击分类多选，<Kbd>Shift</Kbd> + 点击范围选择（仅真实分类可选，收藏 / 未分类不参与）</li>
             <li>操作栏：删除选中分类（其下书签自动变为未分类，不丢失）</li>
             <li>按 Esc 或点退出按钮退出</li>
