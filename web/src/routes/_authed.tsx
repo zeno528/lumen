@@ -22,11 +22,16 @@ loadFaviconCache()
  *
  */
 export const Route = createFileRoute('/_authed')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ cause }) => {
     const token = useAuthStore.getState().token
     if (!token) {
       throw redirect({ to: '/login' })
     }
+    // 仅路由「进入」时联网校验 token。搜索参数变化（如切换分类 ?category=N）等 cause='stay'
+    // 导航不重复联网：否则每次切分类都等一次 /api/auth/verify 网络往返（~700ms），期间旧视图
+    // 被重新挂上入场动画整体闪烁，随后同步纠正又播一遍 → 切分类双闪。token 有效性由后续
+    // 每个 API 请求的 401 兜底（onUnauthorized → 登出跳登录），无安全缺口。
+    if (cause !== 'enter') return
     // 验证 token 有效性：失效（401）直接跳登录，避免乐观渲染受保护页面后 401 闪烁跳转
     // 用原生 fetch 不走 api() 客户端，避免 401 触发 onUnauthorized 的 location.href 与 redirect 冲突
     try {
