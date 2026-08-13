@@ -585,10 +585,10 @@ select,
   width: 24px;
   height: 20px;
   padding: 0;
-  margin-left: 2px;
+  margin-left: 4px;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--top-pill-text) 24%, transparent);
-  border-radius: 0;
+  /* 与 .sidebar-add-btn 同款胶囊：active/hover 高亮跟随圆角，不再出现方角高亮框 */
+  border-radius: 999px;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -654,6 +654,18 @@ select,
      推出 item 边界 → name 永远收不到可用宽度，ellipsis 不触发 → count 胶囊被推挤出 sidebar。
      修这一处 + name 那处 = 链路两端都能缩。 */
   min-width: 0;
+}
+/* 边界热区：覆盖分类项之间 .sidebar-categories 的 2px gap。
+   与书签视图同款「before 伪元素扩热区」做法（星标 before:-inset-3 / 箭头 ::before inset:-4px）：
+   伪元素只参与命中测试、不绘制，hover 视觉不变；上下各扩 1px 正好铺满 2px 间隙，
+   鼠标扫过 A/B 之间不再掉出 hover（同样覆盖拖拽 dragover 命中）。 */
+.sidebar-item-inner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  bottom: -1px;
 }
 .sidebar-item:hover {
   background: rgba(0, 0, 0, 0.06);
@@ -822,6 +834,10 @@ select,
   font-size: 0.9rem;
   opacity: 1;
   pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.bookmark-drag-preview.bookmark-drag-preview-fading {
+  opacity: 0;
 }
 .category-drag-preview span,
 .bookmark-drag-preview span {
@@ -1417,7 +1433,7 @@ select,
     left: 0;
     bottom: 0;
     width: fit-content;
-    min-width: 240px;
+    min-width: 255px;
     max-width: 280px;
     z-index: 300;
     border-radius: 0 16px 16px 0;

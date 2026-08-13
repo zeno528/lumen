@@ -33,3 +33,16 @@ export function moveBookmarkInList<T extends { id: number }>(
   next.splice(position === 'after' ? targetIdx + 1 : targetIdx, 0, moved)
   return next
 }
+
+/** 批量移动是否真的换了分类：ids 中任一书签不在目标分类即算跨分类移动（才需要成功通知）。
+ *  契约：ids 恒来自 bookmarks 列表；找不到的 id 视为「未跨分类」被忽略，调用方不得传入脏 id。 */
+export function isCrossCategoryMove(
+  bookmarks: Bookmark[],
+  ids: number[],
+  targetCategoryId: number | null,
+): boolean {
+  return ids.some((id) => {
+    const bookmark = bookmarks.find((item) => item.id === id)
+    return bookmark != null && bookmark.category_id !== targetCategoryId
+  })
+}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -8,6 +10,29 @@ import (
 
 	"lumen/server/db"
 )
+
+func TestSessionCookieSecureOnlyOutsideDevelopment(t *testing.T) {
+	cases := []struct {
+		appEnv string
+		secure bool
+	}{
+		{"development", false},
+		{"production", true},
+		{"", true}, // 未设 APP_ENV 按 fail-closed 生产对待
+	}
+	for _, tc := range cases {
+		srv := newAuthTestServer(t, tc.appEnv, "p")
+		rec := httptest.NewRecorder()
+		srv.setSessionCookie(rec, "t", http.SameSiteStrictMode)
+		cookies := rec.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("appEnv=%q: want 1 cookie, got %d", tc.appEnv, len(cookies))
+		}
+		if cookies[0].Secure != tc.secure {
+			t.Fatalf("appEnv=%q: Secure=%v, want %v", tc.appEnv, cookies[0].Secure, tc.secure)
+		}
+	}
+}
 
 // newAuthTestServer 构造一个带全新临时 SQLite 库的 Server，仅用于密码初始化安全测试。
 // 复用项目既有测试的 db.Connect + Migrate 初始化方式（见 api_integration_test.go）。

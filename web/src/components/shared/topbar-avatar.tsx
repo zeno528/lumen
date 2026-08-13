@@ -154,6 +154,7 @@ export function TopbarAvatar({
       <button
         type="button"
         className={cn(
+          'topbar-avatar-trigger',
           'topbar-icon-btn w-24 h-9 rounded-full pl-1 pr-2 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
           menu ? 'menu-open scale-[1.02]' : 'border-(--border)',
           className,
@@ -185,6 +186,7 @@ export function TopbarAvatar({
         anchor="center"
         alignY="top"
         minWidth={AVATAR_MENU_WIDTH}
+        ignoreOutsideClickSelector=".topbar-avatar-trigger"
       />
     </>
   )
