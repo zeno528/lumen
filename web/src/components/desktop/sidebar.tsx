@@ -45,6 +45,7 @@ import type { CategoryDeleteMode } from '@/api/categories'
 import { getChildCategories, getCategoryCount, getParentCategory, getTopLevelCategories, hasChildCategories } from '@/lib/category-tree'
 import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getDragId, getDropSide, hasDragType, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
 import { getDraggedBookmarkIds } from '@/lib/bookmark-dnd'
+import { getDragImage } from '@/lib/drag-image'
 
 /**
  * 拖拽 MIME 类型。
@@ -91,7 +92,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     clearCategorySelection,
   } = useUIStore()
   const setBookmarkDragTarget = useBookmarkDragStore((state) => state.setTarget)
-  const setChildMenuOpen = useBookmarkDragStore((state) => state.setChildMenuOpen)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   // 新建分类触发 pop-in 入场动画（isNew）。不设定时清除：pop-in 由 sidebar-item 的
@@ -134,11 +134,12 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const [draggedCatId, setDraggedCatId] = useState<number | null>(null)
   const [dragPreview, setDragPreview] = useState<Category | null>(null)
   const [childDragOver, setChildDragOver] = useState<{ id: number; position: 'before' | 'after' | 'bookmark' } | null>(null)
+  const [dragResultId, setDragResultId] = useState<number | null>(null)
   const dragPreviewRef = useRef<HTMLDivElement>(null)
-  const dragImageRef = useRef<HTMLDivElement | null>(null)
   const childMenuTimerRef = useRef<number | null>(null)
   const childMenuCloseTimerRef = useRef<number | null>(null)
   const childMenuTargetIdRef = useRef<number | null>(null)
+  const dragResultTimerRef = useRef<number | null>(null)
   // 子分类浮层与其右键菜单属于同一临时交互：从任一入口关闭时必须一起消失。
   const closeCategoryMenuGroup = () => {
     setChildMenu(null)
@@ -463,6 +464,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   useEffect(() => () => {
     if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
     if (childMenuCloseTimerRef.current != null) window.clearTimeout(childMenuCloseTimerRef.current)
+    if (dragResultTimerRef.current != null) window.clearTimeout(dragResultTimerRef.current)
   }, [])
 
   const cancelChildMenuClose = () => {
@@ -473,12 +475,11 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   }
 
   function clearDragState() {
+    const draggedId = draggedCatId
     setDraggedCatId(null)
     setDragPreview(null)
     setChildDragOver(null)
     setChildMenu(null)
-    dragImageRef.current?.remove()
-    dragImageRef.current = null
     useBookmarkDragStore.getState().clear()
     if (childMenuTimerRef.current != null) {
       window.clearTimeout(childMenuTimerRef.current)
@@ -486,14 +487,22 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
     childMenuTargetIdRef.current = null
     cancelChildMenuClose()
+    // 松手后给刚拖动的分类一个独立的着重色描边标记（与 hover 无关，互不打架）。
+    // 按 id 绑定、由 React 渲染：重排异步提交也不受影响，A 排到哪描边就跟到哪。
+    if (draggedId != null) {
+      setDragResultId(draggedId)
+      // 落位描边只短暂停留，1.5s 后自动解除（下次拖拽开始会提前清除）
+      if (dragResultTimerRef.current != null) window.clearTimeout(dragResultTimerRef.current)
+      dragResultTimerRef.current = window.setTimeout(() => {
+        setDragResultId(null)
+        dragResultTimerRef.current = null
+      }, 1500)
+    }
   }
 
   function setCategoryDragImage(event: React.DragEvent) {
-    const image = document.createElement('div')
-    image.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;pointer-events:none;'
-    document.body.append(image)
-    dragImageRef.current = image
-    event.dataTransfer.setDragImage(image, 0, 0)
+    // 复用全局单例 ghost 图：不在拖拽会话中增删 DOM 节点（防 Chromium 崩溃）
+    event.dataTransfer.setDragImage(getDragImage(), 0, 0)
   }
 
   function moveCategoryDragPreview(event: React.DragEvent) {
@@ -506,25 +515,49 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     if (!hasChildCategories(categories, target.id)) return
     cancelChildMenuClose()
     if (childMenu?.category.id === target.id) return
-    if (childMenuTargetIdRef.current === target.id) return
-    if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
-    setChildMenu(null)
-    const rect = event.currentTarget.getBoundingClientRect()
-    childMenuTargetIdRef.current = target.id
-    // 150ms：比旧的 450ms 快得多，同时保留扫过侧栏时的防误触缓冲（与搜索 debounce 同手感）。
-    childMenuTimerRef.current = window.setTimeout(() => {
-      setChildMenu({ category: target, x: rect.right + 8, y: rect.top })
-      childMenuTimerRef.current = null
-    }, 150)
+    // 只在目标变化时（重）起 timer：拖拽中 dragover 每像素触发，
+    // 同时修复"hide 清掉 ref 后，原 `if (ref===target) return` 守卫把重开挡死"导致浮层弹不出。
+    if (childMenuTargetIdRef.current !== target.id) {
+      childMenuTargetIdRef.current = target.id
+      if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
+      setChildMenu(null)
+      // 先取 rect：React 事件处理完 currentTarget 会被置空，定时器闭包里不能再读
+      const rect = event.currentTarget.getBoundingClientRect()
+      // 150ms：比旧的 450ms 快得多，同时保留扫过侧栏时的防误触缓冲（与搜索 debounce 同手感）。
+      childMenuTimerRef.current = window.setTimeout(() => {
+        childMenuTimerRef.current = null
+        // 150ms 内已离开该目标 → 不弹（拖拽中 dragleave 的 relatedTarget 常为 null，靠此兜底）
+        if (childMenuTargetIdRef.current !== target.id) return
+        setChildMenu({ category: target, x: rect.right + 8, y: rect.top })
+      }, 150)
+    }
   }
 
-  // 子分类悬浮卡片出现/关闭时同步到书签拖拽 store：
-  // 书签预览卡片跟着鼠标走，卡片出现时预览渐隐避让（见 bookmark-card 的 fading 类）。
+  // 书签拖拽结束（store.sourceId 清空）时统一清理子分类浮层的 timer/ref/菜单。
+  // 书签拖拽走 clearBookmarkDrag（zustand），不经过 clearDragState，旧逻辑会遗留：
+  // - 150ms 弹层 timer → 拖拽结束后浮层在错误位置突然弹出（拖拽会话外新增节点，叠加崩溃风险）
+  // - childMenuTargetIdRef 残留 → 下一次拖同一分类被 showChildMenu 的守卫挡掉、浮层弹不出
+  // 归一到"拖拽会话生命周期"统一清理，避免两套拖拽（书签/分类）各留一半状态。
+  const dragSourceId = useBookmarkDragStore((s) => s.sourceId)
   useEffect(() => {
-    setChildMenuOpen(childMenu != null)
-  }, [childMenu, setChildMenuOpen])
+    if (dragSourceId != null) return
+    if (childMenuTimerRef.current != null) {
+      window.clearTimeout(childMenuTimerRef.current)
+      childMenuTimerRef.current = null
+    }
+    if (childMenuCloseTimerRef.current != null) {
+      window.clearTimeout(childMenuCloseTimerRef.current)
+      childMenuCloseTimerRef.current = null
+    }
+    childMenuTargetIdRef.current = null
+    setChildMenu(null)
+  }, [dragSourceId])
 
   const hideChildMenuOnDragLeave = (target: Category) => {
+    // 立即清 ref：允许下一个 dragover 重新起 timer。
+    // 拖拽中 dragleave 的 relatedTarget 经常为 null（误判离开），若 ref 不立即清，
+    // showChildMenu 会因"ref 已被旧目标占用"而无法为新目标重开浮层。
+    if (childMenuTargetIdRef.current === target.id) childMenuTargetIdRef.current = null
     if (childMenuTimerRef.current != null) {
       window.clearTimeout(childMenuTimerRef.current)
       childMenuTimerRef.current = null
@@ -536,7 +569,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       childMenuCloseTimerRef.current = null
     }
     childMenuCloseTimerRef.current = window.setTimeout(() => {
-      if (childMenuTargetIdRef.current === target.id) childMenuTargetIdRef.current = null
+      childMenuTargetIdRef.current = null
       setChildMenu((current) => current?.category.id === target.id ? null : current)
       childMenuCloseTimerRef.current = null
     }, 120)
@@ -755,6 +788,13 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 onTargetDragLeave={hideChildMenuOnDragLeave}
                 onBookmarkDragTargetChange={(target) => setBookmarkDragTarget(target ? { id: target.id, name: target.name } : null)}
                 onDragStart={(event, category) => {
+                  // 拖拽开始立即收起右键菜单：右键菜单只监听点击外部，拖拽不产生 click，不会自动关
+                  setCatMenu(null)
+                  if (dragResultTimerRef.current != null) {
+                    window.clearTimeout(dragResultTimerRef.current)
+                    dragResultTimerRef.current = null
+                  }
+                  setDragResultId(null)
                   setDraggedCatId(category.id)
                   setDragPreview(category)
                   setCategoryDragImage(event)
@@ -765,37 +805,29 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 isNew={c.id === recentlyAddedCatId}
                 selected={categoryBatchMode && selectedCategoryIds.has(c.id)}
                 onSelect={categoryBatchMode ? handleCategorySelect : undefined}
+                dragResult={dragResultId === c.id}
               />
             )
           })}
       </div>
 
-      {draggedCatId != null && categories.find((category) => category.id === draggedCatId)?.parent_id != null && (
-        <div
-          className="category-release-dropzone"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault()
-            const categoryId = getDragId(event.dataTransfer, DRAG_TYPE_CATEGORY)
-            if (categoryId == null) return
-            void moveCat.mutateAsync({ id: categoryId, parentId: null })
-              .then(() => toast.success('已释放为父分类'))
-              .catch((error) => toast.error('释放失败: ' + (error as Error).message))
-          }}
-        >
-          释放为父分类
-        </div>
-      )}
-
-      {dragPreview && (() => {
-        const DragIcon = resolveCategoryIcon(dragPreview.icon)
-        return (
-          <div ref={dragPreviewRef} className="category-drag-preview" aria-hidden="true">
-            <DragIcon size={16} style={{ color: dragPreview.color || 'var(--default-category-color)' }} />
-            <span>{dragPreview.name}</span>
-          </div>
-        )
-      })()}
+      {/* 预览 div 常驻挂载、按 dragPreview 切 class 显隐：拖拽会话中不增删 DOM 节点（防 Chromium 崩溃）。
+          内容仍条件渲染，避免常驻无谓节点。 */}
+      <div
+        ref={dragPreviewRef}
+        className={cn('category-drag-preview', !dragPreview && 'drag-preview-hidden')}
+        aria-hidden="true"
+      >
+        {dragPreview && (() => {
+          const DragIcon = resolveCategoryIcon(dragPreview.icon)
+          return (
+            <>
+              <DragIcon size={16} style={{ color: dragPreview.color || 'var(--default-category-color)' }} />
+              <span>{dragPreview.name}</span>
+            </>
+          )
+        })()}
+      </div>
 
       <ContextMenu
         open={!!childMenu}

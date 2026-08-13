@@ -8,6 +8,7 @@ import { useLongPress } from '@/hooks/use-long-press'
 import { useUIStore } from '@/stores/ui'
 import { useBookmarkDragStore } from '@/stores/bookmark-drag'
 import { highlightText } from '@/lib/bookmark-utils'
+import { getDragImage } from '@/lib/drag-image'
 import { DRAG_TYPE_BOOKMARK, getDragId, hasDragType, setDragId } from '@/lib/category-dnd'
 import { getBookmarkDropPosition, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
 import { startBookmarkAutoScroll, stopBookmarkAutoScroll, updateBookmarkAutoScroll } from '@/lib/bookmark-auto-scroll'
@@ -68,7 +69,6 @@ export function BookmarkCard({
   // pop-in 动画结束后移除 class（恢复 pointer-events，.pop-in 有 pointer-events: none）
   const [showPopIn, setShowPopIn] = useState(isNew)
   const dragTarget = useBookmarkDragStore((s) => s.sourceId === bookmark.id ? s.target : null)
-  const childMenuOpen = useBookmarkDragStore((s) => s.sourceId === bookmark.id && s.childMenuOpen)
   const startBookmarkDrag = useBookmarkDragStore((s) => s.start)
   const setBookmarkDragTarget = useBookmarkDragStore((s) => s.setTarget)
   const clearBookmarkDrag = useBookmarkDragStore((s) => s.clear)
@@ -85,11 +85,10 @@ export function BookmarkCard({
   const [copiedId, setCopiedId] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragOver, setDragOver] = useState<BookmarkDropPosition | null>(null)
-  // 拖拽预览与 sidebar 同机制：可见预览 div 用 ref 直接写 left/top（onDrag 高频触发不重渲染），
-  // 隐藏 1px 元素只作 setDragImage 掩盖浏览器原生 ghost。
+  // 拖拽预览与 sidebar 同机制：可见预览 div 用 ref 直接写 left/top（onDrag 高频触发不重渲染）。
+  // 预览 div 常驻挂载（不随 dragging 增删节点，防 Chromium 拖拽崩溃），
+  // ghost 图用 lib/drag-image 单例（不再每次 append/remove）。
   const dragPreviewRef = useRef<HTMLDivElement>(null)
-  const dragImageRef = useRef<HTMLElement | null>(null)
-  useEffect(() => () => dragImageRef.current?.remove(), [])
   const toggleFav = useToggleFavorite()
   const reorder = useReorderBookmarks()
   const { batchMode, selectedIds, toggleSelection } = useUIStore()
@@ -151,16 +150,13 @@ export function BookmarkCard({
     const scrollContainer = e.currentTarget.closest<HTMLElement>('.main-content') ?? e.currentTarget.closest<HTMLElement>('.main')
     if (scrollContainer) startBookmarkAutoScroll(scrollContainer)
     setDragId(e.dataTransfer, DRAG_TYPE_BOOKMARK, bookmark.id)
-    const preview = document.createElement('div')
-    preview.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;pointer-events:none;'
-    document.body.append(preview)
-    dragImageRef.current = preview
-    e.dataTransfer.setDragImage(preview, 0, 0)
-    window.requestAnimationFrame(() => {
-      if (!dragPreviewRef.current) return
+    // 复用全局单例 ghost 图：不在拖拽会话中增删 DOM 节点（防 Chromium 崩溃）
+    e.dataTransfer.setDragImage(getDragImage(), 0, 0)
+    // 预览 div 常驻挂载，这里同步定位即可（无需等 rAF 让 React 提交挂载）
+    if (dragPreviewRef.current) {
       dragPreviewRef.current.style.left = `${e.clientX + 14}px`
       dragPreviewRef.current.style.top = `${e.clientY + 14}px`
-    })
+    }
   }
   const onDrag = (e: React.DragEvent) => {
     updateBookmarkAutoScroll(e.clientY)
@@ -171,8 +167,6 @@ export function BookmarkCard({
   const onDragEnd = () => {
     setDragging(false)
     setDragOver(null)
-    dragImageRef.current?.remove()
-    dragImageRef.current = null
     stopBookmarkAutoScroll()
     clearBookmarkDrag()
   }
@@ -415,36 +409,43 @@ export function BookmarkCard({
         </div>
       </footer>
     </article>
-    {dragging && (
-      <div
-        ref={dragPreviewRef}
-        className={cn('bookmark-drag-preview', childMenuOpen && 'bookmark-drag-preview-fading')}
-        aria-hidden="true"
-      >
-        <div className="bookmark-icon-bg bookmark-drag-preview-icon-bg">
-          {!faviconError ? (
-            <img
-              className="bookmark-drag-preview-icon"
-              src={bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at)}
-              alt=""
-              onError={() => setFaviconError(true)}
-            />
-          ) : <span className="bookmark-drag-preview-icon bookmark-drag-preview-fallback">◎</span>}
-        </div>
-        <div className="bookmark-drag-preview-content">
-          <span className="bookmark-drag-preview-title">{bookmark.title}</span>
-          <div className="bookmark-drag-preview-category-row">
-            <span className="bookmark-tag category-tag bookmark-drag-preview-category">{categoryName ?? '未分类'}</span>
-            {dragTarget && dragTarget.id !== bookmark.category_id && (
-              <>
-                <ArrowRight size={13} className="bookmark-drag-preview-arrow" aria-hidden="true" />
-                <span className="bookmark-tag category-tag bookmark-drag-preview-category bookmark-drag-preview-category-target">{dragTarget.name}</span>
-              </>
-            )}
+    {/* 预览 div 常驻挂载、按 dragging 切 class 显隐：拖拽会话中不增删 DOM 节点（防 Chromium 崩溃）。
+        内容仍条件渲染，避免每张卡片常驻 favicon img 拖累首屏。 */}
+    <div
+      ref={dragPreviewRef}
+      className={cn(
+        'bookmark-drag-preview',
+        !dragging && 'drag-preview-hidden',
+      )}
+      aria-hidden="true"
+    >
+      {dragging && (
+        <>
+          <div className="bookmark-icon-bg bookmark-drag-preview-icon-bg">
+            {!faviconError ? (
+              <img
+                className="bookmark-drag-preview-icon"
+                src={bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at)}
+                alt=""
+                onError={() => setFaviconError(true)}
+              />
+            ) : <span className="bookmark-drag-preview-icon bookmark-drag-preview-fallback">◎</span>}
           </div>
-        </div>
-      </div>
-    )}
+          <div className="bookmark-drag-preview-content">
+            <span className="bookmark-drag-preview-title">{bookmark.title}</span>
+            <div className="bookmark-drag-preview-category-row">
+              <span className="bookmark-tag category-tag bookmark-drag-preview-category">{categoryName ?? '未分类'}</span>
+              {dragTarget && dragTarget.id !== bookmark.category_id && (
+                <>
+                  <ArrowRight size={13} className="bookmark-drag-preview-arrow" aria-hidden="true" />
+                  <span className="bookmark-tag category-tag bookmark-drag-preview-category bookmark-drag-preview-category-target">{dragTarget.name}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
     </>
   )
 }
