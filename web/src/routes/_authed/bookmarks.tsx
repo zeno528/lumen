@@ -23,7 +23,9 @@ import {
   useToggleFavorite,
   useDeleteBookmark,
   useBatchDelete,
+  useBatchMove,
   useUpdateBookmark,
+  notifyBatchMove,
 } from '@/hooks/useBookmarks'
 import { refreshBookmarkFavicon, faviconUrl, updateBookmark } from '@/api/bookmarks'
 import { blobToDataUri } from '@/lib/favicon'
@@ -45,6 +47,9 @@ import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
+import { DRAG_TYPE_BOOKMARK, getDragId, hasDragType } from '@/lib/category-dnd'
+import { getDraggedBookmarkIds } from '@/lib/bookmark-dnd'
+import { useBookmarkDragStore } from '@/stores/bookmark-drag'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import type { Category } from '@/types'
 import { fetchAIMeta } from '@/api/utils'
@@ -71,6 +76,7 @@ function BookmarksPage() {
   const toggleFav = useToggleFavorite()
   const deleteMut = useDeleteBookmark()
   const batchDeleteMut = useBatchDelete()
+  const batchMove = useBatchMove()
   const updateMut = useUpdateBookmark()
   const qc = useQueryClient()
   // 退场动画标记：删除先标记后 mutate，卡片挂 pop-out 动画结束才真正删
@@ -265,9 +271,55 @@ function BookmarksPage() {
         bookmarks: filtered.filter((bookmark) => bookmark.category_id === category.id),
         showTitle: category.id !== parent.id,
       }))
-      .filter((group) => group.bookmarks.length > 0)
   }, [filtered, categories, q, currentCategory])
   const cardGroups = q ? searchGroups : categoryGroups.length > 0 ? categoryGroups : null
+  const aggregateParent = !q && categoryGroups.length > 0 ? activeCategory : undefined
+
+  const handleAggregateCardDrop = (event: React.DragEvent, target: Bookmark, position: 'before' | 'after') => {
+    const targetCategoryId = target.category_id
+    const draggedId = getDragId(event.dataTransfer, DRAG_TYPE_BOOKMARK)
+    if (!aggregateParent || targetCategoryId == null || draggedId == null) return false
+    const dragged = allBookmarks.find((bookmark) => bookmark.id === draggedId)
+    if (!dragged) return false
+
+    const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, draggedId)
+    if (ids.includes(target.id)) return true
+
+    notifyBatchMove(
+      batchMove.mutateAsync({ ids, categoryId: targetCategoryId, targetBookmarkId: target.id, position }),
+      ids.length,
+      catMap.get(targetCategoryId) ?? '未分类',
+      isBatch,
+      clearSelection,
+    )
+    return true
+  }
+
+  const handleAggregateGroupDragOver = (event: React.DragEvent, category: Category) => {
+    if (!hasDragType(Array.from(event.dataTransfer.types), DRAG_TYPE_BOOKMARK)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    useBookmarkDragStore.getState().setTarget({ id: category.id, name: category.name })
+  }
+
+  const handleAggregateGroupDragLeave = (event: React.DragEvent) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node)) useBookmarkDragStore.getState().setTarget(null)
+  }
+
+  const handleAggregateGroupDrop = (event: React.DragEvent, category: Category) => {
+    event.preventDefault()
+    if (!hasDragType(Array.from(event.dataTransfer.types), DRAG_TYPE_BOOKMARK)) return
+    const draggedId = getDragId(event.dataTransfer, DRAG_TYPE_BOOKMARK)
+    if (draggedId == null) return
+    const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, draggedId)
+    notifyBatchMove(
+      batchMove.mutateAsync({ ids, categoryId: category.id }),
+      ids.length,
+      category.name,
+      isBatch,
+      clearSelection,
+    )
+  }
 
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
@@ -652,7 +704,7 @@ function BookmarksPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && !aggregateParent ? (
         <div
           key={`empty-${currentCategory}-${q ? 'search' : 'cat'}`}
           className={cn('empty-state animate-enter', q && 'searching')}
@@ -682,14 +734,54 @@ function BookmarksPage() {
         </div>
       ) : (
         <div key={currentCategory} className={cn('bookmarks-grid', enterAnimate && 'animate-enter', q && 'searching', batchMode && 'select-none')}>
-          {cardGroups
-            ? cardGroups.flatMap((group) => {
+          {aggregateParent
+            ? categoryGroups.flatMap((group) => {
                 const Icon = resolveCategoryIcon(group.category?.icon)
                 const name = group.category?.name ?? '未分类'
                 const groupKey = group.category?.id ?? '__uncategorized__'
                 return [
                   ...(group.showTitle ? [
                     <h2 key={`group-${groupKey}`} className="search-group-title">
+                      <Icon size={14} style={{ color: group.category?.color || 'var(--text-muted)' }} aria-hidden="true" />
+                      <span>{name}</span>
+                      <span className="search-group-count">{group.bookmarks.length}</span>
+                    </h2>,
+                  ] : []),
+                  <div
+                    key={`dropzone-${groupKey}`}
+                    className={cn('bookmark-category-dropzone', group.bookmarks.length === 0 && 'empty')}
+                    onDragOver={(event) => handleAggregateGroupDragOver(event, group.category)}
+                    onDragLeave={handleAggregateGroupDragLeave}
+                    onDrop={(event) => handleAggregateGroupDrop(event, group.category)}
+                  >
+                    {group.bookmarks.map((b) => (
+                      <BookmarkCard
+                        key={b.id}
+                        bookmark={b}
+                        categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
+                        searchQuery={q}
+                        onMenuClick={(id, x, y) => setMenu({ id, x, y })}
+                        onSelect={handleCardSelect}
+                        isNew={b.id === recentlyAddedId}
+                        refreshing={refreshingFavId === b.id}
+                        exiting={isBookmarkExiting(b.id)}
+                        onAggregateCardDrop={handleAggregateCardDrop}
+                      />
+                    ))}
+                  </div>,
+                ]
+              })
+            : cardGroups
+            ? cardGroups.flatMap((group) => {
+                const Icon = resolveCategoryIcon(group.category?.icon)
+                const name = group.category?.name ?? '未分类'
+                const groupKey = group.category?.id ?? '__uncategorized__'
+                return [
+                  ...(group.showTitle ? [
+                    <h2
+                      key={`group-${groupKey}`}
+                      className="search-group-title"
+                    >
                       <Icon
                         size={14}
                         style={{ color: group.category?.color || 'var(--text-muted)' }}

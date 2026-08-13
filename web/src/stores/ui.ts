@@ -48,8 +48,6 @@ interface UIState {
   selectedCategoryIds: Set<number>
   /** Shift 范围选择锚点：上次点击的分类 id */
   categoryAnchorId: number | null
-  /** 进入批量模式（选中当前 id 并设为锚点，由右键菜单「批量删除」触发）*/
-  enterCategoryBatchMode: (id: number) => void
   exitCategoryBatchMode: () => void
   toggleCategoryBatchMode: () => void
   toggleCategorySelection: (id: number) => void
@@ -165,8 +163,6 @@ export const useUIStore = create<UIState>()(
       categoryBatchMode: false,
       selectedCategoryIds: new Set<number>(),
       categoryAnchorId: null,
-      enterCategoryBatchMode: (id) =>
-        set({ categoryBatchMode: true, selectedCategoryIds: new Set([id]), categoryAnchorId: id }),
       exitCategoryBatchMode: () =>
         set({ categoryBatchMode: false, selectedCategoryIds: new Set(), categoryAnchorId: null }),
       toggleCategoryBatchMode: () =>

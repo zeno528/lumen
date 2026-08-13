@@ -56,8 +56,10 @@ type BatchDeleteInput struct {
 
 // BatchMoveInput 批量移动分类输入
 type BatchMoveInput struct {
-	IDs        []int64 `json:"ids"`
-	CategoryID *int64  `json:"category_id"` // null = 移除分类
+	IDs              []int64 `json:"ids"`
+	CategoryID       *int64  `json:"category_id"` // null = 移除分类
+	TargetBookmarkID *int64  `json:"target_bookmark_id,omitempty"`
+	Position         string  `json:"position,omitempty"` // before | after；缺省排到末尾
 }
 
 // BatchTagsInput 批量添加标签输入

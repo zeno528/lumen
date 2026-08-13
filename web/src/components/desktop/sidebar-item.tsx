@@ -1,7 +1,7 @@
 import { useState, useEffect, type CSSProperties } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { useLongPress } from '@/hooks/use-long-press'
-import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getCategoryDropAction, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
+import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getCategoryDropAction, hasDragType, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/types'
 
@@ -41,6 +41,7 @@ export function SidebarItem({
   canNestDrop = false,
   onNestDragOver,
   onTargetDragLeave,
+  onBookmarkDragTargetChange,
   onDrop,
   isNew = false,
   style,
@@ -69,6 +70,7 @@ export function SidebarItem({
   canNestDrop?: boolean
   onNestDragOver?: (event: React.DragEvent, target: Category) => void
   onTargetDragLeave?: (target: Category) => void
+  onBookmarkDragTargetChange?: (target: Category | null) => void
   /** 分类拖到边缘时排序，拖到中部时归入目标父分类。 */
   onDrop?: (e: React.DragEvent, targetCat: Category, action: CategoryDropAction) => void
   /** 新建分类：挂 pop-in*/
@@ -131,7 +133,8 @@ export function SidebarItem({
     e.dataTransfer.dropEffect = 'move'
     if (!isReal || category!.id === draggedCatId) return
     // 书签拖入也应在有子分类的父分类上悬停展开子分类卡片。
-    if (e.dataTransfer.types.includes(DRAG_TYPE_BOOKMARK)) {
+    if (hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)) {
+      onBookmarkDragTargetChange?.(category!)
       onNestDragOver?.(e, category!)
       return
     }
@@ -149,9 +152,11 @@ export function SidebarItem({
     // 拖到自己不高亮
     if (category!.id === draggedCatId) return
     // 按 types 派发高亮：书签拖入用绿色，分类排序用 accent
-    const isBookmark = e.dataTransfer.types.includes(DRAG_TYPE_BOOKMARK)
+    const isBookmark = hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)
     if (isBookmark) {
-      setDragOver({ kind: 'bookmark' })
+      // 等值守卫：dragenter 频繁进入时不反复重建同一状态对象，避免无意义重渲染
+      setDragOver((cur) => (cur?.kind === 'bookmark' ? cur : { kind: 'bookmark' }))
+      onBookmarkDragTargetChange?.(category!)
       onNestDragOver?.(e, category!)
       return
     }
@@ -171,7 +176,7 @@ export function SidebarItem({
     e.preventDefault()
     // 分类排序：按鼠标在 target 项内的中线决定 before/after，与 dragover 高亮同一逻辑，
     // 保证"看到的顶部线/底部线"就是实际落点（所见即所得）。书签拖入固定 after。
-    const isBookmark = e.dataTransfer.types.includes(DRAG_TYPE_BOOKMARK)
+    const isBookmark = hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)
     const action: CategoryDropAction = isBookmark ? { kind: 'reorder', position: 'after' } : getDropAction(e)
     setDragOver(null)
     onDrop?.(e, category!, action)

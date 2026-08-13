@@ -453,6 +453,39 @@ func TestMoveCategoryIntoParent(t *testing.T) {
 		}
 	}
 
+	anchorRes := api.request(t, http.MethodPost, "/api/categories", jwt, CategoryInput{Name: "Anchor", ParentID: &targetID})
+	requireStatus(t, anchorRes, http.StatusCreated)
+	anchorID := decodeJSON[struct {
+		Category Category `json:"category"`
+	}](t, anchorRes).Category.ID
+	secondSourceID := createCategory(t, api, jwt, "Second source")
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(secondSourceID, 10)+"/parent", jwt, map[string]any{
+		"parent_id": targetID,
+		"target_id": anchorID,
+		"position":  "before",
+	}), http.StatusOK)
+	categories = decodeJSON[struct {
+		Categories []Category `json:"categories"`
+	}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+	var childOrder []int64
+	for _, category := range categories {
+		if category.ParentID != nil && *category.ParentID == targetID {
+			childOrder = append(childOrder, category.ID)
+		}
+	}
+	secondSourceIndex, anchorIndex := -1, -1
+	for index, categoryID := range childOrder {
+		if categoryID == secondSourceID {
+			secondSourceIndex = index
+		}
+		if categoryID == anchorID {
+			anchorIndex = index
+		}
+	}
+	if secondSourceIndex == -1 || anchorIndex == -1 || secondSourceIndex+1 != anchorIndex {
+		t.Fatalf("child order = %v, want moved category immediately before anchor", childOrder)
+	}
+
 	parentWithChildID := createCategory(t, api, jwt, "Parent with child")
 	childRes := api.request(t, http.MethodPost, "/api/categories", jwt, CategoryInput{Name: "Child", ParentID: &parentWithChildID})
 	requireStatus(t, childRes, http.StatusCreated)
@@ -511,6 +544,34 @@ func TestBookmarkBatchOperations(t *testing.T) {
 	requireStatus(t, api.request(t, http.MethodDelete, "/api/bookmarks/batch", jwt, BatchDeleteInput{IDs: ids}), http.StatusOK)
 	if got := listBookmarks(t, api, jwt, "/api/bookmarks"); len(got) != 0 {
 		t.Fatalf("remaining bookmarks = %d, want 0", len(got))
+	}
+}
+
+func TestBatchMoveBookmarksInsertsBeforeTargetAndKeepsSelectionOrder(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	sourceID := createCategory(t, api, jwt, "Source")
+	targetID := createCategory(t, api, jwt, "Target")
+	sourceFirstID := createBookmark(t, api, jwt, "https://example.com/source-first", "Source first", &sourceID)
+	sourceSecondID := createBookmark(t, api, jwt, "https://example.com/source-second", "Source second", &sourceID)
+	targetFirstID := createBookmark(t, api, jwt, "https://example.com/target-first", "Target first", &targetID)
+	targetSecondID := createBookmark(t, api, jwt, "https://example.com/target-second", "Target second", &targetID)
+
+	requireStatus(t, api.request(t, http.MethodPut, "/api/bookmarks/batch-move", jwt, BatchMoveInput{
+		IDs:              []int64{sourceFirstID, sourceSecondID},
+		CategoryID:       &targetID,
+		TargetBookmarkID: &targetSecondID,
+		Position:         "before",
+	}), http.StatusOK)
+
+	bookmarks := listBookmarks(t, api, jwt, "/api/bookmarks?category="+strconv.FormatInt(targetID, 10))
+	got := make([]int64, len(bookmarks))
+	for i, bookmark := range bookmarks {
+		got[i] = bookmark.ID
+	}
+	want := []int64{targetFirstID, sourceFirstID, sourceSecondID, targetSecondID}
+	if !slices.Equal(got, want) {
+		t.Fatalf("target order = %v, want %v", got, want)
 	}
 }
 

@@ -73,19 +73,25 @@ export function useUpdateCategory() {
   )
 }
 
-/** 拖拽归类 —— 只改 parent_id，保留分类本身及其书签。 */
+/** 拖拽归类 —— 可在同一请求内改 parent_id 并插入目标分类前/后。 */
 export function useMoveCategory() {
   const qc = useQueryClient()
   return useMutation(
-    createOptimisticMutation<{ id: number; parentId: number | null }>(qc, {
-      mutationFn: ({ id, parentId }) => moveCategory(id, parentId),
+    createOptimisticMutation<{ id: number; parentId: number | null; targetId?: number; position?: 'before' | 'after' }>(qc, {
+      mutationFn: ({ id, parentId, targetId, position }) => moveCategory(id, parentId, targetId, position),
       targets: [
         {
           queryKey: CATEGORIES_KEY,
-          apply: (old: { categories: Category[] } | undefined, { id, parentId }) =>
-            old
-              ? { ...old, categories: old.categories.map((c) => (c.id === id ? { ...c, parent_id: parentId } : c)) }
-              : old,
+          apply: (old: { categories: Category[] } | undefined, { id, parentId, targetId, position }) => {
+            if (!old) return old
+            const categories = old.categories.map((category) => category.id === id ? { ...category, parent_id: parentId } : category)
+            return {
+              ...old,
+              categories: targetId != null && position != null
+                ? reorderCategory(categories, id, targetId, position)
+                : categories,
+            }
+          },
         },
       ],
     }),

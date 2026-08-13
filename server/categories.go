@@ -175,6 +175,8 @@ func (s *Server) handleMoveCategory(w http.ResponseWriter, r *http.Request) {
 
 	var input struct {
 		ParentID *int64 `json:"parent_id"`
+		TargetID *int64 `json:"target_id"`
+		Position string `json:"position"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -183,6 +185,15 @@ func (s *Server) handleMoveCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.validateCategoryParent(input.ParentID, id); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if input.TargetID != nil {
+		if input.ParentID == nil || *input.TargetID == id || (input.Position != "before" && input.Position != "after") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序落点无效"})
+			return
+		}
+	} else if input.Position != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序落点无效"})
 		return
 	}
 
@@ -197,7 +208,55 @@ func (s *Server) handleMoveCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.db.Exec("UPDATE categories SET parent_id = ? WHERE id = ?", input.ParentID, id)
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Printf("开始移动分类事务失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+		return
+	}
+	defer tx.Rollback()
+
+	var targetOrder []int64
+	if input.TargetID != nil {
+		rows, err := tx.Query("SELECT id FROM categories WHERE parent_id = ? AND id != ? ORDER BY sort_order, id", input.ParentID, id)
+		if err != nil {
+			log.Printf("查询目标子分类失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+		for rows.Next() {
+			var categoryID int64
+			if err := rows.Scan(&categoryID); err != nil {
+				rows.Close()
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+				return
+			}
+			targetOrder = append(targetOrder, categoryID)
+		}
+		if err := rows.Close(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+		insertAt := -1
+		for index, categoryID := range targetOrder {
+			if categoryID == *input.TargetID {
+				insertAt = index
+				break
+			}
+		}
+		if insertAt == -1 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序目标不属于父分类"})
+			return
+		}
+		if input.Position == "after" {
+			insertAt++
+		}
+		targetOrder = append(targetOrder, 0)
+		copy(targetOrder[insertAt+1:], targetOrder[insertAt:])
+		targetOrder[insertAt] = id
+	}
+
+	result, err := tx.Exec("UPDATE categories SET parent_id = ? WHERE id = ?", input.ParentID, id)
 	if err != nil {
 		log.Printf("更新分类父级失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
@@ -205,6 +264,18 @@ func (s *Server) handleMoveCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if affected, _ := result.RowsAffected(); affected == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "分类不存在"})
+		return
+	}
+	for index, categoryID := range targetOrder {
+		if _, err := tx.Exec("UPDATE categories SET sort_order = ? WHERE id = ?", index, categoryID); err != nil {
+			log.Printf("更新分类排序失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("提交移动分类事务失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
 		return
 	}
 

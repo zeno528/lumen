@@ -620,6 +620,10 @@ func (s *Server) handleBatchMoveBookmarks(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "单次最多移动 500 个书签"})
 		return
 	}
+	if input.TargetBookmarkID != nil && (input.CategoryID == nil || (input.Position != "before" && input.Position != "after")) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "目标位置无效"})
+		return
+	}
 
 	// 事务:把 sort_order 设为目标分类末尾(按加入顺序排),再改 category_id
 	tx, err := s.db.Begin()
@@ -630,19 +634,63 @@ func (s *Server) handleBatchMoveBookmarks(w http.ResponseWriter, r *http.Request
 	}
 	defer tx.Rollback()
 
-	// 目标分类当前最大 sort_order,被移动书签从 maxOrder+1 开始递增(排到末尾)
-	// category_id IS ? 兼容真实分类(=)和移除分类(NULL)两种情况
-	var maxOrder int
-	if err := tx.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM bookmarks WHERE category_id IS ?", input.CategoryID).Scan(&maxOrder); err != nil {
+	// 目标分类内按 sort_order 重排。常规移动不带落点，插入位置自然是末尾；
+	// 聚合视图传 target_bookmark_id + position 时，插入指定书签前/后。
+	rows, err := tx.Query("SELECT id FROM bookmarks WHERE category_id IS ? ORDER BY sort_order, id DESC", input.CategoryID)
+	if err != nil {
 		log.Printf("操作失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
 		return
 	}
-
-	for i, id := range input.IDs {
+	defer rows.Close()
+	selected := make(map[int64]struct{}, len(input.IDs))
+	moving := make([]int64, 0, len(input.IDs))
+	for _, id := range input.IDs {
+		if _, exists := selected[id]; exists {
+			continue
+		}
+		selected[id] = struct{}{}
+		moving = append(moving, id)
+	}
+	remaining := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			log.Printf("操作失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+		if _, isMoving := selected[id]; !isMoving {
+			remaining = append(remaining, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("操作失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+		return
+	}
+	insertAt := len(remaining)
+	if input.TargetBookmarkID != nil {
+		insertAt = -1
+		for i, id := range remaining {
+			if id == *input.TargetBookmarkID {
+				insertAt = i
+				if input.Position == "after" {
+					insertAt++
+				}
+				break
+			}
+		}
+		if insertAt == -1 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "目标书签不在该分类"})
+			return
+		}
+	}
+	ordered := append(append(remaining[:insertAt:insertAt], moving...), remaining[insertAt:]...)
+	for i, id := range ordered {
 		if _, err := tx.Exec(
 			"UPDATE bookmarks SET category_id = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-			input.CategoryID, maxOrder+i+1, id,
+			input.CategoryID, i, id,
 		); err != nil {
 			log.Printf("操作失败: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
