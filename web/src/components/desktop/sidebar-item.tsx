@@ -108,13 +108,13 @@ export function SidebarItem({
   const isReal = !!category
   const isDragging = isReal && draggedCatId === category!.id
 
-  // 触摸设备长按触发右键菜单（500ms）
+  // 触摸设备长按 350ms 后松手触发右键菜单；移动则交给原生拖拽。
   const longPress = useLongPress(
     (x, y) => {
       if (!onContext) return
       onContext({ clientX: x, clientY: y, preventDefault: () => {} } as React.MouseEvent)
     },
-    { delay: 500 },
+    { delay: 350, triggerOnRelease: true },
   )
 
   // 分类图标 dragstart
