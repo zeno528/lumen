@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Layers,
   Star,
@@ -17,6 +18,8 @@ import {
   useCategories,
   useDeleteCategory,
   useBatchDeleteCategories,
+  useMoveCategory,
+  useReleaseCategoryChildren,
   useReorderCategories,
 } from '@/hooks/useCategories'
 import {
@@ -38,15 +41,16 @@ import { ImportDialog } from '@/components/shared/import-dialog'
 import { ExportDialog } from '@/components/shared/export-dialog'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
 import type { Category } from '@/types'
+import type { CategoryDeleteMode } from '@/api/categories'
+import { getChildCategories, getCategoryCount, getTopLevelCategories } from '@/lib/category-tree'
+import { categoryFilterToSearch } from '@/lib/bookmark-route'
+import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getDragId, getDropSide, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
 
 /**
  * 拖拽 MIME 类型。
  * 用专属 MIME 类型区分"书签拖到分类"和"分类之间排序"，避免共用 text/plain 派发模糊。
  * 拖拽视觉与"被拖分类 id"在 SidebarItem 内 / Sidebar state 管理，见 sidebar-item.tsx。
  */
-const DRAG_TYPE_BOOKMARK = 'application/x-bookmark-id'
-const DRAG_TYPE_CATEGORY = 'application/x-category-id'
-
 /**
  * 侧边栏 —— logo（顶部）+ 分类列表 + 底部操作（导入/导出）。
  * - 分类列表：全部 / 收藏 / 未分类 / 各分类，每项带计数
@@ -57,11 +61,14 @@ const DRAG_TYPE_CATEGORY = 'application/x-category-id'
  */
 export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryClick?: () => void } = {}) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { data: catData, isLoading } = useCategories()
   const { data: bmData, isLoading: bmLoading } = useBookmarks()
   const deleteCat = useDeleteCategory()
   const batchDelete = useBatchDelete()
   const batchDeleteCats = useBatchDeleteCategories()
+  const moveCat = useMoveCategory()
+  const releaseChildren = useReleaseCategoryChildren()
   const reorderCats = useReorderCategories()
   const batchMove = useBatchMove()
   const clearFav = useClearAllFavorites()
@@ -121,6 +128,20 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const [confirmClearUncategorized, setConfirmClearUncategorized] = useState(false)
   const [confirmBatchDeleteCat, setConfirmBatchDeleteCat] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
+  const [childMenu, setChildMenu] = useState<{ category: Category; x: number; y: number } | null>(null)
+  const [newChildParentId, setNewChildParentId] = useState<number | null>(null)
+  const [draggedCatId, setDraggedCatId] = useState<number | null>(null)
+  const [dragPreview, setDragPreview] = useState<Category | null>(null)
+  const [childDragOver, setChildDragOver] = useState<{ id: number; position: 'before' | 'after' | 'inside' } | null>(null)
+  const dragPreviewRef = useRef<HTMLDivElement>(null)
+  const childMenuTimerRef = useRef<number | null>(null)
+  const childMenuCloseTimerRef = useRef<number | null>(null)
+  const childMenuTargetIdRef = useRef<number | null>(null)
+  // 子分类浮层与其右键菜单属于同一临时交互：从任一入口关闭时必须一起消失。
+  const closeCategoryMenuGroup = () => {
+    setChildMenu(null)
+    setCatMenu(null)
+  }
 
   const catIds = new Set(categories.map((c) => c.id))
   const counts = {
@@ -130,7 +151,8 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       (b) => b.category_id == null || !catIds.has(b.category_id),
     ).length,
   }
-  const countByCat = (id: number) => bookmarks.filter((b) => b.category_id === id).length
+  const countByCat = (id: number) => getCategoryCount(bookmarks, categories, id)
+  const topLevelCategories = getTopLevelCategories(categories)
 
   // 收藏/未分类出现走 pop-in 入场动画（isNew）；消失随计数归零直接移除，无退场动画
   // 虚拟分类用负数 id（-1 收藏 / -2 未分类）
@@ -177,6 +199,30 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const menuCat = catMenu?.kind === 'cat' ? categories.find((c) => c.id === catMenu.id) : null
   const catMenuItems: MenuItem[] = menuCat
     ? [
+        ...(menuCat.parent_id == null
+          ? [{
+              label: '新建子分类',
+              icon: <Plus size={14} />,
+              onClick: () => {
+                setNewChildParentId(menuCat.id)
+                openCreateCategory()
+              },
+            }]
+          : []),
+        ...(menuCat.parent_id == null && getChildCategories(categories, menuCat.id).length > 0
+          ? [{
+              label: '释放子分类',
+              icon: <Folder size={14} />,
+              onClick: async () => {
+                try {
+                  await releaseChildren.mutateAsync(menuCat.id)
+                  toast.success(`已释放「${menuCat.name}」下的子分类`)
+                } catch (error) {
+                  toast.error('释放失败: ' + (error as Error).message)
+                }
+              },
+            }]
+          : []),
         {
           label: '编辑',
           icon: <Pencil size={14} />,
@@ -191,11 +237,13 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
             toast.success('已复制')
           },
         },
-        {
-          label: '批量删除',
-          icon: <Trash2 size={14} />,
-          onClick: () => enterCategoryBatchMode(menuCat.id),
-        },
+        ...(menuCat.parent_id == null
+          ? [{
+              label: '批量删除',
+              icon: <Trash2 size={14} />,
+              onClick: () => enterCategoryBatchMode(menuCat.id),
+            }]
+          : []),
         {
           label: '删除',
           icon: <Trash2 size={14} />,
@@ -225,6 +273,74 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
 
   const menuItems: MenuItem[] =
     catMenu?.kind === 'cat' ? catMenuItems : catMenu?.kind === 'fav' ? favMenuItems : uncatMenuItems
+
+  const childMenuItems: MenuItem[] = childMenu
+    ? [
+        {
+          label: childMenu.category.name,
+          icon: <Layers size={14} />,
+          header: true,
+          trailing: <span className="sidebar-item-count">{countByCat(childMenu.category.id)}</span>,
+        },
+        ...getChildCategories(categories, childMenu.category.id).map((child) => {
+          const ChildIcon = resolveCategoryIcon(child.icon)
+          return {
+            label: `${child.name}（${countByCat(child.id)}）`,
+            icon: <ChildIcon size={14} style={{ color: child.color || 'var(--default-category-color)' }} />,
+            onClick: () => selectCategory(child.id),
+            onContext: (event: React.MouseEvent<HTMLButtonElement>) => {
+              setCatMenu({ kind: 'cat', id: child.id, x: event.clientX, y: event.clientY })
+            },
+            onLongPress: (x: number, y: number) => setCatMenu({ kind: 'cat', id: child.id, x, y }),
+            className: cn(
+              childDragOver?.id === child.id && childDragOver.position === 'before' && 'category-drag-over-before',
+              childDragOver?.id === child.id && childDragOver.position === 'after' && 'category-drag-over-after',
+              childDragOver?.id === child.id && childDragOver.position === 'inside' && 'category-drag-over-inside',
+            ),
+            onDragOver: (e: React.DragEvent<HTMLButtonElement>) => {
+              e.preventDefault()
+              const source = categories.find((category) => category.id === draggedCatId)
+              if (!source || source.id === child.id) return
+              const rect = e.currentTarget.getBoundingClientRect()
+              const position = source.parent_id === child.parent_id
+                ? getDropSide(e.clientY - rect.top, rect.height)
+                : 'inside'
+              setChildDragOver((current) => current?.id === child.id && current.position === position ? current : { id: child.id, position })
+            },
+            onDragLeave: (e: React.DragEvent<HTMLButtonElement>) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) setChildDragOver(null)
+            },
+            onDrop: (e: React.DragEvent<HTMLButtonElement>) => {
+              e.preventDefault()
+              setChildDragOver(null)
+              const categoryId = getDragId(e.dataTransfer, DRAG_TYPE_CATEGORY)
+              if (categoryId != null && categoryId !== child.id) {
+                const source = categories.find((category) => category.id === categoryId)
+                if (source?.parent_id === child.parent_id) {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  reorderCats.mutate({
+                    fromId: categoryId,
+                    toId: child.id,
+                    position: getDropSide(e.clientY - rect.top, rect.height),
+                  })
+                } else {
+                  void moveCat.mutateAsync({ id: categoryId, parentId: child.parent_id })
+                }
+                return
+              }
+              void handleBookmarkDropToCategory(e, child)
+            },
+            draggable: true,
+            onDragStart: (e: React.DragEvent<HTMLButtonElement>) => {
+              setDraggedCatId(child.id)
+              setDragPreview(child)
+              setDragId(e.dataTransfer, DRAG_TYPE_CATEGORY, child.id)
+            },
+            onDragEnd: clearDragState,
+          }
+        }),
+      ]
+    : []
 
   const onClearFavorites = async () => {
     // 乐观：useClearAllFavorites 已在 mutationFn 内同步把缓存里所有 is_favorite 翻 false（UI 秒变）。
@@ -284,7 +400,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
 
   // 删除入口：无书签直接删，有书签弹确认
   const handleDeleteClick = (cat: Category) => {
-    if (countByCat(cat.id) === 0) {
+    if (countByCat(cat.id) === 0 && getChildCategories(categories, cat.id).length === 0) {
       // 无书签直接删：乐观删除（无退场动画）
       performDelete(cat, 'empty')
     } else {
@@ -295,52 +411,40 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   /**
    * 删除分类（乐观，无退场动画）：
    * - deleteCat.onMutate 立即从 categories 缓存移除 -> 后续分类瞬间补位
-   * - 书签按 bookmarkMode 处理：'keep' 降级未分类 / 'remove' 连书签删（mode='all'）
+   * - 父分类可提升子分类，或将父子分类作为一个整体处理。
    * - 失败由 deleteCat.onError 回滚 categories + bookmarks 缓存
    *
    * mode:
    * - 'empty'：无书签直接删（handleDeleteClick，countByCat(cat.id)===0）
-   * - 'keep'：删除分类但保留书签变未分类（CategoryDeleteDialog 确认）
-   * - 'all'：一并删除该分类下书签再删分类（CategoryDeleteDialog 一并删除）
+   * - 'promote'：仅删除父分类，子分类提升为顶级分类
+   * - 'keep'：删除分类但保留书签变未分类
+   * - 'all'：一并删除分类及书签
    */
   const performDelete = async (
     cat: Category,
-    mode: 'empty' | 'keep' | 'all',
+    mode: 'empty' | CategoryDeleteMode,
   ) => {
-    // mode='all' 要删的书签 id 必须在 deleteCat 之前算好：deleteCat.onMutate（bookmarkMode='remove'）
-    // 会 filter 掉该分类书签，之后 filter(b => b.category_id === cat.id) 会得空数组。
-    const bookmarkIds =
-      mode === 'all' ? bookmarks.filter((b) => b.category_id === cat.id).map((b) => b.id) : []
+    const childIds = getChildCategories(categories, cat.id).map((child) => child.id)
     toast.success(
-      mode === 'keep' ? `分类"${cat.name}"已删除，书签已保留`
+      mode === 'promote' ? `父分类"${cat.name}"已删除，子分类已保留`
+        : mode === 'keep' ? `分类"${cat.name}"已删除，书签已保留`
         : mode === 'all' ? `分类"${cat.name}"及相关书签已删除`
         : `分类"${cat.name}"已删除`,
     )
     if (currentCategory === cat.id) setCurrentCategory('all')
     try {
-      // 分类先乐观删除：deleteCat.onMutate 立即从 categories 缓存移除 -> 后续分类瞬间补位。
-      // ⚠️ 不能 await batchDelete 之后再删分类--那会让补位等书签删除的网络往返。
-      // 书签删除改为后台并行，不阻塞补位。
-      await deleteCat.mutateAsync({ id: cat.id, bookmarkMode: mode === 'all' ? 'remove' : 'keep' })
+      await deleteCat.mutateAsync({ id: cat.id, mode: mode === 'empty' ? 'keep' : mode, childIds })
     } catch (e) {
       toast.error('删除失败: ' + (e as Error).message)
       return
     }
-    // 书签后台删除（不阻塞分类补位）。分类已删无法回退；若失败，书签因后端 ON DELETE SET NULL
-    // 已降级为未分类，batchDelete.onError 会把它们恢复显示到未分类列表，用户可再试，数据不丢。
-    if (bookmarkIds.length) {
-      batchDelete.mutateAsync(bookmarkIds).catch((e) => {
-        toast.error(`${bookmarkIds.length} 个书签删除失败，已转为未分类: ` + (e as Error).message)
-      })
-    }
   }
 
-  // 确认删除：保留书签(变未分类) / 一并删除(连书签删)
-  const onConfirmDelete = async (keepBookmarks: boolean) => {
+  const onConfirmDelete = async (mode: CategoryDeleteMode) => {
     const cat = deleteTarget
     if (!cat) return
     setDeleteTarget(null)
-    await performDelete(cat, keepBookmarks ? 'keep' : 'all')
+    await performDelete(cat, mode)
   }
 
   const editingCategory =
@@ -349,10 +453,58 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       : null
 
   // ===== 分类拖拽 =====
-  // draggedCatId 提升 到 Sidebar state，通过 props 传给 SidebarItem；
-  // SidebarItem 本地管 dragOver。拖拽期间 Sidebar 不重渲染（drop 才 setState），
-  // SidebarItem 挂载稳定，HTML5 DnD 不会被打断。
-  const [draggedCatId, setDraggedCatId] = useState<number | null>(null)
+
+  useEffect(() => () => {
+    if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
+    if (childMenuCloseTimerRef.current != null) window.clearTimeout(childMenuCloseTimerRef.current)
+  }, [])
+
+  const cancelChildMenuClose = () => {
+    if (childMenuCloseTimerRef.current != null) {
+      window.clearTimeout(childMenuCloseTimerRef.current)
+      childMenuCloseTimerRef.current = null
+    }
+  }
+
+  function clearDragState() {
+    setDraggedCatId(null)
+    setDragPreview(null)
+    setChildDragOver(null)
+    setChildMenu(null)
+    if (childMenuTimerRef.current != null) {
+      window.clearTimeout(childMenuTimerRef.current)
+      childMenuTimerRef.current = null
+    }
+    childMenuTargetIdRef.current = null
+    cancelChildMenuClose()
+  }
+
+  const showChildMenuOnNestHover = (event: React.DragEvent, target: Category) => {
+    if (getChildCategories(categories, target.id).length === 0) return
+    cancelChildMenuClose()
+    if (childMenu?.category.id === target.id) return
+    if (childMenuTargetIdRef.current === target.id) return
+    if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
+    setChildMenu(null)
+    const rect = event.currentTarget.getBoundingClientRect()
+    childMenuTargetIdRef.current = target.id
+    childMenuTimerRef.current = window.setTimeout(() => {
+      setChildMenu({ category: target, x: rect.right + 8, y: rect.top })
+      childMenuTimerRef.current = null
+    }, 450)
+  }
+
+  const hideChildMenuOnDragLeave = (target: Category) => {
+    if (childMenuTimerRef.current != null) {
+      window.clearTimeout(childMenuTimerRef.current)
+      childMenuTimerRef.current = null
+    }
+    childMenuCloseTimerRef.current = window.setTimeout(() => {
+      if (childMenuTargetIdRef.current === target.id) childMenuTargetIdRef.current = null
+      setChildMenu((current) => current?.category.id === target.id ? null : current)
+      childMenuCloseTimerRef.current = null
+    }, 120)
+  }
 
   /**
    * 分类 drop 派发。
@@ -364,20 +516,28 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const onCategoryDrop = async (
     e: React.DragEvent,
     targetCat: Category,
-    position: 'before' | 'after',
+    action: CategoryDropAction,
   ) => {
     e.stopPropagation()
     // 书签拖到分类 → 移动分类
     if (Array.from(e.dataTransfer.types).includes(DRAG_TYPE_BOOKMARK)) {
-      await handleBookmarkDropToCategory(e, targetCat, position)
+      await handleBookmarkDropToCategory(e, targetCat)
       return
     }
     // 分类之间拖动 → 排序
     // fallback text/plain：自定义 MIME 在某些环境下 drop 时读不到
-    const raw = e.dataTransfer.getData(DRAG_TYPE_CATEGORY) || e.dataTransfer.getData('text/plain')
-    const fromId = Number(raw)
-    if (!fromId || fromId === targetCat.id) return
-    reorderCats.mutate({ fromId, toId: targetCat.id, position })
+    const fromId = getDragId(e.dataTransfer, DRAG_TYPE_CATEGORY)
+    if (fromId == null || fromId === targetCat.id) return
+    if (action.kind === 'make-child') {
+      try {
+        await moveCat.mutateAsync({ id: fromId, parentId: targetCat.id })
+        toast.success(`已将「${categories.find((category) => category.id === fromId)?.name ?? '分类'}」归入「${targetCat.name}」`)
+      } catch (err) {
+        toast.error('归类失败: ' + (err as Error).message)
+      }
+      return
+    }
+    reorderCats.mutate({ fromId, toId: targetCat.id, position: action.position })
   }
 
   /**
@@ -389,12 +549,10 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const handleBookmarkDropToCategory = async (
     e: React.DragEvent,
     targetCat: Category,
-    _position: 'before' | 'after',
   ) => {
     // fallback text/plain：自定义 MIME 在某些环境下 drop 时读不到
-    const raw = e.dataTransfer.getData(DRAG_TYPE_BOOKMARK) || e.dataTransfer.getData('text/plain')
-    const draggedId = Number(raw)
-    if (!draggedId) return
+    const draggedId = getDragId(e.dataTransfer, DRAG_TYPE_BOOKMARK)
+    if (draggedId == null) return
     // 批量模式下整批移动
     // 整批拖拽（拖的卡片在已选集合且选了多个）→ 移动后清掉这批选中；单个拖拽不动选中
     const isBatchDrag = selectedIds.has(draggedId) && selectedIds.size > 1
@@ -417,11 +575,11 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
   }
 
-  /** 选中分类：切 currentCategory + 通知宿主。移动端抽屉据此关闭——旧实现靠"对比 prev/curr 分类变化"
-   *  effect 推断，点已选分类时值不变 effect 不触发导致抽屉不收缩；改由点击动作直接通知，所见即所得。
-   *  桌面端不传 onCategoryClick，no-op。 */
+  /** 选中分类：分类行只切换视图；子分类悬浮卡片由右侧箭头单独触发。 */
   const selectCategory = (cat: typeof currentCategory) => {
     setCurrentCategory(cat)
+    navigate({ to: '/bookmarks', search: categoryFilterToSearch(cat) })
+    closeCategoryMenuGroup()
     onCategoryClick?.()
   }
 
@@ -450,7 +608,10 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         <span>分类（{categories.length}）</span>
         <button
           className="sidebar-add-btn"
-          onClick={openCreateCategory}
+          onClick={() => {
+            setNewChildParentId(null)
+            openCreateCategory()
+          }}
           aria-label="新建分类"
           title="新建分类（Ctrl+Shift+I）"
         >
@@ -506,7 +667,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           />
         )}
         {!isLoading &&
-          categories.map((c) => {
+          topLevelCategories.map((c) => {
             const Icon = resolveCategoryIcon(c.icon)
             return (
               <SidebarItem
@@ -518,11 +679,37 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 icon={<Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />}
                 label={c.name}
                 count={countByCat(c.id)}
+                childCount={getChildCategories(categories, c.id).length}
+                expanded={childMenu?.category.id === c.id}
+                onExpand={(e) => {
+                  e.stopPropagation()
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setCatMenu(null)
+                  setChildMenu((current) =>
+                    current?.category.id === c.id ? null : { category: c, x: rect.right + 8, y: rect.top },
+                  )
+                }}
                 active={currentCategory === c.id}
                 onClick={() => selectCategory(c.id)}
                 onContext={(e) => setCatMenu({ kind: 'cat', id: c.id, x: e.clientX, y: e.clientY })}
-                onDragStart={(catId) => setDraggedCatId(catId)}
-                onDragEnd={() => setDraggedCatId(null)}
+                canNestDrop={!getChildCategories(categories, draggedCatId ?? -1).length}
+                onNestDragOver={showChildMenuOnNestHover}
+                onTargetDragLeave={hideChildMenuOnDragLeave}
+                onDragStart={(event, category) => {
+                  setDraggedCatId(category.id)
+                  setDragPreview(category)
+                  window.requestAnimationFrame(() => {
+                    if (!dragPreviewRef.current) return
+                    dragPreviewRef.current.style.left = `${event.clientX + 14}px`
+                    dragPreviewRef.current.style.top = `${event.clientY + 14}px`
+                  })
+                }}
+                onDrag={(event) => {
+                  if (!dragPreviewRef.current || event.clientX === 0 || event.clientY === 0) return
+                  dragPreviewRef.current.style.left = `${event.clientX + 14}px`
+                  dragPreviewRef.current.style.top = `${event.clientY + 14}px`
+                }}
+                onDragEnd={clearDragState}
                 onDrop={onCategoryDrop}
                 isNew={c.id === recentlyAddedCatId}
                 selected={categoryBatchMode && selectedCategoryIds.has(c.id)}
@@ -531,6 +718,50 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
             )
           })}
       </div>
+
+      {draggedCatId != null && categories.find((category) => category.id === draggedCatId)?.parent_id != null && (
+        <div
+          className="category-release-dropzone"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault()
+            const categoryId = getDragId(event.dataTransfer, DRAG_TYPE_CATEGORY)
+            if (categoryId == null) return
+            void moveCat.mutateAsync({ id: categoryId, parentId: null })
+              .then(() => toast.success('已释放为父分类'))
+              .catch((error) => toast.error('释放失败: ' + (error as Error).message))
+          }}
+        >
+          释放为父分类
+        </div>
+      )}
+
+      {dragPreview && (() => {
+        const DragIcon = resolveCategoryIcon(dragPreview.icon)
+        return (
+          <div ref={dragPreviewRef} className="category-drag-preview" aria-hidden="true">
+            <DragIcon size={16} style={{ color: dragPreview.color || 'var(--default-category-color)' }} />
+            <span>{dragPreview.name}</span>
+          </div>
+        )
+      })()}
+
+      <ContextMenu
+        open={!!childMenu}
+        onClose={closeCategoryMenuGroup}
+        x={childMenu?.x ?? 0}
+        y={childMenu?.y ?? 0}
+        items={childMenuItems}
+        anchor="left"
+        preserveOnMenuClick
+        ignoreOutsideClickSelector=".sidebar-item-expand"
+        onDragEnter={cancelChildMenuClose}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node) && childMenu) {
+            hideChildMenuOnDragLeave(childMenu.category)
+          }
+        }}
+      />
 
       {/* 分类批量操作栏（批量模式时显示）*/}
       {categoryBatchMode && (
@@ -586,7 +817,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       {/* 分类右键菜单（真实分类 / 收藏 / 未分类）*/}
       <ContextMenu
         open={!!catMenu}
-        onClose={() => setCatMenu(null)}
+        onClose={closeCategoryMenuGroup}
         x={catMenu?.x ?? 0}
         y={catMenu?.y ?? 0}
         items={menuItems}
@@ -633,8 +864,12 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       {/* 分类新增/编辑 */}
       <CategoryDialog
         open={categoryDialog !== null}
-        onClose={closeCategoryDialog}
+        onClose={() => {
+          closeCategoryDialog()
+          setNewChildParentId(null)
+        }}
         editingCategory={editingCategory}
+        parentId={newChildParentId}
         onCreated={(id) => setRecentlyAddedCatId(id)}
       />
 
@@ -644,6 +879,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         onClose={() => setDeleteTarget(null)}
         category={deleteTarget}
         count={deleteTarget ? countByCat(deleteTarget.id) : 0}
+        childCount={deleteTarget ? getChildCategories(categories, deleteTarget.id).length : 0}
         onConfirm={onConfirmDelete}
       />
     </aside>

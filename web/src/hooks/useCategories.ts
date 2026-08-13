@@ -3,12 +3,15 @@ import {
   getCategories,
   createCategory,
   updateCategory,
+  moveCategory,
+  releaseCategoryChildren,
   deleteCategory,
   batchDeleteCategories,
   reorderCategories,
 } from '@/api/categories'
 import { createOptimisticMutation } from '@/lib/optimistic-mutation'
 import type { Category, CategoryInput, Bookmark } from '@/types'
+import type { CategoryDeleteMode } from '@/api/categories'
 
 const CATEGORIES_KEY = ['categories'] as const
 const BOOKMARKS_KEY = ['bookmarks'] as const
@@ -70,6 +73,40 @@ export function useUpdateCategory() {
   )
 }
 
+/** 拖拽归类 —— 只改 parent_id，保留分类本身及其书签。 */
+export function useMoveCategory() {
+  const qc = useQueryClient()
+  return useMutation(
+    createOptimisticMutation<{ id: number; parentId: number | null }>(qc, {
+      mutationFn: ({ id, parentId }) => moveCategory(id, parentId),
+      targets: [
+        {
+          queryKey: CATEGORIES_KEY,
+          apply: (old: { categories: Category[] } | undefined, { id, parentId }) =>
+            old
+              ? { ...old, categories: old.categories.map((c) => (c.id === id ? { ...c, parent_id: parentId } : c)) }
+              : old,
+        },
+      ],
+    }),
+  )
+}
+
+/** 释放父分类下的全部直接子分类。 */
+export function useReleaseCategoryChildren() {
+  const qc = useQueryClient()
+  return useMutation(
+    createOptimisticMutation<number>(qc, {
+      mutationFn: releaseCategoryChildren,
+      targets: [{
+        queryKey: CATEGORIES_KEY,
+        apply: (old: { categories: Category[] } | undefined, id) =>
+          old ? { ...old, categories: old.categories.map((category) => category.parent_id === id ? { ...category, parent_id: null } : category) } : old,
+      }],
+    }),
+  )
+}
+
 /**
  * 删除分类 —— 乐观更新：onMutate 立即从 categories 缓存 filter 掉 id，并模拟后端
  * ON DELETE SET NULL 把关联书签的 category_id 置 null（mode='keep' 语义）。
@@ -83,33 +120,33 @@ export function useUpdateCategory() {
 export function useDeleteCategory() {
   const qc = useQueryClient()
   return useMutation(
-    createOptimisticMutation<{ id: number; bookmarkMode?: 'keep' | 'remove' }>(qc, {
-      mutationFn: (args) => deleteCategory(args.id),
+    createOptimisticMutation<{ id: number; mode?: CategoryDeleteMode; childIds?: number[] }>(qc, {
+      mutationFn: (args) => deleteCategory(args.id, args.mode),
       targets: [
         {
           queryKey: CATEGORIES_KEY,
-          apply: (old: { categories: Category[] } | undefined, { id }) => {
+          apply: (old: { categories: Category[] } | undefined, { id, mode = 'keep' }) => {
             if (!old) return old
             return {
               ...old,
-              categories: old.categories.filter((c: Category) => c.id !== id),
+              categories: old.categories
+                .filter((c: Category) => c.id !== id)
+                .map((c: Category) => (mode === 'promote' && c.parent_id === id ? { ...c, parent_id: null } : c)),
             }
           },
         },
         {
           queryKey: BOOKMARKS_KEY,
-          apply: (old: { bookmarks: Bookmark[] } | undefined, { id, bookmarkMode = 'keep' }) => {
+          apply: (old: { bookmarks: Bookmark[] } | undefined, { id, mode = 'keep', childIds = [] }) => {
             if (!old) return old
-            // bookmarkMode='remove'：连书签删，直接 filter 掉该分类书签，不经过"未分类"中间态
-            //   （否则置 null -> 未分类项闪现 -> 调用方 batchDelete 移除 -> 未分类项消失）。
-            // bookmarkMode='keep'：保留书签，置 null 降级为未分类（模拟后端 ON DELETE SET NULL）。
+            const deletedIds = new Set(mode === 'promote' ? [id] : [id, ...childIds])
             return {
               ...old,
               bookmarks:
-                bookmarkMode === 'remove'
-                  ? old.bookmarks.filter((b: Bookmark) => b.category_id !== id)
+                mode === 'all'
+                  ? old.bookmarks.filter((b: Bookmark) => !deletedIds.has(b.category_id ?? -1))
                   : old.bookmarks.map((b: Bookmark) =>
-                      b.category_id === id ? { ...b, category_id: null } : b,
+                      b.category_id != null && deletedIds.has(b.category_id) ? { ...b, category_id: null } : b,
                     ),
             }
           },
@@ -188,7 +225,7 @@ export function useReorderCategories() {
       position: 'before' | 'after'
     }) => {
       const data = qc.getQueryData<{ categories: Category[] }>(CATEGORIES_KEY)
-      const order = moveCategory(data?.categories ?? [], fromId, toId, position).map(
+      const order = reorderCategory(data?.categories ?? [], fromId, toId, position).map(
         (c) => c.id,
       )
       return reorderCategories(order)
@@ -200,7 +237,7 @@ export function useReorderCategories() {
         if (!old) return old
         return {
           ...old,
-          categories: moveCategory(old.categories, fromId, toId, position),
+          categories: reorderCategory(old.categories, fromId, toId, position),
         }
       })
       return { prev }
@@ -222,7 +259,7 @@ export function useReorderCategories() {
  * - position='before'：splice(insertIdx, 0, moved)，被拖项落到 to 前面
  * - position='after'：splice(insertIdx + 1, 0, moved)，被拖项落到 to 后面
  */
-function moveCategory(
+function reorderCategory(
   categories: Category[],
   fromId: number,
   toId: number,

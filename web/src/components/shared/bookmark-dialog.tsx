@@ -18,6 +18,7 @@ import { toast } from '@/components/ui/toast'
 import type { ToastAction } from '@/components/ui/toast'
 import { useUIStore } from '@/stores/ui'
 import { normalizeUrl, requireUrl, findDuplicateBookmark, parseTags } from '@/lib/bookmark-utils'
+import { getCategoryLabel } from '@/lib/category-tree'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import type { Bookmark } from '@/types'
@@ -564,7 +565,7 @@ export function BookmarkDialog({
     const Icon = resolveCategoryIcon(c.icon)
     return {
       value: String(c.id),
-      label: c.name,
+      label: getCategoryLabel(c),
       icon: <Icon size={12} />,
       color: c.color,
     }

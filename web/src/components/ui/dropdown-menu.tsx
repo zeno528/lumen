@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { useLongPress } from '@/hooks/use-long-press'
 
 export interface MenuItem {
   label: string
@@ -8,6 +9,16 @@ export interface MenuItem {
   /** 文案语义色，如连接状态 */
   labelColor?: string
   onClick?: () => void
+  onContext?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onLongPress?: (x: number, y: number) => void
+  onDragOver?: (event: React.DragEvent<HTMLButtonElement>) => void
+  onDrop?: (event: React.DragEvent<HTMLButtonElement>) => void
+  draggable?: boolean
+  onDragStart?: (event: React.DragEvent<HTMLButtonElement>) => void
+  onDragEnd?: (event: React.DragEvent<HTMLButtonElement>) => void
+  onDragEnter?: (event: React.DragEvent<HTMLButtonElement>) => void
+  onDragLeave?: (event: React.DragEvent<HTMLButtonElement>) => void
+  className?: string
   variant?: 'default' | 'edit' | 'delete'
   separator?: boolean
   /** 标题项；传 onClick 则变成可点击入口（如「切换模型」→ 跳设置）*/
@@ -43,9 +54,13 @@ export function ContextMenu({
   items,
   onMouseEnter,
   onMouseLeave,
+  onDragEnter,
+  onDragLeave,
   anchor = 'left',
   alignY = 'top',
   minWidth,
+  preserveOnMenuClick = false,
+  ignoreOutsideClickSelector,
 }: {
   open: boolean
   onClose: () => void
@@ -54,6 +69,8 @@ export function ContextMenu({
   items: MenuItem[]
   onMouseEnter?: () => void
   onMouseLeave?: () => void
+  onDragEnter?: (event: React.DragEvent<HTMLDivElement>) => void
+  onDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void
   /** 菜单水平锚点：left 以 x 为左边缘展开；right 以 x 为右边缘向左展开；center 以 x 为水平中心（头像下拉居中） */
   anchor?: 'left' | 'right' | 'center'
   /** 菜单垂直对齐：top 以 y 为顶部（默认，符合右键菜单 / 下拉）；middle 以 y 为中心（用于 avatar 等居中场景） */
@@ -62,20 +79,23 @@ export function ContextMenu({
    *  provider logo 异步加载会让首次 paint width 偏小、之后涨 3~5px），强制首次 width = 稳定值，
    * 配合 useLayoutEffect 一次定位，clamp 一次到位，避免贴边 / 跳动 / 间隔不一致 */
   minWidth?: number
+  /** 嵌套菜单：点击另一张菜单卡片时不把当前卡片当作“点外面”关闭。 */
+  preserveOnMenuClick?: boolean
+  /** 交给外部控制器自行处理的点击目标，例如可开关菜单的箭头。 */
+  ignoreOutsideClickSelector?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
   // 全局关闭：点外面 / Esc
-  // 用 click capture 阶段（而非 mousedown）：capture 先于卡片 onClick（bubble），
-  // stopPropagation 阻止 click 穿透到卡片 —— 否则 mousedown 只关闭菜单，
-  // click 仍触发卡片 onClick → 误跳转 URL（移动端点卡片关闭菜单时触发的 bug）
+  // 用 click capture 阶段（而非 mousedown）：先关闭临时菜单，再让同一次点击继续交给
+  // 导入、搜索、分类、书签等目标处理；空白处则只会关闭菜单。
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
+        if (preserveOnMenuClick && e.target instanceof Element && e.target.closest('.context-menu')) return
+        if (ignoreOutsideClickSelector && e.target instanceof Element && e.target.closest(ignoreOutsideClickSelector)) return
         onClose()
-        e.stopPropagation()
-        e.preventDefault()
       }
     }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -85,7 +105,7 @@ export function ContextMenu({
       document.removeEventListener('click', onDoc, true)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open, onClose])
+  }, [open, onClose, preserveOnMenuClick, ignoreOutsideClickSelector])
 
   // 定位 + 边界 clamp：DOM commit 后同步执行（useLayoutEffect，paint 前），无闪烁。
   // ⚠️ 定位必须用 left/top，不能用 transform：
@@ -138,6 +158,8 @@ export function ContextMenu({
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
     >
       {items.map((item, i) =>
         item.separator ? (
@@ -170,28 +192,52 @@ export function ContextMenu({
             </div>
           )
         ) : (
-          <button
-            key={i}
-            title={item.label}
-            className={cn(
-              'context-menu-item',
-              item.variant === 'edit' && 'edit',
-              item.variant === 'delete' && 'delete',
-              item.active && 'active',
-            )}
-            onClick={() => {
-              item.onClick?.()
-              if (!item.keepOpen) onClose()
-            }}
-          >
-            {item.icon && <span className="icon">{item.icon}</span>}
-            <span className="flex-1 min-w-0 truncate" style={{ color: item.labelColor }}>{item.label}</span>
-            {item.trailing && <span className="shrink-0">{item.trailing}</span>}
-          </button>
+          <ContextMenuItem key={i} item={item} onClose={onClose} />
         ),
       )}
     </div>
   )
 
   return createPortal(node, document.body)
+}
+
+function ContextMenuItem({ item, onClose }: { item: MenuItem; onClose: () => void }) {
+  // 所有菜单项统一一个组件：长按手势只对有 onLongPress 的项生效
+  // （hook 无条件调用，条件展开 props，保持 hook 规则）。
+  const longPress = useLongPress((x, y) => item.onLongPress?.(x, y))
+
+  return (
+    <button
+      type="button"
+      title={item.label}
+      className={cn(
+        'context-menu-item',
+        item.className,
+        item.variant === 'edit' && 'edit',
+        item.variant === 'delete' && 'delete',
+        item.active && 'active',
+      )}
+      onClick={() => {
+        item.onClick?.()
+        if (!item.keepOpen) onClose()
+      }}
+      onContextMenu={(event) => {
+        if (!item.onContext) return
+        event.preventDefault()
+        item.onContext(event)
+      }}
+      onDragOver={item.onDragOver}
+      onDrop={item.onDrop}
+      draggable={item.draggable}
+      onDragStart={item.onDragStart}
+      onDragEnd={item.onDragEnd}
+      onDragEnter={item.onDragEnter}
+      onDragLeave={item.onDragLeave}
+      {...(item.onLongPress ? longPress : {})}
+    >
+      {item.icon && <span className="icon">{item.icon}</span>}
+      <span className="flex-1 min-w-0 truncate" style={{ color: item.labelColor }}>{item.label}</span>
+      {item.trailing && <span className="shrink-0">{item.trailing}</span>}
+    </button>
+  )
 }

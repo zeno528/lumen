@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useBookmarks'
 import { useUIStore } from '@/stores/ui'
 import { parseTags } from '@/lib/bookmark-utils'
+import { getCategoryCount, getCategoryLabel } from '@/lib/category-tree'
 
 /**
  * 批量操作对话框 —— 移动分类 / 加标签 / 移除已有标签。
@@ -137,13 +138,13 @@ export function BatchDialog({
     submitRef.current()
   }, [open, batchDialogSubmitToken])
 
-  const countByCat = (id: number) =>
-    bmData?.bookmarks.filter((b) => b.category_id === id).length ?? 0
+  // 与侧边栏同一计数语义：父分类含子分类书签
+  const countByCat = (id: number) => getCategoryCount(bmData?.bookmarks ?? [], categories, id)
   const moveOptions = [
     { value: '', label: '移除分类（不归类）' },
     ...categories.map((c) => ({
       value: String(c.id),
-      label: `${c.name}（${countByCat(c.id)}）`,
+      label: `${getCategoryLabel(c)}（${countByCat(c.id)}）`,
     })),
   ]
 

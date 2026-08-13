@@ -7,6 +7,7 @@ import { useToggleFavorite, useReorderBookmarks } from '@/hooks/useBookmarks'
 import { useLongPress } from '@/hooks/use-long-press'
 import { useUIStore } from '@/stores/ui'
 import { highlightText } from '@/lib/bookmark-utils'
+import { DRAG_TYPE_BOOKMARK, setDragId } from '@/lib/category-dnd'
 import { cn, openInNewTab } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 
@@ -14,8 +15,6 @@ import { toast } from '@/components/ui/toast'
  * 拖拽 MIME 类型。
  * 用专属 MIME 类型区分"书签拖到分类"和"分类之间排序"，避免共用 text/plain 派发模糊。
  */
-const DRAG_TYPE_BOOKMARK = 'application/x-bookmark-id'
-
 /**
  * 书签卡片。
  * - favicon：icon 容器 46×46 radius 10px，内嵌 img 38×38 radius 4px，
@@ -75,6 +74,11 @@ export function BookmarkCard({
   const [copiedId, setCopiedId] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  // 拖拽预览与 sidebar 同机制：可见预览 div 用 ref 直接写 left/top（onDrag 高频触发不重渲染），
+  // 隐藏 1px 元素只作 setDragImage 掩盖浏览器原生 ghost。
+  const dragPreviewRef = useRef<HTMLDivElement>(null)
+  const dragImageRef = useRef<HTMLElement | null>(null)
+  useEffect(() => () => dragImageRef.current?.remove(), [])
   const toggleFav = useToggleFavorite()
   const reorder = useReorderBookmarks()
   const { batchMode, selectedIds, toggleSelection } = useUIStore()
@@ -132,12 +136,28 @@ export function BookmarkCard({
   // ===== 拖拽重排（state 驱动视觉）=====
   const onDragStart = (e: React.DragEvent) => {
     setDragging(true)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData(DRAG_TYPE_BOOKMARK, String(bookmark.id))
+    setDragId(e.dataTransfer, DRAG_TYPE_BOOKMARK, bookmark.id)
+    const preview = document.createElement('div')
+    preview.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;pointer-events:none;'
+    document.body.append(preview)
+    dragImageRef.current = preview
+    e.dataTransfer.setDragImage(preview, 0, 0)
+    window.requestAnimationFrame(() => {
+      if (!dragPreviewRef.current) return
+      dragPreviewRef.current.style.left = `${e.clientX + 14}px`
+      dragPreviewRef.current.style.top = `${e.clientY + 14}px`
+    })
+  }
+  const onDrag = (e: React.DragEvent) => {
+    if (!dragPreviewRef.current || e.clientX === 0 || e.clientY === 0) return
+    dragPreviewRef.current.style.left = `${e.clientX + 14}px`
+    dragPreviewRef.current.style.top = `${e.clientY + 14}px`
   }
   const onDragEnd = () => {
     setDragging(false)
     setDragOver(false)
+    dragImageRef.current?.remove()
+    dragImageRef.current = null
   }
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -163,6 +183,7 @@ export function BookmarkCard({
   }
 
   return (
+    <>
     <article
       data-bookmark-id={bookmark.id}
       className={cn(
@@ -198,6 +219,7 @@ export function BookmarkCard({
         }
       }}
       onDragStart={onDragStart}
+      onDrag={onDrag}
       onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDragEnter={onDragEnter}
@@ -362,5 +384,23 @@ export function BookmarkCard({
         </div>
       </footer>
     </article>
+    {dragging && (
+      <div
+        ref={dragPreviewRef}
+        className="bookmark-drag-preview"
+        aria-hidden="true"
+      >
+        {!faviconError ? (
+          <img
+            className="bookmark-drag-preview-icon"
+            src={bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at)}
+            alt=""
+            onError={() => setFaviconError(true)}
+          />
+        ) : <span className="bookmark-drag-preview-icon bookmark-drag-preview-fallback">◎</span>}
+        <span>{bookmark.title}</span>
+      </div>
+    )}
+    </>
   )
 }

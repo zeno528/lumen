@@ -58,6 +58,8 @@ func newTestAPI(t *testing.T) *testAPI {
 
 		r.Get("/api/categories", srv.handleGetCategories)
 		r.Post("/api/categories", srv.handleCreateCategory)
+		r.Put("/api/categories/{id}/children/release", srv.handleReleaseCategoryChildren)
+		r.Put("/api/categories/{id}/parent", srv.handleMoveCategory)
 		r.Put("/api/categories/{id}", srv.handleUpdateCategory)
 		r.Delete("/api/categories/{id}", srv.handleDeleteCategory)
 		r.Post("/api/categories/merge", srv.handleMergeCategories)
@@ -344,7 +346,10 @@ func TestBookmarkAndCategoryLifecycle(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)
 	categoryID := createCategory(t, api, jwt, "Work")
-	requireStatus(t, api.request(t, http.MethodPost, "/api/categories", jwt, map[string]string{"name": "Work"}), http.StatusConflict)
+	secondCategoryID := createCategory(t, api, jwt, "Work")
+	if secondCategoryID == categoryID {
+		t.Fatal("same-name categories must receive distinct IDs")
+	}
 
 	bookmarkID := createBookmark(t, api, jwt, "HTTPS://Example.COM/docs//", "Docs", &categoryID)
 	requireStatus(t, api.request(t, http.MethodPost, "/api/bookmarks", jwt, BookmarkInput{URL: "example.com/docs/", Title: "Duplicate"}), http.StatusConflict)
@@ -366,6 +371,120 @@ func TestBookmarkAndCategoryLifecycle(t *testing.T) {
 	}
 	requireStatus(t, api.request(t, http.MethodDelete, "/api/bookmarks/"+strconv.FormatInt(bookmarkID, 10), jwt, nil), http.StatusOK)
 	requireStatus(t, api.request(t, http.MethodDelete, "/api/bookmarks/"+strconv.FormatInt(bookmarkID, 10), jwt, nil), http.StatusNotFound)
+}
+
+func TestParentCategoryDeleteModes(t *testing.T) {
+	newHierarchy := func(t *testing.T) (*testAPI, string, int64, int64, int64, int64) {
+		t.Helper()
+		api := newTestAPI(t)
+		jwt := login(t, api)
+		parentID := createCategory(t, api, jwt, "Parent")
+		childRes := api.request(t, http.MethodPost, "/api/categories", jwt, CategoryInput{Name: "Child", ParentID: &parentID})
+		requireStatus(t, childRes, http.StatusCreated)
+		childID := decodeJSON[struct {
+			Category Category `json:"category"`
+		}](t, childRes).Category.ID
+		parentBookmarkID := createBookmark(t, api, jwt, "https://example.com/parent", "Parent bookmark", &parentID)
+		childBookmarkID := createBookmark(t, api, jwt, "https://example.com/child", "Child bookmark", &childID)
+		return api, jwt, parentID, childID, parentBookmarkID, childBookmarkID
+	}
+
+	t.Run("promote keeps child categories and their bookmarks", func(t *testing.T) {
+		api, jwt, parentID, childID, parentBookmarkID, childBookmarkID := newHierarchy(t)
+		requireStatus(t, api.request(t, http.MethodDelete, "/api/categories/"+strconv.FormatInt(parentID, 10)+"?mode=promote", jwt, nil), http.StatusOK)
+
+		categories := decodeJSON[struct {
+			Categories []Category `json:"categories"`
+		}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+		if len(categories) != 1 || categories[0].ID != childID || categories[0].ParentID != nil {
+			t.Fatalf("child should become top-level: %+v", categories)
+		}
+		bookmarks := listBookmarks(t, api, jwt, "/api/bookmarks")
+		for _, bookmark := range bookmarks {
+			if bookmark.ID == parentBookmarkID && bookmark.CategoryID != nil {
+				t.Fatalf("parent bookmark should become uncategorized: %+v", bookmark)
+			}
+			if bookmark.ID == childBookmarkID && (bookmark.CategoryID == nil || *bookmark.CategoryID != childID) {
+				t.Fatalf("child bookmark should stay in child category: %+v", bookmark)
+			}
+		}
+	})
+
+	t.Run("keep removes hierarchy and keeps all bookmarks", func(t *testing.T) {
+		api, jwt, parentID, _, _, _ := newHierarchy(t)
+		requireStatus(t, api.request(t, http.MethodDelete, "/api/categories/"+strconv.FormatInt(parentID, 10)+"?mode=keep", jwt, nil), http.StatusOK)
+		categories := decodeJSON[struct {
+			Categories []Category `json:"categories"`
+		}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+		if len(categories) != 0 {
+			t.Fatalf("categories = %+v, want none", categories)
+		}
+		for _, bookmark := range listBookmarks(t, api, jwt, "/api/bookmarks") {
+			if bookmark.CategoryID != nil {
+				t.Fatalf("kept bookmark should become uncategorized: %+v", bookmark)
+			}
+		}
+	})
+
+	t.Run("all removes hierarchy and all bookmarks", func(t *testing.T) {
+		api, jwt, parentID, _, _, _ := newHierarchy(t)
+		requireStatus(t, api.request(t, http.MethodDelete, "/api/categories/"+strconv.FormatInt(parentID, 10)+"?mode=all", jwt, nil), http.StatusOK)
+		if bookmarks := listBookmarks(t, api, jwt, "/api/bookmarks"); len(bookmarks) != 0 {
+			t.Fatalf("bookmarks = %+v, want none", bookmarks)
+		}
+	})
+}
+
+func TestMoveCategoryIntoParent(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	targetID := createCategory(t, api, jwt, "Target")
+	sourceID := createCategory(t, api, jwt, "Source")
+
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(sourceID, 10)+"/parent", jwt, map[string]any{
+		"parent_id": targetID,
+	}), http.StatusOK)
+	categories := decodeJSON[struct {
+		Categories []Category `json:"categories"`
+	}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+	for _, category := range categories {
+		if category.ID == sourceID && (category.ParentID == nil || *category.ParentID != targetID) {
+			t.Fatalf("source parent_id = %v, want %d", category.ParentID, targetID)
+		}
+	}
+
+	parentWithChildID := createCategory(t, api, jwt, "Parent with child")
+	childRes := api.request(t, http.MethodPost, "/api/categories", jwt, CategoryInput{Name: "Child", ParentID: &parentWithChildID})
+	requireStatus(t, childRes, http.StatusCreated)
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(parentWithChildID, 10)+"/parent", jwt, map[string]any{
+		"parent_id": targetID,
+	}), http.StatusBadRequest)
+}
+
+func TestReleaseCategoryChildren(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	parentID := createCategory(t, api, jwt, "Parent")
+	childRes := api.request(t, http.MethodPost, "/api/categories", jwt, CategoryInput{Name: "Child", ParentID: &parentID})
+	requireStatus(t, childRes, http.StatusCreated)
+	childID := decodeJSON[struct {
+		Category Category `json:"category"`
+	}](t, childRes).Category.ID
+	bookmarkID := createBookmark(t, api, jwt, "https://example.com/child", "Child bookmark", &childID)
+
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(parentID, 10)+"/children/release", jwt, nil), http.StatusOK)
+	categories := decodeJSON[struct {
+		Categories []Category `json:"categories"`
+	}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+	for _, category := range categories {
+		if category.ID == childID && category.ParentID != nil {
+			t.Fatalf("released child parent_id = %v, want nil", category.ParentID)
+		}
+	}
+	bookmarks := listBookmarks(t, api, jwt, "/api/bookmarks")
+	if len(bookmarks) != 1 || bookmarks[0].ID != bookmarkID || bookmarks[0].CategoryID == nil || *bookmarks[0].CategoryID != childID {
+		t.Fatalf("child bookmark must stay assigned: %+v", bookmarks)
+	}
 }
 
 func TestBookmarkBatchOperations(t *testing.T) {

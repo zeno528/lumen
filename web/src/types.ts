@@ -20,6 +20,7 @@ export interface Category {
   icon: string // FA 类名 fa-xxx，运行时映射到 Lucide（lib/icon-map）
   color: string
   sort_order: number
+  parent_id: number | null
 }
 
 export interface BookmarksResponse {
@@ -46,6 +47,7 @@ export interface CategoryInput {
   name: string
   icon?: string
   color?: string
+  parent_id?: number | null
 }
 
 /** API Token 列表项（脱敏，无明文，对齐 tokens.go handleListTokens）*/

@@ -25,11 +25,14 @@ export function CategoryDialog({
   onClose,
   editingCategory,
   onCreated,
+  parentId = null,
 }: {
   open: boolean
   onClose: () => void
   editingCategory?: Category | null
   onCreated?: (id: number) => void
+  /** 仅由“新建子分类”入口预设；模态框内不允许改父级。 */
+  parentId?: number | null
 }) {
   const createMut = useCreateCategory()
   const updateMut = useUpdateCategory()
@@ -112,7 +115,7 @@ export function CategoryDialog({
       try {
         await updateMut.mutateAsync({
           id: editingCategory.id,
-          input: { name: trimmed, icon, color },
+          input: { name: trimmed, icon, color, parent_id: editingCategory.parent_id },
         })
       } catch (e) {
         toast.error('保存失败: ' + (e as Error).message)
@@ -124,12 +127,11 @@ export function CategoryDialog({
     onClose()
     toast.success('分类已添加')
     try {
-      const cat = await createMut.mutateAsync({ name: trimmed, icon, color })
+      const cat = await createMut.mutateAsync({ name: trimmed, icon, color, parent_id: parentId })
       onCreated?.(cat.id)
     } catch (e) {
       const msg = (e as Error).message
-      if (msg.includes('已存在')) toast.warning('该分类已存在')
-      else toast.error('保存失败: ' + msg)
+      toast.error('保存失败: ' + msg)
     }
   }
 
@@ -148,7 +150,7 @@ export function CategoryDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={editingCategory ? '编辑分类' : '添加分类'}
+      title={editingCategory ? '编辑分类' : parentId != null ? '新建子分类' : '添加分类'}
       headerExtra={
         editingCategory ? (
           <span
