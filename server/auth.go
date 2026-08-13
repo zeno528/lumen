@@ -320,6 +320,22 @@ func (s *Server) verifyUsername(username string) bool {
 	return hashPassword(username) == stored
 }
 
+// setSessionCookie 下发会话 token cookie（同源 <img> 如 favicon 依赖它认证）。
+// 仅生产要求 Secure：真机走局域网明文 HTTP（http://192.168.x.x）时浏览器不会发送
+// Secure cookie，favicon 等 cookie 认证链路会整体失效；development 放宽，
+// production 与未设 APP_ENV（fail-closed 视为生产）仍强制 Secure。
+func (s *Server) setSessionCookie(w http.ResponseWriter, token string, sameSite http.SameSite) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   90 * 24 * 3600,
+		HttpOnly: true,
+		Secure:   s.config.AppEnv != "development",
+		SameSite: sameSite,
+	})
+}
+
 // handleLogin POST /api/auth/login
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	ip := s.getClientIP(r)
@@ -362,15 +378,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// 登录即视为密码验证（同 10 分钟时效）：登录后直接改账号/密码无需再输一次当前密码
 	s.markSessionVerified(jti, time.Now())
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   90 * 24 * 3600,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	s.setSessionCookie(w, token, http.SameSiteStrictMode)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token": token,
@@ -513,15 +521,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// 新会话继承验证时效（原时间戳，不刷新）：改完一个再改另一个无需重复验证
 	s.markSessionVerified(jti, verifiedAt)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   90 * 24 * 3600,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	s.setSessionCookie(w, token, http.SameSiteStrictMode)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":    true,

@@ -1,6 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getBookmarkDropPosition, getDraggedBookmarkIds, moveBookmarkInList } from '../src/lib/bookmark-dnd.ts'
+import {
+  getBookmarkDropPosition,
+  getDraggedBookmarkIds,
+  moveBookmarkInList,
+  isCrossCategoryMove,
+} from '../src/lib/bookmark-dnd.ts'
 import { getAutoScrollDelta } from '../src/lib/bookmark-auto-scroll.ts'
 import type { Bookmark } from '../src/types.ts'
 
@@ -24,6 +29,18 @@ test('reorder honors the before/after drop side', () => {
   assert.deepEqual(moveBookmarkInList(bookmarks, 3, 1, 'after').map((b) => b.id), [1, 3, 2])
   assert.equal(moveBookmarkInList(bookmarks, 1, 1, 'after'), bookmarks)
   assert.equal(moveBookmarkInList(bookmarks, 9, 1, 'before'), bookmarks)
+})
+
+test('same-category reorder is not a cross-category move', () => {
+  const items = [
+    { id: 1, category_id: 1 },
+    { id: 2, category_id: 1 },
+    { id: 3, category_id: 2 },
+  ] as Bookmark[]
+  assert.equal(isCrossCategoryMove(items, [1, 2], 1), false)
+  assert.equal(isCrossCategoryMove(items, [3], 1), true)
+  assert.equal(isCrossCategoryMove(items, [1, 3], 1), true)
+  assert.equal(isCrossCategoryMove(items, [1], null), true)
 })
 
 test('auto-scroll accelerates toward the active edge only', () => {

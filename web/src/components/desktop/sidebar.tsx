@@ -42,7 +42,7 @@ import { ExportDialog } from '@/components/shared/export-dialog'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
 import type { Category } from '@/types'
 import type { CategoryDeleteMode } from '@/api/categories'
-import { getChildCategories, getCategoryCount, getTopLevelCategories } from '@/lib/category-tree'
+import { getChildCategories, getCategoryCount, getParentCategory, getTopLevelCategories, hasChildCategories } from '@/lib/category-tree'
 import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getDragId, getDropSide, hasDragType, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
 import { getDraggedBookmarkIds } from '@/lib/bookmark-dnd'
 
@@ -91,6 +91,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     clearCategorySelection,
   } = useUIStore()
   const setBookmarkDragTarget = useBookmarkDragStore((state) => state.setTarget)
+  const setChildMenuOpen = useBookmarkDragStore((state) => state.setChildMenuOpen)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   // 新建分类触发 pop-in 入场动画（isNew）。不设定时清除：pop-in 由 sidebar-item 的
@@ -154,6 +155,11 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   }
   const countByCat = (id: number) => getCategoryCount(bookmarks, categories, id)
   const topLevelCategories = getTopLevelCategories(categories)
+  // 当前视图是子分类时，其父分类也要显示选中态（子分类不在侧栏列表里）
+  const currentParentId =
+    typeof currentCategory === 'number'
+      ? (getParentCategory(categories, currentCategory)?.id ?? null)
+      : null
 
   // 收藏/未分类出现走 pop-in 入场动画（isNew）；消失随计数归零直接移除，无退场动画
   // 虚拟分类用负数 id（-1 收藏 / -2 未分类）
@@ -210,7 +216,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
               },
             }]
           : []),
-        ...(menuCat.parent_id == null && getChildCategories(categories, menuCat.id).length > 0
+        ...(menuCat.parent_id == null && hasChildCategories(categories, menuCat.id)
           ? [{
               label: '释放子分类',
               icon: <Folder size={14} />,
@@ -400,7 +406,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
 
   // 删除入口：无书签直接删，有书签弹确认
   const handleDeleteClick = (cat: Category) => {
-    if (countByCat(cat.id) === 0 && getChildCategories(categories, cat.id).length === 0) {
+    if (countByCat(cat.id) === 0 && !hasChildCategories(categories, cat.id)) {
       // 无书签直接删：乐观删除（无退场动画）
       performDelete(cat, 'empty')
     } else {
@@ -497,7 +503,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   }
 
   const showChildMenuOnNestHover = (event: React.DragEvent, target: Category) => {
-    if (getChildCategories(categories, target.id).length === 0) return
+    if (!hasChildCategories(categories, target.id)) return
     cancelChildMenuClose()
     if (childMenu?.category.id === target.id) return
     if (childMenuTargetIdRef.current === target.id) return
@@ -511,6 +517,12 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       childMenuTimerRef.current = null
     }, 150)
   }
+
+  // 子分类悬浮卡片出现/关闭时同步到书签拖拽 store：
+  // 书签预览卡片跟着鼠标走，卡片出现时预览渐隐避让（见 bookmark-card 的 fading 类）。
+  useEffect(() => {
+    setChildMenuOpen(childMenu != null)
+  }, [childMenu, setChildMenuOpen])
 
   const hideChildMenuOnDragLeave = (target: Category) => {
     if (childMenuTimerRef.current != null) {
@@ -735,10 +747,10 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                     current?.category.id === c.id ? null : { category: c, x: rect.right + 8, y: rect.top },
                   )
                 }}
-                active={currentCategory === c.id}
+                active={currentCategory === c.id || currentParentId === c.id}
                 onClick={() => selectCategory(c.id)}
                 onContext={(e) => setCatMenu({ kind: 'cat', id: c.id, x: e.clientX, y: e.clientY })}
-                canNestDrop={!getChildCategories(categories, draggedCatId ?? -1).length}
+                canNestDrop={!hasChildCategories(categories, draggedCatId ?? -1)}
                 onNestDragOver={showChildMenuOnNestHover}
                 onTargetDragLeave={hideChildMenuOnDragLeave}
                 onBookmarkDragTargetChange={(target) => setBookmarkDragTarget(target ? { id: target.id, name: target.name } : null)}

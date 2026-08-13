@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, Layers, Star, Folder, Bookmark, ChevronRight } from 'lucide-react'
+import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, ChevronLeft, Layers, Star, Folder, Bookmark } from 'lucide-react'
 import { TopbarAvatar } from '@/components/shared/topbar-avatar'
 import { TopbarAIButton } from '@/components/shared/topbar-ai-button'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
@@ -14,7 +14,7 @@ import { useDebouncedValue } from '@/hooks/use-debounce'
 import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
-import { getCategoryCount, getChildCategories, getTopLevelCategories } from '@/lib/category-tree'
+import { getCategoryCount, getChildCategories, getParentCategory, hasChildCategories } from '@/lib/category-tree'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 
 /**
@@ -386,7 +386,6 @@ function MobileCategorySelect() {
   const { data: bmData } = useBookmarks()
   const { currentCategory, setCurrentCategory } = useUIStore()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const [childMenuParent, setChildMenuParent] = useState<number | null>(null)
 
   const categories = catData?.categories ?? []
   const bookmarks = bmData?.bookmarks ?? []
@@ -441,114 +440,85 @@ function MobileCategorySelect() {
     }
   })()
 
-  // 下拉项：复用 ContextMenu —— 与头像 / AI 切换同款锚定 + viewport clamp + ESC + 玻璃范式，不再自造一套。
-  // count 走 trailing（label 是 flex-1，trailing 自然靠右）；点选后 ContextMenu 的 onClick 自动 onClose 关闭。
-  const countNode = (n: number) => (
-    <span className="text-xs text-(--text-secondary) tabular-nums">{n}</span>
-  )
-  const items: MenuItem[] = [
-    {
-      label: '全部',
-      icon: <Layers size={13} style={{ color: 'var(--icon-all)' }} />,
-      active: currentCategory === 'all',
-      trailing: countNode(counts.all),
-      onClick: () => selectCategory('all'),
-    },
-  ]
-  if (counts.favorites > 0)
-    items.push({
-      label: '收藏',
-      icon: <Star size={13} style={{ color: 'var(--favorite-star)', fill: 'var(--favorite-star)' }} />,
-      active: currentCategory === '__favorites__',
-      trailing: countNode(counts.favorites),
-      onClick: () => selectCategory('__favorites__'),
-    })
-  if (counts.uncategorized > 0)
-    items.push({
-      label: '未分类',
-      icon: <Folder size={13} style={{ color: 'var(--icon-uncategorized)', fill: 'var(--icon-uncategorized)' }} />,
-      active: currentCategory === '__uncategorized__',
-      trailing: countNode(counts.uncategorized),
-      onClick: () => selectCategory('__uncategorized__'),
-    })
-  getTopLevelCategories(categories).forEach((cat) => {
-    const Icon = resolveCategoryIcon(cat.icon)
-    const children = getChildCategories(categories, cat.id)
-    items.push({
-      label: cat.name,
-      icon: <Icon size={13} style={{ color: cat.color || 'var(--default-category-color)' }} />,
-      active: currentCategory === cat.id,
-      trailing: children.length > 0 ? (
-        <span
-          role="button"
-          tabIndex={0}
-          className="inline-flex items-center justify-center p-1 rounded text-(--text-muted)"
-          onClick={(e) => {
-            e.stopPropagation()
-            setChildMenuParent(cat.id)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              e.stopPropagation()
-              setChildMenuParent(cat.id)
-            }
-          }}
-          aria-label={`${cat.name}子分类`}
-        ><ChevronRight size={14} /></span>
-      ) : countNode(countByCat(cat.id)),
-      onClick: () => selectCategory(cat.id),
-    })
-  })
+  // 聚合上下文：子分类 → 父分类；顶级聚合 → 自己；孤儿子分类（父分类已被删除）→ 只给「返回全部」逃生口。
+  const currentCat =
+    typeof currentCategory === 'number' ? (categories.find((c) => c.id === currentCategory) ?? null) : null
+  const parentCat = currentCat?.parent_id != null ? getParentCategory(categories, currentCat.id) : null
+  const isOrphan = currentCat != null && currentCat.parent_id != null && parentCat == null
+  const aggregate =
+    parentCat ?? (currentCat != null && !isOrphan && hasChildCategories(categories, currentCat.id) ? currentCat : null)
+  const siblings = aggregate ? getChildCategories(categories, aggregate.id) : []
+  const canExpand = aggregate != null || isOrphan
+  const isChildView = currentCat != null && aggregate != null && currentCat.id !== aggregate.id
 
-  const childParent = childMenuParent == null ? null : categories.find((c) => c.id === childMenuParent)
-  const childItems: MenuItem[] = childParent
-    ? [
-        {
-          label: childParent.name,
-          header: true,
-          trailing: <span className="sidebar-item-count">{countByCat(childParent.id)}</span>,
-        },
-        ...getChildCategories(categories, childParent.id).map((child) => {
-          const ChildIcon = resolveCategoryIcon(child.icon)
-          return {
-            label: `${child.name}（${countByCat(child.id)}）`,
-            icon: <ChildIcon size={13} style={{ color: child.color || 'var(--default-category-color)' }} />,
-            onClick: () => selectCategory(child.id),
-          }
-        }),
-      ]
-    : items
+  const items: MenuItem[] = isOrphan
+    ? [{
+        label: '返回全部',
+        icon: <Layers size={13} style={{ color: 'var(--icon-all)' }} />,
+        onClick: () => selectCategory('all'),
+      }]
+    : aggregate
+      ? [
+          ...(isChildView
+            ? [{
+                label: '返回父分类',
+                icon: <ChevronLeft size={14} />,
+                onClick: () => selectCategory(aggregate.id),
+              }]
+            : [{
+                label: aggregate.name,
+                header: true,
+                trailing: <span className="sidebar-item-count">{countByCat(aggregate.id)}</span>,
+              }]),
+          ...siblings.map((child) => {
+            const ChildIcon = resolveCategoryIcon(child.icon)
+            return {
+              label: `${child.name}（${countByCat(child.id)}）`,
+              icon: <ChildIcon size={13} style={{ color: child.color || 'var(--default-category-color)' }} />,
+              active: currentCategory === child.id,
+              onClick: () => selectCategory(child.id),
+            }
+          }),
+        ]
+      : []
 
   return (
     <>
       <button
         className={cn('mobile-category-badge', menu && 'open')}
         onClick={(e) => {
+          if (!canExpand) return
           const r = e.currentTarget.getBoundingClientRect()
-          // 锚到视口右边（留 clamp 的 10px 边距）+ anchor=right 向左展开：
-          // 分类徽章在三个按钮里最左，照搬头像的 center 锚定会让卡片偏左（center = 卡片中心跟着按钮走），
-          // 改成右对齐到窗口右边，与头像 / AI 卡片视觉统一靠右。
-          setMenu({ x: window.innerWidth - 10, y: r.bottom + 6 })
+          if (menu) {
+            // 再次点击收起（与顶栏 AI / 头像按钮一致的 toggle 语义）
+            setMenu(null)
+          } else {
+            // 锚到视口右边（留 clamp 的 10px 边距）+ anchor=right 向左展开：
+            // 分类徽章在三个按钮里最左，照搬头像的 center 锚定会让卡片偏左（center = 卡片中心跟着按钮走），
+            // 改成右对齐到窗口右边，与头像 / AI 卡片视觉统一靠右。
+            setMenu({ x: window.innerWidth - 10, y: r.bottom + 6 })
+          }
         }}
-        aria-label="切换分类"
+        aria-label={canExpand ? `切换分类（当前：${current.name}）` : current.name}
+        aria-expanded={canExpand ? !!menu : undefined}
       >
         {current.icon}
         <span className="mobile-category-name">{current.name}</span>
         <span className={cn('mobile-category-count', !bmData && 'invisible')}>
           {current.count}
         </span>
-        <ChevronDown size={10} className="mobile-category-arrow" />
+        {canExpand && <ChevronDown size={10} className="mobile-category-arrow" />}
       </button>
       <ContextMenu
         open={!!menu}
-        onClose={() => { setMenu(null); setChildMenuParent(null) }}
+        onClose={() => setMenu(null)}
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
-        items={childMenuParent != null ? childItems : items}
+        items={items}
         anchor="right"
         alignY="top"
         minWidth={200}
+        ignoreOutsideClickSelector=".mobile-category-badge"
       />
     </>
   )

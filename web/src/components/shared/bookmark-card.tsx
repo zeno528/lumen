@@ -68,6 +68,7 @@ export function BookmarkCard({
   // pop-in 动画结束后移除 class（恢复 pointer-events，.pop-in 有 pointer-events: none）
   const [showPopIn, setShowPopIn] = useState(isNew)
   const dragTarget = useBookmarkDragStore((s) => s.sourceId === bookmark.id ? s.target : null)
+  const childMenuOpen = useBookmarkDragStore((s) => s.sourceId === bookmark.id && s.childMenuOpen)
   const startBookmarkDrag = useBookmarkDragStore((s) => s.start)
   const setBookmarkDragTarget = useBookmarkDragStore((s) => s.setTarget)
   const clearBookmarkDrag = useBookmarkDragStore((s) => s.clear)
@@ -417,7 +418,7 @@ export function BookmarkCard({
     {dragging && (
       <div
         ref={dragPreviewRef}
-        className="bookmark-drag-preview"
+        className={cn('bookmark-drag-preview', childMenuOpen && 'bookmark-drag-preview-fading')}
         aria-hidden="true"
       >
         <div className="bookmark-icon-bg bookmark-drag-preview-icon-bg">

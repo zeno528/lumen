@@ -48,7 +48,7 @@ import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tr
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { DRAG_TYPE_BOOKMARK, getDragId, hasDragType } from '@/lib/category-dnd'
-import { getDraggedBookmarkIds } from '@/lib/bookmark-dnd'
+import { getDraggedBookmarkIds, isCrossCategoryMove } from '@/lib/bookmark-dnd'
 import { useBookmarkDragStore } from '@/stores/bookmark-drag'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import type { Category } from '@/types'
@@ -285,12 +285,15 @@ function BookmarksPage() {
     const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, draggedId)
     if (ids.includes(target.id)) return true
 
+    // 同分类内排序不算跨分类移动：静默执行，不弹「已移动」通知
+    const quiet = !isCrossCategoryMove(allBookmarks, ids, targetCategoryId)
     notifyBatchMove(
       batchMove.mutateAsync({ ids, categoryId: targetCategoryId, targetBookmarkId: target.id, position }),
       ids.length,
       catMap.get(targetCategoryId) ?? '未分类',
       isBatch,
       clearSelection,
+      { quiet },
     )
     return true
   }
@@ -312,12 +315,14 @@ function BookmarksPage() {
     const draggedId = getDragId(event.dataTransfer, DRAG_TYPE_BOOKMARK)
     if (draggedId == null) return
     const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, draggedId)
+    const quiet = !isCrossCategoryMove(allBookmarks, ids, category.id)
     notifyBatchMove(
       batchMove.mutateAsync({ ids, categoryId: category.id }),
       ids.length,
       category.name,
       isBatch,
       clearSelection,
+      { quiet },
     )
   }
 

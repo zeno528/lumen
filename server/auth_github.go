@@ -155,16 +155,8 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 设置 cookie（和密码登录一致）
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   90 * 24 * 3600,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode, // Lax 允许 OAuth 回调跨站跳转携带 cookie
-	})
+	// 设置 cookie（和密码登录一致）；Lax 允许 OAuth 回调跨站跳转携带 cookie
+	s.setSessionCookie(w, token, http.SameSiteLaxMode)
 
 	// 跳转首页，token 通过 URL 参数传递给前端
 	http.Redirect(w, r, "/?token="+token, http.StatusFound)

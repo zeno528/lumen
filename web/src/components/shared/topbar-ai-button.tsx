@@ -158,6 +158,7 @@ export function TopbarAIButton({
       <button
         type="button"
         className={cn(
+          'topbar-ai-trigger',
           'group w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors duration-200 ease-out hover:bg-(--bg-primary) hover:text-(--accent) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) text-(--text-secondary)',
           menu && 'bg-(--bg-primary) text-(--accent)',
           scaleContainerWhenOpen && menu && 'scale-105',
@@ -189,6 +190,7 @@ export function TopbarAIButton({
         items={items}
         anchor={isMobile ? 'right' : 'center'}
         alignY="top"
+        ignoreOutsideClickSelector=".topbar-ai-trigger"
       />
     </>
   )

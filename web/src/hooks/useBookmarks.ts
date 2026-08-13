@@ -340,10 +340,12 @@ export function notifyBatchMove(
   categoryName: string,
   isBatch: boolean,
   clearSelection: () => void,
+  options?: { quiet?: boolean },
 ) {
   void promise
     .then(() => {
-      toast.success(`已移动 ${count} 个书签到「${categoryName}」`)
+      // 同分类内排序不是跨分类移动：静默成功，只有真的换了分类才通知
+      if (!options?.quiet) toast.success(`已移动 ${count} 个书签到「${categoryName}」`)
       if (isBatch) clearSelection()
     })
     .catch((error: Error) => toast.error('移动失败: ' + error.message))
