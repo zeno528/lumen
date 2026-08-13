@@ -1,59 +1,164 @@
+<div align="center">
+
 # Lumen
 
-<p align="left">
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go&logoColor=white" alt="Go" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/React-19-20232A?style=flat&logo=react&logoColor=61DAFB" alt="React" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/TypeScript-7.x-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat&logo=vite&logoColor=white" alt="Vite" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
-  <a href="https://github.com/zeno528/lumen"><img src="https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white" alt="SQLite" /></a>
-  <a href="https://github.com/zeno528/lumen/actions/workflows/deploy.yml"><img src="https://github.com/zeno528/lumen/actions/workflows/deploy.yml/badge.svg?branch=main" alt="CI" /></a>
-</p>
-
-> 保存链接，AI 帮你补全；随时用搜索和 API 找回它。
-
-**Lumen 是一个自托管的 AI 书签工作台**，支持多模型接入、API Token、实时同步与本地数据存储。它不替你决定收藏什么，而是让每一条链接在需要时都能被快速找到和使用。
-
-## 预览
+**自托管的 AI 书签工作台** —— 保存链接，AI 帮你补全；随时用搜索和 API 找回它。
 
 <p>
-  <img width="49%" alt="Lumen 浅色主题书签列表" src="docs/images/lumen-light.png" />
-  <img width="49%" alt="Lumen 深色主题书签列表" src="docs/images/lumen-dark.png" />
+  <img src="https://img.shields.io/github/license/zeno528/lumen?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-7.x-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
 </p>
 
-## 用 Lumen 做什么
+<p>
+  <img width="49%" alt="Lumen 浅色主题" src="docs/images/lumen-desktop-light.png#gh-light-mode-only" />
+  <img width="49%" alt="Lumen 深色主题" src="docs/images/lumen-desktop-dark.png#gh-dark-mode-only" />
+</p>
 
-| 你的需求 | Lumen 如何完成 |
-| --- | --- |
-| **快速收集** | 粘贴网址即可新建书签；可自动获取标题、描述和网站图标，并识别重复链接。 |
-| **清晰而轻量的图标** | 不只抓网站 favicon：先从两套品牌 SVG 图标库匹配域名及主域，优先拿到清晰的矢量图标；未命中再读取站点声明与常见路径，并由 6 个图标源并发兜底。大图会压到 64 × 64 后随书签保存，列表无需反复请求，清晰也轻量。 |
-| **整理而不堆积** | 用分类、标签和收藏组织内容，支持拖拽排序、批量移动、批量加标签和批量删除。 |
-| **更快找回** | 支持标题、网址和 ID 搜索；分类、收藏与未分类视图让常用内容始终可达。 |
-| **让 AI 做整理工作** | 根据网址智能补全标题、描述、分类和标签；配置多个模型后可随时测试、切换和复用。 |
-| **接入自己的工作流** | 创建 API Token，通过 Bearer 认证调用书签、分类与 AI 配置接口；内置受认证保护的 OpenAPI 说明。 |
-| **掌控自己的数据** | 数据存于 SQLite，支持 JSON 备份与导入，也可导出可直接打开查看的 HTML 书签页；浏览器标签页与设备间通过 WebSocket 同步更新。 |
+</div>
 
-## AI，不绑定单一模型
+## 功能亮点
 
-Lumen 预置 **DeepSeek、智谱 GLM、MiniMax、硅基流动与 Anthropic**，也支持填写兼容 OpenAI 或 Anthropic 格式的自定义服务地址。一个 Provider 可保存多份模型配置，顶栏可快速切换当前模型。
+- 🔗 **粘贴即收藏** — 自动抓取标题、描述与网站图标，识别重复链接
+- 🤖 **AI 补全元数据** — 自动生成标题、描述、分类与标签；预置 DeepSeek / 智谱 GLM / MiniMax / 硅基流动，支持自定义 OpenAI / Anthropic 兼容端点，多份配置一键切换
+- 🎨 **清晰而轻量的图标** — 品牌 SVG 图标库（theSVG / Simple Icons）优先命中，站点声明与常见路径兜底，6 个图标源并发补齐；统一压至 64 × 64 随书签存储
+- 🗂️ **整理而不堆积** — 多级分类、标签、收藏，拖拽排序，批量移动 / 加标签 / 删除
+- 🔍 **更快找回** — 标题 / 网址 / ID 搜索，全部 / 收藏 / 未分类视图一键切换
+- 🔄 **多端实时同步** — 浏览器标签页与设备之间通过 WebSocket 即时同步
+- 🔌 **开放 API** — `msk_` API Token + Bearer 认证，内置 OpenAPI 3.0 说明，接入你的自动化工作流
+- 💾 **数据完全属于你** — SQLite 本地存储，JSON 备份 / 导入（自动合并），HTML 只读导出，无第三方遥测
+- 🪶 **轻量到极致** — 单一 Go 二进制 + 静态前端，512 MB 内存小机即可运行，空闲内存约 19 MiB
+- 📱 **桌面与移动均可用** — 响应式界面，手机与桌面访问均流畅
 
-AI 用于补全书签元数据，而不是替代你的收藏判断：输入网址后，可让它生成标题、描述、分类和标签。可选的 Serper 配置可在直连抓取失败时作为搜索兜底。
-
-## API 与自动化
-
-- 在设置中创建 `msk_` API Token；明文只在创建时显示一次。
-- 使用 `Authorization: Bearer <API_TOKEN>` 访问受支持的接口。
-- `/openapi.json` 提供 OpenAPI 3.0 描述，需要 JWT 或 API Token 认证。
-- Token 的创建、改名、撤销仅允许账号 JWT 执行，避免 API Token 自行扩大权限。
+<p align="center">
+  <img width="32%" alt="Lumen 移动端浅色视图" src="docs/images/lumen-mobile-light.png#gh-light-mode-only" />
+  <img width="32%" alt="Lumen 移动端深色视图" src="docs/images/lumen-mobile-dark.png#gh-dark-mode-only" />
+</p>
 
 ## 快速开始
 
-### 前置条件
+构建需要 Go 1.26、Node.js 24 与 pnpm 11；**运行时只需要一个二进制**，无需 Docker、数据库或其他服务。
 
-- Go 1.26
-- Node.js 24（与 CI 一致）
-- pnpm 11
-- [Air](https://github.com/air-verse/air)（Go 开发热重载）
+```bash
+git clone https://github.com/zeno528/lumen.git
+cd lumen
+
+# 构建前端并放入 static/ 目录
+pnpm -C web install
+pnpm -C web build
+mkdir -p static
+cp -r web/dist/* static/
+
+# 构建后端
+go build -o lumen ./server
+```
+
+启动前至少设置三个变量。`JWT_SECRET` 同时派生 AES 密钥加密已保存的 AI / Serper 密钥，**首次确定后不要更改**：
+
+```bash
+export APP_ENV=production
+export JWT_SECRET=$(openssl rand -hex 32)
+export APP_PASSWORD='your-strong-password'
+
+./lumen
+```
+
+打开服务地址，用 `APP_PASSWORD` 登录（仅在数据库为空时用于初始化，登录后可在设置中心修改）。完整配置项见 [配置](#配置)。
+
+### 常驻运行（systemd）
+
+```ini
+# /etc/systemd/system/lumen.service
+[Unit]
+Description=Lumen
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/lumen
+EnvironmentFile=/opt/lumen/.env
+ExecStart=/opt/lumen/lumen
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl enable --now lumen
+```
+
+## 使用
+
+- **添加书签**：粘贴网址自动抓取信息；点 AI 按钮补全分类和标签
+- **整理**：多级分类、标签、收藏；拖拽排序；批量模式（`Ctrl/Cmd + B`）批量移动、加标签、删除、导出
+- **找回**：顶栏搜索支持标题、网址与 ID；「全部 / 收藏 / 未分类」视图切换
+- **备份**：侧边栏「导出」生成 JSON 备份或 HTML 只读书签页；「导入」自动合并，不会覆盖现有内容
+- **多端同步**：多开标签页或在手机打开同一地址，改动实时互相同步
+
+应用内置完整图文帮助：右上角头像菜单 → **帮助**。
+
+## 配置
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `APP_ENV` | 空（按生产处理） | `development` / `production`；未显式设为 `development` 即按生产严格校验 |
+| `PORT` | `8080` | 监听端口（本地开发用 `8081`） |
+| `DB_PATH` | `data/bookmarks.db` | SQLite 数据库文件路径 |
+| `STATIC_DIR` | `./static` | 前端静态文件目录 |
+| `JWT_SECRET` | 无 | JWT 签名与敏感配置加密密钥；生产必须强随机且确定后不可更改 |
+| `APP_PASSWORD` | 无 | 空库首次启动的初始登录密码；生产禁止为空或 `admin` |
+| `TRUSTED_PROXY_CIDR` | 空 | 可信反向代理 CIDR（逗号分隔）；空 = 不信任 `X-Forwarded-For` |
+| `CORS_ORIGINS` | 空 | 允许的跨域来源（空格分隔）；空 = 仅同源 |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_ALLOWED_USER` | 空 | 可选的 GitHub OAuth 登录（`GITHUB_ALLOWED_USER` 为用户名白名单） |
+| `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` | 空 | 环境变量形式的 AI 配置兜底；设置界面保存的配置优先 |
+| `SERPER_API_KEY` | 空 | 可选的 Serper 搜索密钥（AI 补全抓取失败时的搜索兜底） |
+
+> 请勿提交 `.env.dev`、数据库、日志或 API 密钥；它们已被 `.gitignore` 排除，提交前仍应检查差异。
+
+## 生产部署
+
+构建产物只有 `lumen` 二进制与 `static/` 目录。推荐用 HTTPS 反向代理（nginx / Caddy）终止 TLS，并确保 WebSocket 升级被正确转发，否则多端实时同步会失效：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+}
+```
+
+若代理与 Lumen 之间存在其他跳转节点，用 `TRUSTED_PROXY_CIDR` 声明可信代理，保证限速与客户端 IP 判断正确。SQLite 驱动为纯 Go 实现，可无 CGO 交叉编译：
+
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen ./server
+```
+
+仓库内置 GitHub Actions 自动部署：推送到 `main` 会依次执行前端类型检查与构建、Go 检查与测试、后端构建与冒烟测试，再经 SSH + rsync 停服部署并健康检查。启用需在仓库 Secrets 中配置 `DEPLOY_SERVERS`（服务器清单 JSON）与 `VPS_SSH_KEY`（SSH 私钥）。
+
+## 开发
+
+- **后端**：Go 1.26 + chi + modernc.org/sqlite（纯 Go 驱动，可静态编译）+ JWT + WebSocket
+- **前端**：React 19 + Vite 8 + TanStack Router / Query + Tailwind CSS v4 + Zustand + shadcn/ui
+- **数据流**：TanStack Query 管理服务端状态并持久化缓存（秒开 + 后台刷新）；Zustand 管理客户端状态；WebSocket 推送失效通知驱动多端同步
+
+### 项目结构
+
+```text
+server/        Go API、SQLite、鉴权、AI、OpenAPI 与 WebSocket
+web/           React 前端与响应式界面（桌面 + 移动）
+docs/images/   README 效果图
+.github/       CI 与部署工作流
+```
+
+### 本地开发
+
+前置条件：Go 1.26、Node.js 24、pnpm 11，以及 [Air](https://github.com/air-verse/air)（Go 热重载）。
 
 ```bash
 git clone https://github.com/zeno528/lumen.git
@@ -62,60 +167,21 @@ cd lumen
 # 仅首次安装 Air
 go install github.com/air-verse/air@latest
 
-# 创建本地开发配置
+# 创建本地开发配置（.env.dev 已被 .gitignore 忽略）
 cp .env.example .env.dev
 
-# 安装依赖并同时启动 Go 后端与 Vite 前端
 pnpm -C web install
-pnpm -C web dev
+
+# 终端 1：Go 后端（Air 热重载，监听 8081）
+air -c .air.toml
+
+# 终端 2：前端 Vite（监听 5173，代理 /api 到后端）
+pnpm -C web dev:fe
 ```
 
-Windows PowerShell：
+打开 [http://localhost:5173](http://localhost:5173)。首次启动时 `.env.dev` 中的 `APP_PASSWORD` 会初始化登录密码，请先替换成自己的开发密码。
 
-```powershell
-Copy-Item .env.example .env.dev
-```
-
-打开 [http://localhost:5173](http://localhost:5173)。首次启动时，`.env.dev` 中的 `APP_PASSWORD` 会初始化登录密码；请先替换成自己的开发密码。
-
-## 部署要求
-
-Lumen 是 **单一 Go 二进制 + 静态前端 + SQLite**：构建后只需部署 `lumen` 二进制和 `static/` 目录，不依赖 Docker、Node.js、外部数据库或本地大模型运行时。
-
-**512 MB 内存、1 vCPU 的小型 服务器即可运行。** 在实际生产节点的空闲采样中，Lumen 进程 RSS 约 **19 MiB**；AI 请求由你配置的远程 Provider 执行，服务器只处理书签 API、SQLite、静态文件和 WebSocket 同步。
-
-> 以上是实际运行参考；书签量、Favicon 数据、并发访问和保留的部署副本会增加磁盘与内存占用。
-
-## 生产部署
-
-先构建前端与后端：
-
-```bash
-pnpm -C web build
-go build -o lumen ./server
-```
-
-将 `web/dist` 的内容放入 `STATIC_DIR` 指向的目录（默认 `./static`），然后以 `APP_ENV=production` 启动 `lumen`。生产环境必须配置长期稳定且非默认的 `JWT_SECRET` 与强 `APP_PASSWORD`；`JWT_SECRET` 同时用于加密已保存的 AI / 搜索服务密钥，部署后不要随意更换。
-
-仓库已配置 GitHub Actions：推送到 `main` 会依次执行前端类型检查、前端构建、Go 检查与测试，再部署。部署前需要在仓库 Secrets 中配置 `DEPLOY_SERVERS` 和 `VPS_SSH_KEY`。
-
-## 配置与安全
-
-从 [`.env.example`](.env.example) 复制出 `.env.dev` 作为本地配置。常用变量如下：
-
-| 变量 | 说明 |
-| --- | --- |
-| `APP_ENV` | `development` 或 `production`；未设置时按生产环境严格校验。 |
-| `PORT` | 后端端口；本地开发使用 `8081`。 |
-| `DB_PATH` | SQLite 数据库文件路径。 |
-| `STATIC_DIR` | 构建后的前端静态文件目录；默认 `./static`。 |
-| `JWT_SECRET` | JWT 签名与敏感配置加密密钥；生产环境必须替换默认值。 |
-| `APP_PASSWORD` | 空数据库首次启动时的初始登录密码。 |
-| `TRUSTED_PROXY_CIDR` | 可信反向代理 CIDR；未设置时不信任 `X-Forwarded-For`。 |
-
-> 请勿提交 `.env.dev`、数据库、日志或 API 密钥。它们已被 `.gitignore` 排除，但提交前仍应检查差异。
-
-## 开发验证
+### 验证
 
 ```bash
 pnpm -C web typecheck
@@ -123,19 +189,6 @@ pnpm -C web build
 go vet ./...
 go test ./...
 ```
-
-## 项目结构
-
-```text
-server/        Go API、SQLite、鉴权、OpenAPI 与 WebSocket
-web/           React 前端与响应式界面
-docs/images/   README 效果图
-.github/       CI 与部署工作流
-```
-
-## 参与贡献
-
-欢迎通过 Issue 反馈问题或提出功能想法；准备提交较大改动前，建议先说明使用场景和预期行为，方便一起确认方向。
 
 ## 许可证
 
