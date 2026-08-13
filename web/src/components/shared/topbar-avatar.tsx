@@ -154,8 +154,8 @@ export function TopbarAvatar({
       <button
         type="button"
         className={cn(
-          'topbar-icon-btn w-24 h-9 rounded-full pl-1 pr-2 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
-          menu ? 'menu-open scale-105' : 'border-(--border)',
+          'topbar-icon-btn w-24 h-9 rounded-full pl-1 pr-2 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) border bg-(--bg-secondary)',
+          menu ? 'menu-open scale-[1.02]' : 'border-(--border)',
           className,
         )}
         onClick={handleButtonClick}
