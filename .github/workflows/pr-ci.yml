@@ -18,6 +18,13 @@ name: PR CI
 on:
   pull_request:
     branches: [main]
+    # paths 白名单：README / docs / 图片等非代码改动不跑 CI
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/pr-ci.yml'
   workflow_dispatch:
 
 permissions:

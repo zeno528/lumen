@@ -1,9 +1,16 @@
 name: Deploy
 
 # 推送到 main 自动部署；也支持 Actions 页面手动触发
+# paths 白名单：只动 README / docs / 图片等非构建产物时跳过 CI+部署（避免改文档也重跑构建和线上更新）
 on:
   push:
     branches: [main]
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
