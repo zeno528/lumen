@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
 import {
   Layers,
   Star,
@@ -10,7 +9,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Copy,
   CheckSquare,
   X,
 } from 'lucide-react'
@@ -43,7 +41,6 @@ import { SidebarItem } from '@/components/desktop/sidebar-item'
 import type { Category } from '@/types'
 import type { CategoryDeleteMode } from '@/api/categories'
 import { getChildCategories, getCategoryCount, getTopLevelCategories } from '@/lib/category-tree'
-import { categoryFilterToSearch } from '@/lib/bookmark-route'
 import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getDragId, getDropSide, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
 
 /**
@@ -55,13 +52,12 @@ import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getDragId, getDropSide, setDrag
  * 侧边栏 —— logo（顶部）+ 分类列表 + 底部操作（导入/导出）。
  * - 分类列表：全部 / 收藏 / 未分类 / 各分类，每项带计数
  * - 标题"+"按钮新建分类
- * - 分类项右键：编辑 / 删除 / 复制 ID
+ * - 分类项右键：编辑 / 批量删除 / 删除
  * - 删除分类：无书签直接删；有书签弹确认（保留书签 / 一并删除）
  * - 底部：导入/导出图标按钮；设置/主题/帮助/登出入口已移到顶栏头像下拉
  */
 export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryClick?: () => void } = {}) {
   const qc = useQueryClient()
-  const navigate = useNavigate()
   const { data: catData, isLoading } = useCategories()
   const { data: bmData, isLoading: bmLoading } = useBookmarks()
   const deleteCat = useDeleteCategory()
@@ -228,14 +224,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           icon: <Pencil size={14} />,
           variant: 'edit',
           onClick: () => openEditCategory(menuCat.id),
-        },
-        {
-          label: '复制ID',
-          icon: <Copy size={14} />,
-          onClick: () => {
-            navigator.clipboard.writeText(`分类ID: ${menuCat.id}`)
-            toast.success('已复制')
-          },
         },
         ...(menuCat.parent_id == null
           ? [{
@@ -578,7 +566,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   /** 选中分类：分类行只切换视图；子分类悬浮卡片由右侧箭头单独触发。 */
   const selectCategory = (cat: typeof currentCategory) => {
     setCurrentCategory(cat)
-    navigate({ to: '/bookmarks', search: categoryFilterToSearch(cat) })
     closeCategoryMenuGroup()
     onCategoryClick?.()
   }
