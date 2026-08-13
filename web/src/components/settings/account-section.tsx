@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cat, ChevronRight, LogOut, Pencil, User } from 'lucide-react'
-import { getUsername, getNickname, updateNickname } from '@/api/settings'
+import { Cat, ChevronRight, LogOut, MonitorSmartphone, Pencil, User } from 'lucide-react'
+import { getUsername, getNickname, revokeOtherSessions, updateNickname } from '@/api/settings'
 import { useAvatar } from '@/hooks/use-avatar'
 import { useUnsavedGuard } from '@/hooks/use-unsaved-guard'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ export function AccountSection({
 }) {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const setToken = useAuthStore((s) => s.setToken)
   const qc = useQueryClient()
   const { data: usernameData } = useQuery({ queryKey: ['auth-username'], queryFn: getUsername })
   const { data: nicknameData } = useQuery({ queryKey: ['auth-nickname'], queryFn: getNickname })
@@ -43,6 +44,8 @@ export function AccountSection({
   const [nickCommitted, setNickCommitted] = useState<string | null>(null)
   const [nickPending, setNickPending] = useState(false)
   const [nickError, setNickError] = useState('')
+  // 踢出其他设备：内联二次确认态（设置模态框内不弹 Dialog，避免堆叠 ESC/遮罩坑）
+  const [revoking, setRevoking] = useState(false)
 
   // 首次从 queryData 同步到 committed（一次性，ref 防 effect 重跑）
   const initialized = useRef(false)
@@ -64,6 +67,17 @@ export function AccountSection({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['auth-nickname'] })
     },
+  })
+
+  // 踢出其他设备：后端递增 token 版本让旧 token 全失效，返回新 token 替换以保留当前会话
+  const revokeMut = useMutation({
+    mutationFn: revokeOtherSessions,
+    onSuccess: (data) => {
+      setToken(data.token)
+      toast.success('其他设备已退出登录')
+      setRevoking(false)
+    },
+    onError: () => toast.error('操作失败，请重试'),
   })
 
   const startNickEdit = () => {
@@ -230,19 +244,38 @@ export function AccountSection({
               </div>
               <ChevronRight size={16} className="shrink-0 text-(--text-muted) transition-colors group-hover:text-(--accent)" />
             </button>
-            <div className="py-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  logout()
-                  navigate({ to: '/login' })
-                }}
+            {revoking ? (
+              <div className="h-14 py-3 flex items-center gap-2 flex-nowrap">
+                <MonitorSmartphone size={16} className="shrink-0 text-(--destructive)" />
+                <span className="text-sm text-(--text-muted) shrink-0">其他设备将需要重新登录</span>
+                <Button variant="destructive" size="sm" disabled={revokeMut.isPending} onClick={() => revokeMut.mutate()}>
+                  退出
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setRevoking(false)}>
+                  取消
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setRevoking(true)}
+                className="w-full h-14 py-3 flex items-center gap-3 text-left group"
               >
-                <LogOut size={14} className="text-(--destructive)" />
-                退出登录
-              </Button>
-            </div>
+                <MonitorSmartphone size={16} className="shrink-0 text-(--text-muted) transition-colors group-hover:text-(--accent)" />
+                <div className="text-sm font-medium text-(--text-primary)">退出其他设备</div>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                logout()
+                navigate({ to: '/login' })
+              }}
+              className="w-full h-14 py-3 flex items-center gap-3 text-left text-(--destructive) transition-opacity hover:opacity-80"
+            >
+              <LogOut size={16} className="shrink-0" />
+              <div className="text-sm font-medium">退出登录</div>
+            </button>
           </div>
       </div>
     </section>

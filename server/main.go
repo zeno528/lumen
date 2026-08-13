@@ -162,6 +162,8 @@ func main() {
 		r.Get("/api/auth/password-verified", srv.handlePasswordVerifiedStatus)
 		r.Post("/api/auth/verify-password", srv.handleVerifyPassword)
 		r.Put("/api/auth/password", srv.handleChangePassword)
+		// 踢其他设备下线：仅 JWT 通道（账号特权，API Token 无"当前会话"概念）
+		r.With(RequireJWT).Post("/api/auth/revoke-sessions", srv.handleRevokeSessions)
 		r.Get("/api/auth/nickname", srv.handleGetNickname)
 		r.Put("/api/auth/nickname", srv.handleUpdateNickname)
 		r.Get("/api/auth/avatar", srv.handleGetAvatar)

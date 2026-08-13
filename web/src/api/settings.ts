@@ -88,6 +88,12 @@ export async function updatePassword(body: {
   return res.json()
 }
 
+/** 踢除其他设备（POST /api/auth/revoke-sessions）。成功后端返回新 token，调用方替换以保留当前会话。 */
+export async function revokeOtherSessions(): Promise<{ token: string }> {
+  const res = await authedFetch('/api/auth/revoke-sessions', { method: 'POST' }, '操作失败')
+  return res.json()
+}
+
 /** 验证当前密码（POST /api/auth/verify-password）——改账号/密码前验证身份用，无副作用。 */
 export async function verifyPassword(password: string): Promise<void> {
   await authedFetch(
