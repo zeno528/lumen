@@ -87,8 +87,9 @@ export function ContextMenu({
   const ref = useRef<HTMLDivElement>(null)
 
   // 全局关闭：点外面 / Esc
-  // 用 click capture 阶段（而非 mousedown）：先关闭临时菜单，再让同一次点击继续交给
-  // 导入、搜索、分类、书签等目标处理；空白处则只会关闭菜单。
+  // 用 click capture 阶段关闭浮层，并 stopImmediatePropagation 吞掉这次外部点击——
+  // 标准浮层 modal 语义：点外部 = 只关闭，不放行给下层目标。
+  // 否则菜单浮起时点空白（移动端几乎必落在某张书签卡片上）会同时关闭菜单并跳转该书签网址。
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
@@ -96,6 +97,8 @@ export function ContextMenu({
         if (preserveOnMenuClick && e.target instanceof Element && e.target.closest('.context-menu')) return
         if (ignoreOutsideClickSelector && e.target instanceof Element && e.target.closest(ignoreOutsideClickSelector)) return
         onClose()
+        // 吞掉外部点击，不传播给下层（书签卡片跳转、分类切换等）；关菜单即终态
+        e.stopImmediatePropagation()
       }
     }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
