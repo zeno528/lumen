@@ -30,11 +30,12 @@ interface LongPressResult {
  */
 export function useLongPress(
   onLongPress: (x: number, y: number) => void,
-  options: { delay?: number } = {},
+  options: { delay?: number; triggerOnRelease?: boolean } = {},
 ): LongPressResult {
-  const { delay = 500 } = options
+  const { delay = 500, triggerOnRelease = false } = options
   const timer = useRef<number | null>(null)
   const pos = useRef({ x: 0, y: 0 })
+  const ready = useRef(false)
   const armed = useRef(false)
 
   // 一组稳定的 handler（用 ref 持有，避免相互引用导致的闭包/依赖问题）
@@ -88,19 +89,30 @@ export function useLongPress(
     (e: React.TouchEvent) => {
       // 新手势开始：先解除上一次长按遗留的 click 吞噬器（避免误吞本次点击）
       h.current!.off()
+      ready.current = false
       const touch = e.touches[0]
       pos.current = { x: touch.clientX, y: touch.clientY }
       timer.current = window.setTimeout(() => {
         timer.current = null
+        if (triggerOnRelease) {
+          ready.current = true
+          return
+        }
         onLongPress(pos.current.x, pos.current.y)
         // 长按已触发 → 武装吞噬器，吞掉随后松手合成的那次 click
         arm()
       }, delay)
     },
-    [onLongPress, delay, arm],
+    [onLongPress, delay, triggerOnRelease, arm],
   )
 
-  const onTouchEnd = useCallback(() => clear(), [clear])
+  const onTouchEnd = useCallback(() => {
+    clear()
+    if (!ready.current) return
+    ready.current = false
+    onLongPress(pos.current.x, pos.current.y)
+    arm()
+  }, [clear, onLongPress, arm])
   const onTouchMove = useCallback(() => {
     // 用户开始移动手指 → 如果已 armed 立即解除 click 吞噬器。
     // 移动端最自然的手势：长按 500ms 后菜单弹出，用户**手指不离屏**就开始拖到菜单项，
@@ -111,6 +123,7 @@ export function useLongPress(
     if (armed.current) {
       h.current!.off()
     }
+    ready.current = false
     clear()
   }, [clear])
 
@@ -118,6 +131,7 @@ export function useLongPress(
   useEffect(
     () => () => {
       clear()
+      ready.current = false
       h.current?.off()
     },
     [clear],
