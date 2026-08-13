@@ -26,10 +26,6 @@ export function getChildCategories(categories: Category[], parentId: number): Ca
   return categories.filter((category) => category.parent_id === parentId)
 }
 
-export function hasCategoryChildren(categories: Category[], categoryId: number): boolean {
-  return getChildCategories(categories, categoryId).length > 0
-}
-
 export function getCategoryLabel(category: Category): string {
   return category.parent_id == null ? category.name : `　${category.name}`
 }

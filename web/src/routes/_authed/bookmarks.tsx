@@ -42,7 +42,7 @@ import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
-import { filterBookmarksByCategory, getChildCategories, hasCategoryChildren } from '@/lib/category-tree'
+import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
 import { categoryFilterFromSearch, parseBookmarkSearch } from '@/lib/bookmark-route'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
@@ -276,7 +276,6 @@ function BookmarksPage() {
       .filter((group) => group.bookmarks.length > 0)
   }, [filtered, categories, q, currentCategory])
   const cardGroups = q ? searchGroups : categoryGroups.length > 0 ? categoryGroups : null
-  const isParentCategoryView = typeof currentCategory === 'number' && hasCategoryChildren(categories, currentCategory)
 
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
@@ -691,7 +690,7 @@ function BookmarksPage() {
           )}
         </div>
       ) : (
-        <div key={currentCategory} className={cn('bookmarks-grid', enterAnimate && !isParentCategoryView && 'animate-enter', q && 'searching', batchMode && 'select-none')}>
+        <div key={currentCategory} className={cn('bookmarks-grid', enterAnimate && 'animate-enter', q && 'searching', batchMode && 'select-none')}>
           {cardGroups
             ? cardGroups.flatMap((group) => {
                 const Icon = resolveCategoryIcon(group.category?.icon)

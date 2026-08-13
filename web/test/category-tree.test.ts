@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getCategoryDescendantIds, filterBookmarksByCategory, getCategoryCount, hasCategoryChildren } from '../src/lib/category-tree.ts'
+import { getCategoryDescendantIds, filterBookmarksByCategory, getCategoryCount } from '../src/lib/category-tree.ts'
 
 const categories = [
   { id: 1, name: '开发', icon: 'fa-folder', color: '', sort_order: 0, parent_id: null },
@@ -30,9 +30,4 @@ test('parent view aggregates direct and child bookmarks while child view stays d
 test('parent count includes direct and child bookmarks', () => {
   assert.equal(getCategoryCount(bookmarks, categories, 1), 3)
   assert.equal(getCategoryCount(bookmarks, categories, 2), 1)
-})
-
-test('only parent categories report child categories', () => {
-  assert.equal(hasCategoryChildren(categories, 1), true)
-  assert.equal(hasCategoryChildren(categories, 2), false)
 })
