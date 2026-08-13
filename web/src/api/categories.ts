@@ -26,9 +26,24 @@ export function updateCategory(
   })
 }
 
+/** PUT /api/categories/{id}/parent —— 仅调整分类层级。 */
+export function moveCategory(id: number, parentId: number | null): Promise<{ ok: boolean }> {
+  return api(`/categories/${id}/parent`, {
+    method: 'PUT',
+    body: JSON.stringify({ parent_id: parentId }),
+  })
+}
+
+/** PUT /api/categories/{id}/children/release —— 将直接子分类释放为顶级分类。 */
+export function releaseCategoryChildren(id: number): Promise<{ ok: boolean }> {
+  return api(`/categories/${id}/children/release`, { method: 'PUT' })
+}
+
 /** DELETE /api/categories/{id} —— 关联书签由后端 ON DELETE SET NULL 自动变未分类 */
-export function deleteCategory(id: number): Promise<{ ok: boolean }> {
-  return api(`/categories/${id}`, { method: 'DELETE' })
+export type CategoryDeleteMode = 'promote' | 'keep' | 'all'
+
+export function deleteCategory(id: number, mode: CategoryDeleteMode = 'keep'): Promise<{ ok: boolean }> {
+  return api(`/categories/${id}?mode=${mode}`, { method: 'DELETE' })
 }
 
 /** DELETE /api/categories/batch -- 批量删除分类，书签变未分类（ON DELETE SET NULL）*/

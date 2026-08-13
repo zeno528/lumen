@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useShallow } from 'zustand/react/shallow'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -42,6 +42,8 @@ import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
+import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
+import { categoryFilterFromSearch, parseBookmarkSearch } from '@/lib/bookmark-route'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { AI_PRESETS } from '@/lib/ai-providers'
@@ -61,10 +63,13 @@ import type { AISettings } from '@/api/settings'
  */
 export const Route = createFileRoute('/_authed/bookmarks')({
   head: () => ({ meta: [{ title: 'Lumen · 书签' }] }),
+  validateSearch: parseBookmarkSearch,
   component: BookmarksPage,
 })
 
 function BookmarksPage() {
+  const navigate = useNavigate()
+  const routeSearch = Route.useSearch()
   const { data: bmData, isLoading, error } = useBookmarks()
   const { data: catData } = useCategories()
   const toggleFav = useToggleFavorite()
@@ -168,6 +173,10 @@ function BookmarksPage() {
       closeBookmarkDialog: s.closeBookmarkDialog,
     })),
   )
+  const routeCategory = categoryFilterFromSearch(routeSearch)
+  useEffect(() => {
+    if (currentCategory !== routeCategory) setCurrentCategory(routeCategory)
+  }, [currentCategory, routeCategory, setCurrentCategory])
 
   // 容器入场动画门控：只在「首载 / 切分类」时挂 animate-enter，
   // 让整批卡片同步 fadeInUp 一次，300ms（fadeInUp 时长）后移除；之后后台 refetch 增量进来的
@@ -222,7 +231,7 @@ function BookmarksPage() {
         (b) => b.category_id == null || !catIds.has(b.category_id),
       )
     } else if (currentCategory !== 'all') {
-      bookmarks = bookmarks.filter((b) => b.category_id === currentCategory)
+      bookmarks = filterBookmarksByCategory(bookmarks, categories, currentCategory)
     }
     // 全部 / 收藏视图（非搜索）按 id DESC（创建顺序，最新在前），不按 sort_order：移动书签到新分类时
     // 后端会改 sort_order（目标分类末尾），若这两个视图也按 sort_order 排会导致书签在当前视图换位。
@@ -236,20 +245,37 @@ function BookmarksPage() {
 
   // 搜索结果按分类分组：filtered 已按分类排好（同分类必相邻），只需切连续段；未分类最后
   const searchGroups = useMemo(() => {
-    if (!q) return [] as { category?: Category; bookmarks: Bookmark[] }[]
+    if (!q) return [] as { category?: Category; bookmarks: Bookmark[]; showTitle: boolean }[]
     const catById = new Map(categories.map((c) => [c.id, c]))
-    const groups: { category?: Category; bookmarks: Bookmark[] }[] = []
+    const groups: { category?: Category; bookmarks: Bookmark[]; showTitle: boolean }[] = []
     for (const bookmark of filtered) {
       const category = bookmark.category_id != null ? catById.get(bookmark.category_id) : undefined
       const last = groups[groups.length - 1]
       if (!last || last.category !== category) {
-        groups.push({ category, bookmarks: [bookmark] })
+        groups.push({ category, bookmarks: [bookmark], showTitle: true })
       } else {
         last.bookmarks.push(bookmark)
       }
     }
     return groups
   }, [filtered, categories, q])
+
+  // 父分类视图沿用搜索结果的分组网格：父分类直属书签与每个子分类的书签分别成组，
+  // 仍在同一个网格中平铺，而不是把子分类做成入口卡片。
+  const categoryGroups = useMemo<{ category: Category; bookmarks: Bookmark[]; showTitle: boolean }[]>(() => {
+    if (q || typeof currentCategory !== 'number') return []
+    const parent = categories.find((category) => category.id === currentCategory)
+    const children = getChildCategories(categories, currentCategory)
+    if (!parent || children.length === 0) return []
+    return [parent, ...children]
+      .map((category) => ({
+        category,
+        bookmarks: filtered.filter((bookmark) => bookmark.category_id === category.id),
+        showTitle: category.id !== parent.id,
+      }))
+      .filter((group) => group.bookmarks.length > 0)
+  }, [filtered, categories, q, currentCategory])
+  const cardGroups = q ? searchGroups : categoryGroups.length > 0 ? categoryGroups : null
 
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
@@ -268,8 +294,9 @@ function BookmarksPage() {
       !categories.some((c) => c.id === currentCategory)
     ) {
       setCurrentCategory('all')
+      navigate({ to: '/bookmarks', search: {}, replace: true })
     }
-  }, [q, currentCategory, filtered.length, allBookmarks.length, categories, setCurrentCategory])
+  }, [q, currentCategory, filtered.length, allBookmarks.length, categories, setCurrentCategory, navigate])
 
   // 滚动位置记忆：刷新/登录后恢复上次滚动位置（书签首次加载完成后恢复）
   const scrollRestored = useRef(false)
@@ -664,21 +691,23 @@ function BookmarksPage() {
         </div>
       ) : (
         <div key={currentCategory} className={cn('bookmarks-grid', enterAnimate && 'animate-enter', q && 'searching', batchMode && 'select-none')}>
-          {q
-            ? searchGroups.flatMap((group) => {
+          {cardGroups
+            ? cardGroups.flatMap((group) => {
                 const Icon = resolveCategoryIcon(group.category?.icon)
                 const name = group.category?.name ?? '未分类'
                 const groupKey = group.category?.id ?? '__uncategorized__'
                 return [
-                  <h2 key={`group-${groupKey}`} className="search-group-title">
-                    <Icon
-                      size={14}
-                      style={{ color: group.category?.color || 'var(--text-muted)' }}
-                      aria-hidden="true"
-                    />
-                    <span>{name}</span>
-                    <span className="search-group-count">{group.bookmarks.length}</span>
-                  </h2>,
+                  ...(group.showTitle ? [
+                    <h2 key={`group-${groupKey}`} className="search-group-title">
+                      <Icon
+                        size={14}
+                        style={{ color: group.category?.color || 'var(--text-muted)' }}
+                        aria-hidden="true"
+                      />
+                      <span>{name}</span>
+                      <span className="search-group-count">{group.bookmarks.length}</span>
+                    </h2>,
+                  ] : []),
                   ...group.bookmarks.map((b) => (
                     <BookmarkCard
                       key={b.id}
@@ -868,4 +897,3 @@ function BookmarksPage() {
     </>
   )
 }
-

@@ -598,6 +598,7 @@ select,
    transform 只施加在 .sidebar-icon 上，hover 时外层高亮块尺寸不变（图标"被点亮"—— Notion/Linear/Arc 同款） */
 .sidebar-item {
   display: flex;
+  position: relative;
   align-items: center;
   border-radius: 8px;
   border: none;
@@ -703,43 +704,119 @@ select,
 }
 
 /* ===== 分类拖拽 =====
-   - sidebar-icon[draggable] 抓取手型
+   - 拖拽不改变鼠标指针样式
    - cat-dragging：被拖分类半透明
-   - cat-drag-over + cat-drag-over-before/after：分类排序目标，顶/底 inset 竖条指示插前/插后
+   - cat-drag-over-before/after：分类排序目标，用弧形插入线表示前/后位置
    - cat-drag-over-bookmark：书签拖入目标，绿色调区别用途
    虚拟分类（all/favorites/uncategorized）在 JS 层拒绝拖入。*/
-.sidebar-icon[draggable="true"] {
-  cursor: grab;
-}
-.sidebar-icon[draggable="true"]:active {
-  cursor: grabbing;
-}
 .sidebar-item.cat-dragging {
   opacity: 0.4;
 }
-.sidebar-item.cat-drag-over {
-  /* 排序落点公共：accent 背景 + 文字色；插入线由 before/after 变体分别给顶部/底部 */
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+/* 排序只显示弧形插入线，不借用“归入父级”的整卡片高亮。 */
+.sidebar-item.cat-drag-over-before::before,
+.sidebar-item.cat-drag-over-after::after {
+  content: '';
+  position: absolute;
+  /* 与“归入父级”的整卡片描边共用左右边界，避免两种反馈看起来像不同宽度的组件。 */
+  left: 0;
+  right: 0;
+  height: 8px;
+  pointer-events: none;
 }
-.sidebar-item.cat-drag-over .sidebar-item-count {
-  color: var(--accent);
+.sidebar-item.cat-drag-over-before::before {
+  top: -4px;
+  border-top: 3px solid var(--accent);
+  border-radius: 14px 14px 0 0;
 }
-/* 插到目标前面：顶部粗插入线 + 内边框（鼠标在 target 上半区） */
-.sidebar-item.cat-drag-over-before {
-  box-shadow:
-    inset 0 3px 0 var(--accent),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+.sidebar-item.cat-drag-over-after::after {
+  bottom: -4px;
+  border-bottom: 3px solid var(--accent);
+  border-radius: 0 0 14px 14px;
 }
-/* 插到目标后面：底部粗插入线 + 内边框（鼠标在 target 下半区） */
-.sidebar-item.cat-drag-over-after {
-  box-shadow:
-    inset 0 -3px 0 var(--accent),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+.context-menu-item.category-drag-over-before,
+.context-menu-item.category-drag-over-after {
+  position: relative;
+}
+.context-menu-item.category-drag-over-before::before,
+.context-menu-item.category-drag-over-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 6px;
+  pointer-events: none;
+}
+.context-menu-item.category-drag-over-before::before {
+  top: -3px;
+  border-top: 2px solid var(--accent);
+  border-radius: 10px 10px 0 0;
+}
+.context-menu-item.category-drag-over-after::after {
+  bottom: -3px;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0 0 10px 10px;
+}
+.context-menu-item.category-drag-over-inside {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.sidebar-item.cat-drag-over-inside {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .sidebar-item.cat-drag-over-bookmark {
-  box-shadow: inset 3px 0 0 #10b981, inset 0 2px 0 #10b981;
+  /* 书签投放是“移动到此分类”，用完整圆角描边而非左/上两条断线。 */
+  box-shadow: inset 0 0 0 2px #10b981;
   background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
+}
+.category-drag-preview,
+.bookmark-drag-preview {
+  position: fixed;
+  z-index: 2100;
+  left: -9999px;
+  top: -9999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-primary) 16%, transparent);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  opacity: 1;
+  pointer-events: none;
+}
+.category-drag-preview span,
+.bookmark-drag-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bookmark-drag-preview-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.bookmark-drag-preview-fallback {
+  display: grid;
+  place-items: center;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.category-release-dropzone {
+  margin: 8px 11px 0;
+  padding: 9px 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  text-align: center;
 }
 .sidebar-icon {
   width: 26px;
@@ -990,6 +1067,34 @@ select,
   overscroll-behavior-y: contain;
   padding: 10px 12px 12px;
 }
+.sidebar-item-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  position: relative;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.18s ease;
+}
+.sidebar-item-expand::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+.sidebar-item-expand:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.sidebar-item-expand.expanded {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
 .bookmarks-view-title {
   grid-column: 1 / -1;
   display: flex;
@@ -1068,7 +1173,6 @@ select,
   box-shadow: 0 0 0 1px var(--border-hover), 0 14px 32px rgba(0, 0, 0, 0.22),
     0 6px 12px rgba(0, 0, 0, 0.1);
 }
-
 /* ===== 批量模式选中态 =====
    语义类 selected 由 bookmark-card.tsx 在 selected 时挂载。
    边框变 accent + 双层阴影（1px 实色描边 + 16px 柔和外发光）。*/
@@ -1222,7 +1326,9 @@ select,
     top: 0;
     left: 0;
     bottom: 0;
-    width: 280px;
+    width: fit-content;
+    min-width: 240px;
+    max-width: 280px;
     z-index: 300;
     border-radius: 0 16px 16px 0;
     margin: 0;

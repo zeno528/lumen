@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, Layers, Star, Folder, Bookmark } from 'lucide-react'
+import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, Layers, Star, Folder, Bookmark, ChevronRight } from 'lucide-react'
 import { TopbarAvatar } from '@/components/shared/topbar-avatar'
 import { TopbarAIButton } from '@/components/shared/topbar-ai-button'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
@@ -14,6 +14,8 @@ import { useDebouncedValue } from '@/hooks/use-debounce'
 import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
+import { getCategoryCount, getChildCategories, getTopLevelCategories } from '@/lib/category-tree'
+import { categoryFilterToSearch } from '@/lib/bookmark-route'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 
 /**
@@ -384,7 +386,9 @@ function MobileCategorySelect() {
   const { data: catData } = useCategories()
   const { data: bmData } = useBookmarks()
   const { currentCategory, setCurrentCategory } = useUIStore()
+  const navigate = useNavigate()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [childMenuParent, setChildMenuParent] = useState<number | null>(null)
 
   const categories = catData?.categories ?? []
   const bookmarks = bmData?.bookmarks ?? []
@@ -398,7 +402,11 @@ function MobileCategorySelect() {
     ).length,
   }
   const countByCat = (id: number) =>
-    bookmarks.filter((b) => b.category_id === id).length
+    getCategoryCount(bookmarks, categories, id)
+  const selectCategory = (category: typeof currentCategory) => {
+    setCurrentCategory(category)
+    navigate({ to: '/bookmarks', search: categoryFilterToSearch(category) })
+  }
 
   // 当前分类信息
   const current = (() => {
@@ -447,7 +455,7 @@ function MobileCategorySelect() {
       icon: <Layers size={13} style={{ color: 'var(--icon-all)' }} />,
       active: currentCategory === 'all',
       trailing: countNode(counts.all),
-      onClick: () => setCurrentCategory('all'),
+      onClick: () => selectCategory('all'),
     },
   ]
   if (counts.favorites > 0)
@@ -456,7 +464,7 @@ function MobileCategorySelect() {
       icon: <Star size={13} style={{ color: 'var(--favorite-star)', fill: 'var(--favorite-star)' }} />,
       active: currentCategory === '__favorites__',
       trailing: countNode(counts.favorites),
-      onClick: () => setCurrentCategory('__favorites__'),
+      onClick: () => selectCategory('__favorites__'),
     })
   if (counts.uncategorized > 0)
     items.push({
@@ -464,18 +472,56 @@ function MobileCategorySelect() {
       icon: <Folder size={13} style={{ color: 'var(--icon-uncategorized)', fill: 'var(--icon-uncategorized)' }} />,
       active: currentCategory === '__uncategorized__',
       trailing: countNode(counts.uncategorized),
-      onClick: () => setCurrentCategory('__uncategorized__'),
+      onClick: () => selectCategory('__uncategorized__'),
     })
-  categories.forEach((cat) => {
+  getTopLevelCategories(categories).forEach((cat) => {
     const Icon = resolveCategoryIcon(cat.icon)
+    const children = getChildCategories(categories, cat.id)
     items.push({
       label: cat.name,
       icon: <Icon size={13} style={{ color: cat.color || 'var(--default-category-color)' }} />,
       active: currentCategory === cat.id,
-      trailing: countNode(countByCat(cat.id)),
-      onClick: () => setCurrentCategory(cat.id),
+      trailing: children.length > 0 ? (
+        <span
+          role="button"
+          tabIndex={0}
+          className="inline-flex items-center justify-center p-1 rounded text-(--text-muted)"
+          onClick={(e) => {
+            e.stopPropagation()
+            setChildMenuParent(cat.id)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              setChildMenuParent(cat.id)
+            }
+          }}
+          aria-label={`${cat.name}子分类`}
+        ><ChevronRight size={14} /></span>
+      ) : countNode(countByCat(cat.id)),
+      onClick: () => selectCategory(cat.id),
     })
   })
+
+  const childParent = childMenuParent == null ? null : categories.find((c) => c.id === childMenuParent)
+  const childItems: MenuItem[] = childParent
+    ? [
+        {
+          label: childParent.name,
+          header: true,
+          trailing: <span className="sidebar-item-count">{countByCat(childParent.id)}</span>,
+        },
+        ...getChildCategories(categories, childParent.id).map((child) => {
+          const ChildIcon = resolveCategoryIcon(child.icon)
+          return {
+            label: `${child.name}（${countByCat(child.id)}）`,
+            icon: <ChildIcon size={13} style={{ color: child.color || 'var(--default-category-color)' }} />,
+            onClick: () => selectCategory(child.id),
+          }
+        }),
+      ]
+    : items
 
   return (
     <>
@@ -499,10 +545,10 @@ function MobileCategorySelect() {
       </button>
       <ContextMenu
         open={!!menu}
-        onClose={() => setMenu(null)}
+        onClose={() => { setMenu(null); setChildMenuParent(null) }}
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
-        items={items}
+        items={childMenuParent != null ? childItems : items}
         anchor="right"
         alignY="top"
         minWidth={200}
