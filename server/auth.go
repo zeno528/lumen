@@ -177,6 +177,24 @@ func (s *Server) IncrementTokenVersion() {
 	}
 }
 
+// rotateSession 踢其他设备 + 保留当前会话：递增 token 版本让旧 token 失效（OWASP V3.3.3，
+// 只终止其他会话），并给当前会话用新版本重发 token。verifiedAt 非0则新会话继承该密码验证时效。
+// 失败时已写错误响应，调用方直接 return；返回新 token 供写入成功响应。
+// 复用方：改密码（handleChangePassword）、踢其他设备（handleRevokeSessions）。
+func (s *Server) rotateSession(w http.ResponseWriter, verifiedAt time.Time) (string, bool) {
+	s.IncrementTokenVersion()
+	token, jti, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "生成 token 失败"})
+		return "", false
+	}
+	if !verifiedAt.IsZero() {
+		s.markSessionVerified(jti, verifiedAt)
+	}
+	s.setSessionCookie(w, token, http.SameSiteStrictMode)
+	return token, true
+}
+
 // consumeWSTicket 校验 WS ticket 的 jti 是否首次使用（一次性票据）。
 // 5s 内重用同一 jti 拒绝（防 ticket 被截获后在有效期内重复连入）。无 jti 的旧 ticket 宽容放行。
 func (s *Server) consumeWSTicket(jti string) bool {
@@ -509,24 +527,27 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		s.db.Exec("INSERT INTO settings (key, value) VALUES ('nickname', ?) ON CONFLICT(key) DO UPDATE SET value = ?", input.Nickname, input.Nickname)
 	}
 
-	// 递增 token 版本号，使所有旧 token 失效（其他设备下次请求 401 退出）
-	s.IncrementTokenVersion()
-
-	// 当前会话保留：用新版本号重发 token，前端替换本地 token 即可无缝继续
-	// （OWASP V3.3.3：改密码只终止"其他"会话，不要求踢出当前会话）
-	token, jti, err := GenerateToken(s.config.JWTSecret, s.GetTokenVersion())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "生成 token 失败"})
+	// 踢其他设备 + 当前会话保留（复用 rotateSession，与「踢出其他设备」同一套逻辑）
+	token, ok := s.rotateSession(w, verifiedAt)
+	if !ok {
 		return
 	}
-	// 新会话继承验证时效（原时间戳，不刷新）：改完一个再改另一个无需重复验证
-	s.markSessionVerified(jti, verifiedAt)
-	s.setSessionCookie(w, token, http.SameSiteStrictMode)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":    true,
 		"token": token,
 	})
+}
+
+// handleRevokeSessions POST /api/auth/revoke-sessions
+// 踢除其他设备（不改密码、不验证密码——已在认证态，UI 二次确认防误触）。
+// 直接复用 rotateSession：递增 token 版本踢其他设备，当前会话重发 token 保留。
+func (s *Server) handleRevokeSessions(w http.ResponseWriter, r *http.Request) {
+	token, ok := s.rotateSession(w, s.passwordVerifiedAt(requestSessionKey(r)))
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "token": token})
 }
 
 // handleGetNickname GET /api/auth/nickname
