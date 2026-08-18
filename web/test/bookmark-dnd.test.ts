@@ -6,7 +6,6 @@ import {
   moveBookmarkInList,
   isCrossCategoryMove,
 } from '../src/lib/bookmark-dnd.ts'
-import { getAutoScrollDelta } from '../src/lib/bookmark-auto-scroll.ts'
 import type { Bookmark } from '../src/types.ts'
 
 const bookmarks = [1, 2, 3].map((id) => ({ id, category_id: id === 3 ? 2 : 1 })) as Bookmark[]
@@ -41,12 +40,4 @@ test('same-category reorder is not a cross-category move', () => {
   assert.equal(isCrossCategoryMove(items, [3], 1), true)
   assert.equal(isCrossCategoryMove(items, [1, 3], 1), true)
   assert.equal(isCrossCategoryMove(items, [1], null), true)
-})
-
-test('auto-scroll accelerates toward the active edge only', () => {
-  const rect = { top: 100, bottom: 700 } as DOMRect
-  assert.equal(getAutoScrollDelta(400, rect, 400), 0)
-  assert.ok(getAutoScrollDelta(105, rect, 400) < 0)
-  assert.ok(getAutoScrollDelta(695, rect, 400) > 0)
-  assert.ok(Math.abs(getAutoScrollDelta(695, rect, 400)) > Math.abs(getAutoScrollDelta(650, rect, 400)))
 })

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, CheckCheck, X } from 'lucide-react'
 import { useRouterState } from '@tanstack/react-router'
+import { DragDropProvider } from '@dnd-kit/react'
 import { Sidebar } from './sidebar'
 import { AddBookmarkFab } from './add-bookmark-fab'
 import { TopbarAvatar } from '@/components/shared/topbar-avatar'
@@ -15,6 +16,7 @@ import { useBookmarks } from '@/hooks/useBookmarks'
 import { useCategories } from '@/hooks/useCategories'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { openInNewTab } from '@/lib/utils'
+import { AppDragOverlay } from '@/components/shared/drag-overlay'
 import {
   computeGridContentWidth,
   MAX_CONTAINER_WIDTH,
@@ -137,10 +139,11 @@ function useGridInset() {
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile(768)
-  return isMobile ? (
-    <MobileShell>{children}</MobileShell>
-  ) : (
-    <DesktopShell>{children}</DesktopShell>
+  return (
+    <DragDropProvider>
+      {isMobile ? <MobileShell>{children}</MobileShell> : <DesktopShell>{children}</DesktopShell>}
+      <AppDragOverlay />
+    </DragDropProvider>
   )
 }
 

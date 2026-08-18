@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useDragDropMonitor, useDroppable, type DragMoveEvent } from '@dnd-kit/react'
+import { useSortable } from '@dnd-kit/react/sortable'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Layers,
@@ -30,7 +32,6 @@ import {
 } from '@/hooks/useBookmarks'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { useUIStore } from '@/stores/ui'
-import { useBookmarkDragStore } from '@/stores/bookmark-drag'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
@@ -40,18 +41,13 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { ImportDialog } from '@/components/shared/import-dialog'
 import { ExportDialog } from '@/components/shared/export-dialog'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
+import { useLongPress } from '@/hooks/use-long-press'
 import type { Category } from '@/types'
 import type { CategoryDeleteMode } from '@/api/categories'
 import { getChildCategories, getCategoryCount, getParentCategory, getTopLevelCategories, hasChildCategories } from '@/lib/category-tree'
-import { DRAG_TYPE_BOOKMARK, DRAG_TYPE_CATEGORY, getDragId, getDropSide, hasDragType, setDragId, type CategoryDropAction } from '@/lib/category-dnd'
+import { getCategoryDropAction, makeCategoryZoneId, makeDragId, type CategoryDragData, type CategoryDropAction, type CategoryZoneDragData, type LumenDragData } from '@/lib/category-dnd'
 import { getDraggedBookmarkIds } from '@/lib/bookmark-dnd'
-import { getDragImage } from '@/lib/drag-image'
 
-/**
- * 拖拽 MIME 类型。
- * 用专属 MIME 类型区分"书签拖到分类"和"分类之间排序"，避免共用 text/plain 派发模糊。
- * 拖拽视觉与"被拖分类 id"在 SidebarItem 内 / Sidebar state 管理，见 sidebar-item.tsx。
- */
 /**
  * 侧边栏 —— logo（顶部）+ 分类列表 + 底部操作（导入/导出）。
  * - 分类列表：全部 / 收藏 / 未分类 / 各分类，每项带计数
@@ -91,7 +87,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     selectCategoryRange,
     clearCategorySelection,
   } = useUIStore()
-  const setBookmarkDragTarget = useBookmarkDragStore((state) => state.setTarget)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   // 新建分类触发 pop-in 入场动画（isNew）。不设定时清除：pop-in 由 sidebar-item 的
@@ -132,14 +127,16 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const [childMenu, setChildMenu] = useState<{ category: Category; x: number; y: number } | null>(null)
   const [newChildParentId, setNewChildParentId] = useState<number | null>(null)
   const [draggedCatId, setDraggedCatId] = useState<number | null>(null)
-  const [dragPreview, setDragPreview] = useState<Category | null>(null)
-  const [childDragOver, setChildDragOver] = useState<{ id: number; position: 'before' | 'after' | 'bookmark' } | null>(null)
   const [dragResultId, setDragResultId] = useState<number | null>(null)
-  const dragPreviewRef = useRef<HTMLDivElement>(null)
   const childMenuTimerRef = useRef<number | null>(null)
   const childMenuCloseTimerRef = useRef<number | null>(null)
   const childMenuTargetIdRef = useRef<number | null>(null)
   const dragResultTimerRef = useRef<number | null>(null)
+  const lastCategoryTargetRef = useRef<{
+    sourceId: number
+    targetData: Extract<LumenDragData, { kind: 'category' }>
+    action: CategoryDropAction
+  } | null>(null)
   // 子分类浮层与其右键菜单属于同一临时交互：从任一入口关闭时必须一起消失。
   const closeCategoryMenuGroup = () => {
     setChildMenu(null)
@@ -275,77 +272,24 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           header: true,
           trailing: <span className="sidebar-item-count">{countByCat(childMenu.category.id)}</span>,
         },
-        ...getChildCategories(categories, childMenu.category.id).map((child) => {
-          const ChildIcon = resolveCategoryIcon(child.icon)
-          return {
-            label: `${child.name}（${countByCat(child.id)}）`,
-            icon: <ChildIcon size={14} style={{ color: child.color || 'var(--default-category-color)' }} />,
-            onClick: () => selectCategory(child.id),
-            onContext: (event: React.MouseEvent<HTMLButtonElement>) => {
-              setCatMenu({ kind: 'cat', id: child.id, x: event.clientX, y: event.clientY })
-            },
-            onLongPress: (x: number, y: number) => setCatMenu({ kind: 'cat', id: child.id, x, y }),
-            className: cn(
-              childDragOver?.id === child.id && childDragOver.position === 'bookmark' && 'category-drag-over-bookmark',
-              childDragOver?.id === child.id && childDragOver.position === 'before' && 'category-drag-over-before',
-              childDragOver?.id === child.id && childDragOver.position === 'after' && 'category-drag-over-after',
-            ),
-            onDragOver: (e: React.DragEvent<HTMLButtonElement>) => {
-              e.preventDefault()
-              if (hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)) {
-                // 等值守卫：dragover 每像素触发，避免无变化时整栏重渲染（高频拖拽性能红线）
-                setChildDragOver((current) =>
-                  current?.id === child.id && current.position === 'bookmark'
-                    ? current
-                    : { id: child.id, position: 'bookmark' },
-                )
-                setBookmarkDragTarget({ id: child.id, name: child.name })
-                return
-              }
-              if (draggedCatId == null || draggedCatId === child.id) return
-              const rect = e.currentTarget.getBoundingClientRect()
-              const position = getDropSide(e.clientY - rect.top, rect.height)
-              setChildDragOver((current) => current?.id === child.id && current.position === position ? current : { id: child.id, position })
-            },
-            onDragLeave: (e: React.DragEvent<HTMLButtonElement>) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setChildDragOver(null)
-              }
-            },
-            onDrop: (e: React.DragEvent<HTMLButtonElement>) => {
-              e.preventDefault()
-              setChildDragOver(null)
-              if (hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)) {
-                void handleBookmarkDropToCategory(e, child)
-                return
-              }
-              const categoryId = getDragId(e.dataTransfer, DRAG_TYPE_CATEGORY)
-              if (categoryId != null && categoryId !== child.id) {
-                const rect = e.currentTarget.getBoundingClientRect()
-                const position = getDropSide(e.clientY - rect.top, rect.height)
-                const source = categories.find((category) => category.id === categoryId)
-                if (source?.parent_id === child.parent_id) {
-                  reorderCats.mutate({ fromId: categoryId, toId: child.id, position })
-                } else {
-                  void moveCat.mutateAsync({ id: categoryId, parentId: child.parent_id, targetId: child.id, position })
-                    .then(() => toast.success(`已将「${source?.name ?? '分类'}」移至「${childMenu.category.name} / ${child.name}」${position === 'before' ? '前' : '后'}`))
-                    .catch((error) => toast.error('移动失败: ' + (error as Error).message))
-                }
-                return
-              }
-              void handleBookmarkDropToCategory(e, child)
-            },
-            draggable: true,
-            onDragStart: (e: React.DragEvent<HTMLButtonElement>) => {
-              setDraggedCatId(child.id)
-              setDragPreview(child)
-              setCategoryDragImage(e)
-              setDragId(e.dataTransfer, DRAG_TYPE_CATEGORY, child.id)
-            },
-            onDrag: moveCategoryDragPreview,
-            onDragEnd: clearDragState,
-          }
-        }),
+        ...getChildCategories(categories, childMenu.category.id).map((child, index) => ({
+          label: child.name,
+          render: () => (
+            <SortableCategoryMenuItem
+              category={child}
+              label={`${child.name}（${countByCat(child.id)}）`}
+              icon={(() => {
+                const ChildIcon = resolveCategoryIcon(child.icon)
+                return <ChildIcon size={14} style={{ color: child.color || 'var(--default-category-color)' }} />
+              })()}
+              index={index}
+              group={`categories:${child.parent_id ?? 'root'}`}
+              onClick={() => selectCategory(child.id)}
+              onContext={(event) => setCatMenu({ kind: 'cat', id: child.id, x: event.clientX, y: event.clientY })}
+              onLongPress={(x, y) => setCatMenu({ kind: 'cat', id: child.id, x, y })}
+            />
+          ),
+        })),
       ]
     : []
 
@@ -474,13 +418,10 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
   }
 
-  function clearDragState() {
-    const draggedId = draggedCatId
+  function clearDragState(draggedId: number | null = draggedCatId) {
+    lastCategoryTargetRef.current = null
     setDraggedCatId(null)
-    setDragPreview(null)
-    setChildDragOver(null)
     setChildMenu(null)
-    useBookmarkDragStore.getState().clear()
     if (childMenuTimerRef.current != null) {
       window.clearTimeout(childMenuTimerRef.current)
       childMenuTimerRef.current = null
@@ -500,18 +441,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
   }
 
-  function setCategoryDragImage(event: React.DragEvent) {
-    // 复用全局单例 ghost 图：不在拖拽会话中增删 DOM 节点（防 Chromium 崩溃）
-    event.dataTransfer.setDragImage(getDragImage(), 0, 0)
-  }
-
-  function moveCategoryDragPreview(event: React.DragEvent) {
-    if (!dragPreviewRef.current || event.clientX === 0 || event.clientY === 0) return
-    dragPreviewRef.current.style.left = `${event.clientX + 14}px`
-    dragPreviewRef.current.style.top = `${event.clientY + 14}px`
-  }
-
-  const showChildMenuOnNestHover = (event: React.DragEvent, target: Category) => {
+  const showChildMenuOnNestHover = (target: Category, rect: DOMRect) => {
     if (!hasChildCategories(categories, target.id)) return
     cancelChildMenuClose()
     if (childMenu?.category.id === target.id) return
@@ -521,8 +451,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       childMenuTargetIdRef.current = target.id
       if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
       setChildMenu(null)
-      // 先取 rect：React 事件处理完 currentTarget 会被置空，定时器闭包里不能再读
-      const rect = event.currentTarget.getBoundingClientRect()
       // 150ms：比旧的 450ms 快得多，同时保留扫过侧栏时的防误触缓冲（与搜索 debounce 同手感）。
       childMenuTimerRef.current = window.setTimeout(() => {
         childMenuTimerRef.current = null
@@ -532,26 +460,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       }, 150)
     }
   }
-
-  // 书签拖拽结束（store.sourceId 清空）时统一清理子分类浮层的 timer/ref/菜单。
-  // 书签拖拽走 clearBookmarkDrag（zustand），不经过 clearDragState，旧逻辑会遗留：
-  // - 150ms 弹层 timer → 拖拽结束后浮层在错误位置突然弹出（拖拽会话外新增节点，叠加崩溃风险）
-  // - childMenuTargetIdRef 残留 → 下一次拖同一分类被 showChildMenu 的守卫挡掉、浮层弹不出
-  // 归一到"拖拽会话生命周期"统一清理，避免两套拖拽（书签/分类）各留一半状态。
-  const dragSourceId = useBookmarkDragStore((s) => s.sourceId)
-  useEffect(() => {
-    if (dragSourceId != null) return
-    if (childMenuTimerRef.current != null) {
-      window.clearTimeout(childMenuTimerRef.current)
-      childMenuTimerRef.current = null
-    }
-    if (childMenuCloseTimerRef.current != null) {
-      window.clearTimeout(childMenuCloseTimerRef.current)
-      childMenuCloseTimerRef.current = null
-    }
-    childMenuTargetIdRef.current = null
-    setChildMenu(null)
-  }, [dragSourceId])
 
   const hideChildMenuOnDragLeave = (target: Category) => {
     // 立即清 ref：允许下一个 dragover 重新起 timer。
@@ -578,50 +486,15 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   /**
    * 分类 drop 派发。
    * 书签拖入 → 移动分类；分类之间拖动 → 排序。
-   * position 由 SidebarItem 按 drop 瞬间鼠标位置计算（中线为界，'before' | 'after'），
-   * 解决"只能往上拖"问题：纯 HTML5 DnD 的 drop 命中点是光标下元素，固定 before 会让往下拖时
-   * 落点命中下方目标但被拖项仍要插到它前面（视觉位移极小），用户感觉"没反应"。
+   * position 由 SidebarItem 按 drop 瞬间鼠标位置计算（中线为界，'before' | 'after'）。
    */
-  const onCategoryDrop = async (
-    e: React.DragEvent,
-    targetCat: Category,
-    action: CategoryDropAction,
-  ) => {
-    e.stopPropagation()
-    // 书签拖到分类 → 移动分类
-    if (hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)) {
-      handleBookmarkDropToCategory(e, targetCat)
-      return
-    }
-    // 分类之间拖动 → 排序
-    // fallback text/plain：自定义 MIME 在某些环境下 drop 时读不到
-    const fromId = getDragId(e.dataTransfer, DRAG_TYPE_CATEGORY)
-    if (fromId == null || fromId === targetCat.id) return
-    if (action.kind === 'make-child') {
-      try {
-        await moveCat.mutateAsync({ id: fromId, parentId: targetCat.id })
-        toast.success(`已将「${categories.find((category) => category.id === fromId)?.name ?? '分类'}」归入「${targetCat.name}」`)
-      } catch (err) {
-        toast.error('归类失败: ' + (err as Error).message)
-      }
-      return
-    }
-    reorderCats.mutate({ fromId, toId: targetCat.id, position: action.position })
-  }
-
   /**
    * 书签拖到分类。
    * 批量模式下若拖的卡片在已选集合且 size>1，整批移动；否则只移这一张。
    * 过滤掉已在目标分类的书签，直接乐观更新 category_id + mutate，当前分类 filter 瞬间移除卡片
    * （无退场动画）。移动是轻操作（书签没删，切到目标分类还在），果断干净，与取消收藏一致。   * position 参数（来自 SidebarItem）当前未使用：书签拖入场景固定是"移到该分类"，无需 before/after。
    */
-  const handleBookmarkDropToCategory = (
-    e: React.DragEvent,
-    targetCat: Category,
-  ) => {
-    // fallback text/plain：自定义 MIME 在某些环境下 drop 时读不到
-    const draggedId = getDragId(e.dataTransfer, DRAG_TYPE_BOOKMARK)
-    if (draggedId == null) return
+  const handleBookmarkDropToCategory = (draggedId: number, targetCat: Category) => {
     // 批量模式下整批移动
     // 整批拖拽（拖的卡片在已选集合且选了多个）→ 移动后清掉这批选中；单个拖拽不动选中
     const { ids: requestedIds, isBatch } = getDraggedBookmarkIds(bookmarks, selectedIds, draggedId)
@@ -643,6 +516,113 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     )
   }
 
+  const rememberCategoryTarget = (operation: DragMoveEvent['operation']) => {
+    const sourceData = operation.source?.data as LumenDragData | undefined
+    const targetData = operation.target?.data as LumenDragData | undefined
+    const targetElement = operation.target?.element
+    if (
+      sourceData?.kind !== 'category' ||
+      targetData?.kind !== 'category' ||
+      targetData.id === sourceData.id ||
+      !targetElement
+    ) return
+    const rect = targetElement.getBoundingClientRect()
+    lastCategoryTargetRef.current = {
+      sourceId: sourceData.id,
+      targetData,
+      action: getCategoryDropAction(
+        operation.position.current.y - rect.top,
+        rect.height,
+        targetData.canNest,
+      ),
+    }
+  }
+
+  useDragDropMonitor({
+    onDragStart: ({ operation }) => {
+      const sourceData = operation.source?.data as LumenDragData | undefined
+      if (sourceData?.kind !== 'category') return
+      lastCategoryTargetRef.current = null
+      setCatMenu(null)
+      if (dragResultTimerRef.current != null) {
+        window.clearTimeout(dragResultTimerRef.current)
+        dragResultTimerRef.current = null
+      }
+      setDragResultId(null)
+      setDraggedCatId(sourceData.id)
+    },
+    onDragMove: ({ operation }) => rememberCategoryTarget(operation),
+    onDragOver: ({ operation }) => rememberCategoryTarget(operation),
+    onCollision: (_event, manager) => rememberCategoryTarget(manager.dragOperation),
+    onDragEnd: async ({ operation, canceled }) => {
+      const lastCategoryTarget = lastCategoryTargetRef.current
+      lastCategoryTargetRef.current = null
+      const sourceData = operation.source?.data as LumenDragData | undefined
+      if (!sourceData) return
+      const targetData = operation.target?.data as LumenDragData | undefined
+
+      if (canceled) {
+        clearDragState(null)
+        return
+      }
+
+      if (sourceData.kind === 'bookmark') {
+        if (targetData?.kind === 'category' || targetData?.kind === 'category-zone') {
+          const target = categories.find((category) => category.id === targetData.id)
+          if (target) handleBookmarkDropToCategory(sourceData.id, target)
+        }
+        clearDragState(null)
+        return
+      }
+
+      const finalTargetData = targetData?.kind === 'category' && targetData.id !== sourceData.id
+        ? targetData
+        : lastCategoryTarget?.sourceId === sourceData.id
+          ? lastCategoryTarget.targetData
+          : undefined
+      if (sourceData.kind !== 'category' || !finalTargetData) {
+        clearDragState(sourceData.kind === 'category' ? sourceData.id : null)
+        return
+      }
+      const targetElement = operation.target?.element
+      const action = targetData?.kind === 'category' && targetData.id !== sourceData.id && targetElement
+        ? getCategoryDropAction(
+            operation.position.current.y - targetElement.getBoundingClientRect().top,
+            targetElement.getBoundingClientRect().height,
+            finalTargetData.canNest,
+          )
+        : lastCategoryTarget?.action
+      if (!action) {
+        clearDragState(sourceData.id)
+        return
+      }
+      const source = categories.find((category) => category.id === sourceData.id)
+      if (action.kind === 'make-child') {
+        try {
+          await moveCat.mutateAsync({ id: sourceData.id, parentId: finalTargetData.id })
+          toast.success(`已将「${source?.name ?? '分类'}」归入「${finalTargetData.name}」`)
+        } catch (error) {
+          toast.error('归类失败: ' + (error as Error).message)
+        }
+      } else if (source?.parent_id === finalTargetData.parentId) {
+        reorderCats.mutate({ fromId: sourceData.id, toId: finalTargetData.id, position: action.position })
+      } else {
+        try {
+          await moveCat.mutateAsync({
+            id: sourceData.id,
+            parentId: finalTargetData.parentId,
+            targetId: finalTargetData.id,
+            position: action.position,
+          })
+          toast.success(`已将「${source?.name ?? '分类'}」移至「${finalTargetData.name}」${action.position === 'before' ? '前' : '后'}`)
+        } catch (error) {
+          toast.error('移动失败: ' + (error as Error).message)
+        }
+      }
+      clearDragState(sourceData.id)
+    },
+  })
+
   /** 选中分类：分类行只切换视图；子分类悬浮卡片由右侧箭头单独触发。 */
   const selectCategory = (cat: typeof currentCategory) => {
     setCurrentCategory(cat)
@@ -661,15 +641,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
        跟 body panel 暖米色不一致，main 圆角塌角透出来形成"小三角"色差 */
     <aside
       className={cn('sidebar', open && 'open')}
-      onDragLeave={(event) => {
-        const related = event.relatedTarget as Node | null
-        if (event.currentTarget.contains(related)) return
-        // 子分类菜单 portal 到 body（不在 aside DOM 内）：滑进菜单不算离开侧栏，
-        // 跳过清空，链路胶囊和父分类路径一样只在悬停项之间替换、不经过 null → 不闪烁。
-        if (related instanceof Element && related.closest('.context-menu')) return
-        // 只清 target 不清 sourceId：clear() 会把 sourceId 一起清，链路胶囊会永久消失。
-        setBookmarkDragTarget(null)
-      }}
     >
       {/* Logo —— 侧栏顶部 */}
       <button
@@ -758,14 +729,15 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           />
         )}
         {!isLoading &&
-          topLevelCategories.map((c) => {
+          topLevelCategories.map((c, index) => {
             const Icon = resolveCategoryIcon(c.icon)
             return (
               <SidebarItem
                 key={c.id}
                 style={staggerStyle()}
                 category={c}
-                draggedCatId={draggedCatId}
+                index={index}
+                group="categories:root"
                 iconColor={c.color || 'var(--default-category-color)'}
                 icon={<Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />}
                 label={c.name}
@@ -786,22 +758,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 canNestDrop={!hasChildCategories(categories, draggedCatId ?? -1)}
                 onNestDragOver={showChildMenuOnNestHover}
                 onTargetDragLeave={hideChildMenuOnDragLeave}
-                onBookmarkDragTargetChange={(target) => setBookmarkDragTarget(target ? { id: target.id, name: target.name } : null)}
-                onDragStart={(event, category) => {
-                  // 拖拽开始立即收起右键菜单：右键菜单只监听点击外部，拖拽不产生 click，不会自动关
-                  setCatMenu(null)
-                  if (dragResultTimerRef.current != null) {
-                    window.clearTimeout(dragResultTimerRef.current)
-                    dragResultTimerRef.current = null
-                  }
-                  setDragResultId(null)
-                  setDraggedCatId(category.id)
-                  setDragPreview(category)
-                  setCategoryDragImage(event)
-                }}
-                onDrag={moveCategoryDragPreview}
-                onDragEnd={clearDragState}
-                onDrop={onCategoryDrop}
                 isNew={c.id === recentlyAddedCatId}
                 selected={categoryBatchMode && selectedCategoryIds.has(c.id)}
                 onSelect={categoryBatchMode ? handleCategorySelect : undefined}
@@ -809,24 +765,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
               />
             )
           })}
-      </div>
-
-      {/* 预览 div 常驻挂载、按 dragPreview 切 class 显隐：拖拽会话中不增删 DOM 节点（防 Chromium 崩溃）。
-          内容仍条件渲染，避免常驻无谓节点。 */}
-      <div
-        ref={dragPreviewRef}
-        className={cn('category-drag-preview', !dragPreview && 'drag-preview-hidden')}
-        aria-hidden="true"
-      >
-        {dragPreview && (() => {
-          const DragIcon = resolveCategoryIcon(dragPreview.icon)
-          return (
-            <>
-              <DragIcon size={16} style={{ color: dragPreview.color || 'var(--default-category-color)' }} />
-              <span>{dragPreview.name}</span>
-            </>
-          )
-        })()}
       </div>
 
       <ContextMenu
@@ -838,12 +776,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         anchor="left"
         preserveOnMenuClick
         ignoreOutsideClickSelector=".sidebar-item-expand"
-        onDragEnter={cancelChildMenuClose}
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node) && childMenu) {
-            hideChildMenuOnDragLeave(childMenu.category)
-          }
-        }}
       />
 
       {/* 分类批量操作栏（批量模式时显示）*/}
@@ -966,5 +898,108 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         onConfirm={onConfirmDelete}
       />
     </aside>
+  )
+}
+
+function SortableCategoryMenuItem({
+  category,
+  label,
+  icon,
+  index,
+  group,
+  onClick,
+  onContext,
+  onLongPress,
+}: {
+  category: Category
+  label: string
+  icon: React.ReactNode
+  index: number
+  group: string
+  onClick: () => void
+  onContext: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onLongPress: (x: number, y: number) => void
+}) {
+  const id = makeDragId('category', category.id)
+  const sortable = useSortable<CategoryDragData>({
+    id,
+    index,
+    group,
+    type: 'category',
+    accept: (source) => source.id !== id && source.type === 'category',
+    data: {
+      kind: 'category',
+      id: category.id,
+      name: category.name,
+      color: category.color,
+      icon: category.icon,
+      parentId: category.parent_id,
+      canNest: false,
+    },
+  })
+  const categoryZone = useDroppable<CategoryZoneDragData>({
+    id: makeCategoryZoneId(category.id),
+    type: 'category-zone',
+    accept: 'bookmark',
+    data: { kind: 'category-zone', id: category.id, name: category.name },
+  })
+  const categoryZoneId = makeCategoryZoneId(category.id)
+  const [dragOver, setDragOver] = useState<'bookmark' | 'before' | 'after' | null>(null)
+
+  useDragDropMonitor({
+    onDragMove: ({ operation }) => {
+      const sourceData = operation.source?.data as { kind?: string } | undefined
+      const targetId = sourceData?.kind === 'bookmark' ? categoryZoneId : id
+      if (operation.target?.id !== targetId || operation.source?.id === id) {
+        setDragOver((current) => current == null ? current : null)
+        return
+      }
+      if (sourceData?.kind === 'bookmark') {
+        setDragOver((current) => current === 'bookmark' ? current : 'bookmark')
+        return
+      }
+      if (sourceData?.kind !== 'category') return
+      const rect = operation.target?.element?.getBoundingClientRect()
+      if (!rect) return
+      const action = getCategoryDropAction(
+        operation.position.current.y - rect.top,
+        rect.height,
+        false,
+      )
+      if (action.kind === 'reorder') {
+        setDragOver((current) => current === action.position ? current : action.position)
+      }
+    },
+    onDragEnd: () => setDragOver(null),
+  })
+
+  const longPress = useLongPress(onLongPress)
+  const setRefs = (element: HTMLButtonElement | null) => {
+    sortable.ref(element)
+    categoryZone.ref(element)
+  }
+
+  return (
+    <button
+      ref={setRefs}
+      type="button"
+      title={label}
+      className={cn(
+        'context-menu-item',
+        dragOver === 'bookmark' && 'category-drag-over-bookmark',
+        dragOver === 'before' && 'category-drag-over-before',
+        dragOver === 'after' && 'category-drag-over-after',
+        sortable.isDragging && 'cat-dragging',
+      )}
+      onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        onContext(event)
+      }}
+      {...longPress}
+    >
+      <span className="icon">{icon}</span>
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+    </button>
   )
 }

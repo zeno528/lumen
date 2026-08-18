@@ -210,8 +210,8 @@ export function useBatchDeleteCategories() {
  * 失败只 console.error 不回滚（排序错位非致命）。
  *
  * 排序语义：由调用方传入 `position: 'before' | 'after'`，决定被拖项插到目标项的前面还是后面。
- * 原实现固定 `before`，配合 HTML5 DnD "drop target = 鼠标光标下的元素" 时，往下拖视觉位移
- * 极小（落点命中 from 已经在它前面的目标 → "插到前面" = 现状）用户感觉"往下拖没反应"。
+ * 原实现固定 `before`，往下拖视觉位移极小（落点命中 from 已经在它前面的目标 →
+ * "插到前面" = 现状）用户感觉"往下拖没反应"。
  * 修复：drop 时按鼠标在 target 内的 offsetY 决定 before/after（中线为界）。
  *
  * 关键点：先移除 from，再用 findIndex 在移除后的数组里重新定位 to 并按 position 插入。
