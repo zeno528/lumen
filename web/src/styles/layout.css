@@ -839,12 +839,12 @@ select,
   font-size: 0.9rem;
   opacity: 1;
   pointer-events: none;
-  transition: opacity 0.16s ease;
 }
-/* 拖拽预览常驻挂载（不随 dragging 增删节点，防 Chromium 拖拽崩溃），未拖拽时隐藏 */
-.category-drag-preview.drag-preview-hidden,
-.bookmark-drag-preview.drag-preview-hidden {
-  visibility: hidden;
+.app-drag-overlay-preview {
+  position: relative;
+  left: auto;
+  top: auto;
+  z-index: auto;
 }
 .category-drag-preview span,
 .bookmark-drag-preview span {

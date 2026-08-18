@@ -1,24 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { Star, Copy, Globe, Check, Hash, Menu, ArrowRight } from 'lucide-react'
+import { Star, Copy, Globe, Check, Hash, Menu } from 'lucide-react'
+import { useDragDropMonitor } from '@dnd-kit/react'
+import { useSortable } from '@dnd-kit/react/sortable'
 import type { Bookmark } from '@/types'
 import { faviconUrl } from '@/api/bookmarks'
 import { getFavicon, hasNoFavicon, markNoFavicon } from '@/lib/favicon-cache'
-import { useToggleFavorite, useReorderBookmarks } from '@/hooks/useBookmarks'
+import { useToggleFavorite } from '@/hooks/useBookmarks'
 import { useLongPress } from '@/hooks/use-long-press'
 import { useUIStore } from '@/stores/ui'
-import { useBookmarkDragStore } from '@/stores/bookmark-drag'
 import { highlightText } from '@/lib/bookmark-utils'
-import { getDragImage } from '@/lib/drag-image'
-import { DRAG_TYPE_BOOKMARK, getDragId, hasDragType, setDragId } from '@/lib/category-dnd'
+import { makeDragId, type BookmarkDragData } from '@/lib/category-dnd'
 import { getBookmarkDropPosition, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
-import { startBookmarkAutoScroll, stopBookmarkAutoScroll, updateBookmarkAutoScroll } from '@/lib/bookmark-auto-scroll'
 import { cn, openInNewTab } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 
-/**
- * 拖拽 MIME 类型。
- * 用专属 MIME 类型区分"书签拖到分类"和"分类之间排序"，避免共用 text/plain 派发模糊。
- */
 /**
  * 书签卡片。
  * - favicon：icon 容器 46×46 radius 10px，内嵌 img 38×38 radius 4px，
@@ -29,11 +24,12 @@ import { toast } from '@/components/ui/toast'
  * - 批量模式下点击选中；搜索高亮
  * - 拖拽重排：仅非批量模式可拖；移动端不渲染本组件天然不触发。
  *
- * 拖拽视觉用 React state（dragging/dragOver）—— BookmarkCard 是外部稳定组件，
- * 挂载稳定，state 触发的重渲染不卸载 DOM，HTML5 DnD 不会被打断。
+ * 拖拽由 dnd-kit 的 sortable 实例管理；卡片只保留落点侧的语义高亮。
  */
 export function BookmarkCard({
   bookmark,
+  index,
+  group,
   categoryName,
   searchQuery,
   onMenuClick,
@@ -42,9 +38,11 @@ export function BookmarkCard({
   exiting = false,
   onExitDone,
   refreshing = false,
-  onAggregateCardDrop,
+  liveSort = false,
 }: {
   bookmark: Bookmark
+  index: number
+  group: string
   categoryName?: string
   searchQuery: string
   onMenuClick: (id: number, x: number, y: number) => void
@@ -58,8 +56,8 @@ export function BookmarkCard({
   onExitDone?: (id: number) => void
   /** 正在刷新图标：图标容器加 .refreshing class 显示旋转*/
   refreshing?: boolean
-  /** 聚合视图跨分类投到具体卡片：返回 true 表示已接管移动；false 保留同分类排序。 */
-  onAggregateCardDrop?: (event: React.DragEvent, target: Bookmark, position: BookmarkDropPosition) => boolean
+  /** 仅直接分类列表启用 dnd-kit 的拖动中实时换位；跨分类视图保留落点后提交。 */
+  liveSort?: boolean
 }) {
   // 初始值读无图标记忆（favicon-cache）：路由切换重挂时若已知该书签无 favicon（updated_at 匹配），
   // 直接显示 Globe 不发请求，避免"空白->Globe"闪烁。首次或书签更新后走 false 重新尝试 <img>。
@@ -68,10 +66,6 @@ export function BookmarkCard({
   )
   // pop-in 动画结束后移除 class（恢复 pointer-events，.pop-in 有 pointer-events: none）
   const [showPopIn, setShowPopIn] = useState(isNew)
-  const dragTarget = useBookmarkDragStore((s) => s.sourceId === bookmark.id ? s.target : null)
-  const startBookmarkDrag = useBookmarkDragStore((s) => s.start)
-  const setBookmarkDragTarget = useBookmarkDragStore((s) => s.setTarget)
-  const clearBookmarkDrag = useBookmarkDragStore((s) => s.clear)
   useEffect(() => {
     if (isNew) setShowPopIn(true)
   }, [isNew])
@@ -83,16 +77,49 @@ export function BookmarkCard({
     setFaviconError(hasNoFavicon(bookmark.id, bookmark.updated_at))
   }, [bookmark.favicon, bookmark.updated_at, bookmark.id])
   const [copiedId, setCopiedId] = useState(false)
-  const [dragging, setDragging] = useState(false)
   const [dragOver, setDragOver] = useState<BookmarkDropPosition | null>(null)
-  // 拖拽预览与 sidebar 同机制：可见预览 div 用 ref 直接写 left/top（onDrag 高频触发不重渲染）。
-  // 预览 div 常驻挂载（不随 dragging 增删节点，防 Chromium 拖拽崩溃），
-  // ghost 图用 lib/drag-image 单例（不再每次 append/remove）。
-  const dragPreviewRef = useRef<HTMLDivElement>(null)
   const toggleFav = useToggleFavorite()
-  const reorder = useReorderBookmarks()
   const { batchMode, selectedIds, toggleSelection } = useUIStore()
   const selected = selectedIds.has(bookmark.id)
+
+  const sortableId = makeDragId('bookmark', bookmark.id)
+  const sortable = useSortable<BookmarkDragData>({
+    id: sortableId,
+    index,
+    group,
+    type: 'bookmark',
+    accept: 'bookmark',
+    plugins: liveSort ? undefined : (defaults) => defaults.slice(0, 1),
+    disabled: batchMode ? { draggable: true } : undefined,
+    data: {
+      kind: 'bookmark',
+      id: bookmark.id,
+      title: bookmark.title,
+      categoryId: bookmark.category_id,
+      categoryName: categoryName ?? '未分类',
+      favicon: bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at),
+    },
+  })
+
+  useDragDropMonitor({
+    onDragMove: ({ operation }) => {
+      const source = operation.source
+      const target = operation.target
+      const sourceData = source?.data as { kind?: string } | undefined
+      if (sourceData?.kind !== 'bookmark' || target?.id !== sortableId || source?.id === sortableId) {
+        setDragOver((current) => current == null ? current : null)
+        return
+      }
+      const element = target.element
+      if (!element) return
+      const position = getBookmarkDropPosition(
+        operation.position.current.x,
+        element.getBoundingClientRect(),
+      )
+      setDragOver((current) => current === position ? current : position)
+    },
+    onDragEnd: () => setDragOver(null),
+  })
 
   // 移动端长按：不触发菜单（菜单已由汉堡按钮承担），只标记忽略后续 contextmenu，
   // 防止浏览器长按后默认 contextmenu 事件弹菜单
@@ -143,72 +170,7 @@ export function BookmarkCard({
       .catch(() => toast.error('复制失败，请检查浏览器剪贴板权限'))
   }
 
-  // ===== 拖拽重排（state 驱动视觉）=====
-  const onDragStart = (e: React.DragEvent) => {
-    setDragging(true)
-    startBookmarkDrag(bookmark.id)
-    const scrollContainer = e.currentTarget.closest<HTMLElement>('.main-content') ?? e.currentTarget.closest<HTMLElement>('.main')
-    if (scrollContainer) startBookmarkAutoScroll(scrollContainer)
-    setDragId(e.dataTransfer, DRAG_TYPE_BOOKMARK, bookmark.id)
-    // 复用全局单例 ghost 图：不在拖拽会话中增删 DOM 节点（防 Chromium 崩溃）
-    e.dataTransfer.setDragImage(getDragImage(), 0, 0)
-    // 预览 div 常驻挂载，这里同步定位即可（无需等 rAF 让 React 提交挂载）
-    if (dragPreviewRef.current) {
-      dragPreviewRef.current.style.left = `${e.clientX + 14}px`
-      dragPreviewRef.current.style.top = `${e.clientY + 14}px`
-    }
-  }
-  const onDrag = (e: React.DragEvent) => {
-    updateBookmarkAutoScroll(e.clientY)
-    if (!dragPreviewRef.current || e.clientX === 0 || e.clientY === 0) return
-    dragPreviewRef.current.style.left = `${e.clientX + 14}px`
-    dragPreviewRef.current.style.top = `${e.clientY + 14}px`
-  }
-  const onDragEnd = () => {
-    setDragging(false)
-    setDragOver(null)
-    stopBookmarkAutoScroll()
-    clearBookmarkDrag()
-  }
-  const onDragOver = (e: React.DragEvent) => {
-    // 只响应书签拖拽：分类拖拽经过书签网格不该亮插入线（drop 端本就不接受分类）
-    if (!hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    if (!dragging) {
-      const position = getBookmarkDropPosition(e.clientX, e.currentTarget.getBoundingClientRect())
-      setDragOver((current) => current === position ? current : position)
-    }
-  }
-  const onDragEnter = (e: React.DragEvent) => {
-    if (!hasDragType(Array.from(e.dataTransfer.types), DRAG_TYPE_BOOKMARK)) return
-    e.preventDefault()
-    // 排除自身高亮
-    if (!dragging) setDragOver(getBookmarkDropPosition(e.clientX, e.currentTarget.getBoundingClientRect()))
-    if (bookmark.category_id != null) {
-      setBookmarkDragTarget({ id: bookmark.category_id, name: categoryName ?? '未分类' })
-    }
-  }
-  const onDragLeave = (e: React.DragEvent) => {
-    // 只在真正离开卡片时移除，忽略子元素冒泡
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragOver(null)
-    }
-  }
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    stopBookmarkAutoScroll()
-    setDragOver(null)
-    const fromId = getDragId(e.dataTransfer, DRAG_TYPE_BOOKMARK)
-    if (!fromId || fromId === bookmark.id) return
-    const position = getBookmarkDropPosition(e.clientX, e.currentTarget.getBoundingClientRect())
-    if (onAggregateCardDrop?.(e, bookmark, position)) return
-    reorder.mutate({ fromId, toId: bookmark.id, position })
-  }
-
   return (
-    <>
     <article
       data-bookmark-id={bookmark.id}
       className={cn(
@@ -218,7 +180,7 @@ export function BookmarkCard({
         // 选中态挂语义类 selected，样式交 layout.css 的 .bookmark-card.selected
         // （accent 边框 + 双层描边外发光）
         selected && 'selected',
-        dragging && 'dragging',
+        sortable.isDragging && 'dragging',
         dragOver && `drag-over-${dragOver}`,
         // 进出场动画
         isNew && 'bookmark-highlight',
@@ -226,7 +188,7 @@ export function BookmarkCard({
         exiting && 'pop-out',
         refreshing && 'favicon-refreshing',
       )}
-      draggable={!batchMode}
+      ref={sortable.ref}
       onAnimationEnd={(e) => {
         // 只在 pop-out 动画结束时触发，避免与 fadeInUp 冲突
         if (exiting && e.animationName === 'popOut') {
@@ -243,13 +205,6 @@ export function BookmarkCard({
           ;(e.currentTarget as HTMLElement).style.animation = 'none'
         }
       }}
-      onDragStart={onDragStart}
-      onDrag={onDrag}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
       onClick={handleCardClick}
       onContextMenu={(e) => {
         if (batchMode) return
@@ -409,43 +364,5 @@ export function BookmarkCard({
         </div>
       </footer>
     </article>
-    {/* 预览 div 常驻挂载、按 dragging 切 class 显隐：拖拽会话中不增删 DOM 节点（防 Chromium 崩溃）。
-        内容仍条件渲染，避免每张卡片常驻 favicon img 拖累首屏。 */}
-    <div
-      ref={dragPreviewRef}
-      className={cn(
-        'bookmark-drag-preview',
-        !dragging && 'drag-preview-hidden',
-      )}
-      aria-hidden="true"
-    >
-      {dragging && (
-        <>
-          <div className="bookmark-icon-bg bookmark-drag-preview-icon-bg">
-            {!faviconError ? (
-              <img
-                className="bookmark-drag-preview-icon"
-                src={bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at)}
-                alt=""
-                onError={() => setFaviconError(true)}
-              />
-            ) : <span className="bookmark-drag-preview-icon bookmark-drag-preview-fallback">◎</span>}
-          </div>
-          <div className="bookmark-drag-preview-content">
-            <span className="bookmark-drag-preview-title">{bookmark.title}</span>
-            <div className="bookmark-drag-preview-category-row">
-              <span className="bookmark-tag category-tag bookmark-drag-preview-category">{categoryName ?? '未分类'}</span>
-              {dragTarget && dragTarget.id !== bookmark.category_id && (
-                <>
-                  <ArrowRight size={13} className="bookmark-drag-preview-arrow" aria-hidden="true" />
-                  <span className="bookmark-tag category-tag bookmark-drag-preview-category bookmark-drag-preview-category-target">{dragTarget.name}</span>
-                </>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-    </>
   )
 }

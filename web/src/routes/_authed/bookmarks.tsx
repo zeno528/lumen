@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useDragDropMonitor, useDroppable, type DragMoveEvent } from '@dnd-kit/react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useShallow } from 'zustand/react/shallow'
 import { useQueryClient } from '@tanstack/react-query'
@@ -24,6 +25,7 @@ import {
   useDeleteBookmark,
   useBatchDelete,
   useBatchMove,
+  useReorderBookmarks,
   useUpdateBookmark,
   notifyBatchMove,
 } from '@/hooks/useBookmarks'
@@ -47,9 +49,8 @@ import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
-import { DRAG_TYPE_BOOKMARK, getDragId, hasDragType } from '@/lib/category-dnd'
-import { getDraggedBookmarkIds, isCrossCategoryMove } from '@/lib/bookmark-dnd'
-import { useBookmarkDragStore } from '@/stores/bookmark-drag'
+import { makeCategoryZoneId, type LumenDragData } from '@/lib/category-dnd'
+import { getBookmarkDropPosition, getDraggedBookmarkIds, isCrossCategoryMove, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import type { Category } from '@/types'
 import { fetchAIMeta } from '@/api/utils'
@@ -69,6 +70,36 @@ export const Route = createFileRoute('/_authed/bookmarks')({
   head: () => ({ meta: [{ title: 'Lumen · 书签' }] }),
   component: BookmarksPage,
 })
+
+function BookmarkCategoryDropzone({
+  category,
+  empty,
+  children,
+}: {
+  category: Category
+  empty: boolean
+  children: React.ReactNode
+}) {
+  const { ref, isDropTarget } = useDroppable({
+    id: makeCategoryZoneId(category.id),
+    type: 'category-zone',
+    accept: 'bookmark',
+    data: { kind: 'category-zone', id: category.id, name: category.name },
+  })
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        'bookmark-category-dropzone',
+        empty && 'empty',
+        isDropTarget && 'drop-target',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
 
 function BookmarksPage() {
   const { data: bmData, isLoading, error } = useBookmarks()
@@ -274,57 +305,93 @@ function BookmarksPage() {
   }, [filtered, categories, q, currentCategory])
   const cardGroups = q ? searchGroups : categoryGroups.length > 0 ? categoryGroups : null
   const aggregateParent = !q && categoryGroups.length > 0 ? activeCategory : undefined
+  const reorder = useReorderBookmarks()
+  const lastBookmarkTargetRef = useRef<{
+    sourceId: number
+    targetData: Extract<LumenDragData, { kind: 'bookmark' }>
+    position: BookmarkDropPosition
+  } | null>(null)
 
-  const handleAggregateCardDrop = (event: React.DragEvent, target: Bookmark, position: 'before' | 'after') => {
-    const targetCategoryId = target.category_id
-    const draggedId = getDragId(event.dataTransfer, DRAG_TYPE_BOOKMARK)
-    if (!aggregateParent || targetCategoryId == null || draggedId == null) return false
-    const dragged = allBookmarks.find((bookmark) => bookmark.id === draggedId)
-    if (!dragged) return false
-
-    const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, draggedId)
-    if (ids.includes(target.id)) return true
-
-    // 同分类内排序不算跨分类移动：静默执行，不弹「已移动」通知
-    const quiet = !isCrossCategoryMove(allBookmarks, ids, targetCategoryId)
-    notifyBatchMove(
-      batchMove.mutateAsync({ ids, categoryId: targetCategoryId, targetBookmarkId: target.id, position }),
-      ids.length,
-      catMap.get(targetCategoryId) ?? '未分类',
-      isBatch,
-      clearSelection,
-      { quiet },
-    )
-    return true
+  const rememberBookmarkTarget = (operation: DragMoveEvent['operation']) => {
+    const sourceData = operation.source?.data as LumenDragData | undefined
+    const targetData = operation.target?.data as LumenDragData | undefined
+    if (sourceData?.kind !== 'bookmark' || targetData?.kind !== 'bookmark' || targetData.id === sourceData.id) return
+    const targetElement = operation.target?.element
+    if (!targetElement) return
+    lastBookmarkTargetRef.current = {
+      sourceId: sourceData.id,
+      targetData,
+      position: getBookmarkDropPosition(operation.position.current.x, targetElement.getBoundingClientRect()),
+    }
   }
 
-  const handleAggregateGroupDragOver = (event: React.DragEvent, category: Category) => {
-    if (!hasDragType(Array.from(event.dataTransfer.types), DRAG_TYPE_BOOKMARK)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    useBookmarkDragStore.getState().setTarget({ id: category.id, name: category.name })
-  }
+  useDragDropMonitor({
+    onDragStart: ({ operation }) => {
+      if ((operation.source?.data as LumenDragData | undefined)?.kind === 'bookmark') {
+        lastBookmarkTargetRef.current = null
+      }
+    },
+    onDragMove: ({ operation }) => rememberBookmarkTarget(operation),
+    onDragOver: ({ operation }) => rememberBookmarkTarget(operation),
+    onCollision: (_event, manager) => rememberBookmarkTarget(manager.dragOperation),
+    onDragEnd: ({ operation, canceled }) => {
+      const lastBookmarkTarget = lastBookmarkTargetRef.current
+      lastBookmarkTargetRef.current = null
+      if (canceled) return
+      const sourceData = operation.source?.data as LumenDragData | undefined
+      if (sourceData?.kind !== 'bookmark') return
 
-  const handleAggregateGroupDragLeave = (event: React.DragEvent) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node)) useBookmarkDragStore.getState().setTarget(null)
-  }
+      const targetData = operation.target?.data as LumenDragData | undefined
+      if (targetData?.kind === 'category-zone') {
+        const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, sourceData.id)
+        const quiet = !isCrossCategoryMove(allBookmarks, ids, targetData.id)
+        notifyBatchMove(
+          batchMove.mutateAsync({ ids, categoryId: targetData.id }),
+          ids.length,
+          targetData.name,
+          isBatch,
+          clearSelection,
+          { quiet },
+        )
+        return
+      }
 
-  const handleAggregateGroupDrop = (event: React.DragEvent, category: Category) => {
-    event.preventDefault()
-    if (!hasDragType(Array.from(event.dataTransfer.types), DRAG_TYPE_BOOKMARK)) return
-    const draggedId = getDragId(event.dataTransfer, DRAG_TYPE_BOOKMARK)
-    if (draggedId == null) return
-    const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, draggedId)
-    const quiet = !isCrossCategoryMove(allBookmarks, ids, category.id)
-    notifyBatchMove(
-      batchMove.mutateAsync({ ids, categoryId: category.id }),
-      ids.length,
-      category.name,
-      isBatch,
-      clearSelection,
-      { quiet },
-    )
-  }
+      const finalTargetData = targetData?.kind === 'bookmark' && targetData.id !== sourceData.id
+        ? targetData
+        : lastBookmarkTarget?.sourceId === sourceData.id
+          ? lastBookmarkTarget.targetData
+          : undefined
+      if (!finalTargetData) return
+      const position = targetData?.kind === 'bookmark' && targetData.id !== sourceData.id && operation.target?.element
+        ? getBookmarkDropPosition(operation.position.current.x, operation.target.element.getBoundingClientRect())
+        : lastBookmarkTarget?.position
+      if (!position) return
+
+      if (aggregateParent) {
+        const targetCategoryId = finalTargetData.categoryId
+        if (targetCategoryId == null) return
+        const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, sourceData.id)
+        if (ids.includes(finalTargetData.id)) return
+        const quiet = !isCrossCategoryMove(allBookmarks, ids, targetCategoryId)
+        notifyBatchMove(
+          batchMove.mutateAsync({
+            ids,
+            categoryId: targetCategoryId,
+            targetBookmarkId: finalTargetData.id,
+            position,
+          }),
+          ids.length,
+          catMap.get(targetCategoryId) ?? '未分类',
+          isBatch,
+          clearSelection,
+          { quiet },
+        )
+        return
+      }
+
+      reorder.mutate({ fromId: sourceData.id, toId: finalTargetData.id, position })
+    },
+  })
 
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
@@ -752,17 +819,17 @@ function BookmarksPage() {
                       <span className="search-group-count">{group.bookmarks.length}</span>
                     </h2>,
                   ] : []),
-                  <div
+                  <BookmarkCategoryDropzone
                     key={`dropzone-${groupKey}`}
-                    className={cn('bookmark-category-dropzone', group.bookmarks.length === 0 && 'empty')}
-                    onDragOver={(event) => handleAggregateGroupDragOver(event, group.category)}
-                    onDragLeave={handleAggregateGroupDragLeave}
-                    onDrop={(event) => handleAggregateGroupDrop(event, group.category)}
+                    category={group.category}
+                    empty={group.bookmarks.length === 0}
                   >
-                    {group.bookmarks.map((b) => (
+                    {group.bookmarks.map((b, index) => (
                       <BookmarkCard
                         key={b.id}
                         bookmark={b}
+                        index={index}
+                        group={`bookmarks:aggregate:${groupKey}`}
                         categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
                         searchQuery={q}
                         onMenuClick={(id, x, y) => setMenu({ id, x, y })}
@@ -770,10 +837,9 @@ function BookmarksPage() {
                         isNew={b.id === recentlyAddedId}
                         refreshing={refreshingFavId === b.id}
                         exiting={isBookmarkExiting(b.id)}
-                        onAggregateCardDrop={handleAggregateCardDrop}
                       />
                     ))}
-                  </div>,
+                  </BookmarkCategoryDropzone>,
                 ]
               })
             : cardGroups
@@ -796,10 +862,12 @@ function BookmarksPage() {
                       <span className="search-group-count">{group.bookmarks.length}</span>
                     </h2>,
                   ] : []),
-                  ...group.bookmarks.map((b) => (
+                  ...group.bookmarks.map((b, index) => (
                     <BookmarkCard
                       key={b.id}
                       bookmark={b}
+                      index={index}
+                      group={`bookmarks:group:${groupKey}`}
                       categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
                       searchQuery={q}
                       onMenuClick={(id, x, y) => setMenu({ id, x, y })}
@@ -811,10 +879,13 @@ function BookmarksPage() {
                   )),
                 ]
               })
-            : filtered.map((b) => (
+            : filtered.map((b, index) => (
                 <BookmarkCard
                   key={b.id}
                   bookmark={b}
+                  index={index}
+                  group={`bookmarks:filtered:${String(currentCategory)}`}
+                  liveSort={!q && !aggregateParent}
                   categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
                   searchQuery={q}
                   onMenuClick={(id, x, y) => setMenu({ id, x, y })}

@@ -1,23 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { useLongPress } from '@/hooks/use-long-press'
 
 export interface MenuItem {
   label: string
+  render?: () => ReactNode
   icon?: ReactNode
   /** 文案语义色，如连接状态 */
   labelColor?: string
   onClick?: () => void
   onContext?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onLongPress?: (x: number, y: number) => void
-  onDragOver?: (event: React.DragEvent<HTMLButtonElement>) => void
-  onDrop?: (event: React.DragEvent<HTMLButtonElement>) => void
-  draggable?: boolean
-  onDragStart?: (event: React.DragEvent<HTMLButtonElement>) => void
-  onDragEnd?: (event: React.DragEvent<HTMLButtonElement>) => void
-  onDragEnter?: (event: React.DragEvent<HTMLButtonElement>) => void
-  onDragLeave?: (event: React.DragEvent<HTMLButtonElement>) => void
   className?: string
   variant?: 'default' | 'edit' | 'delete'
   separator?: boolean
@@ -54,8 +48,6 @@ export function ContextMenu({
   items,
   onMouseEnter,
   onMouseLeave,
-  onDragEnter,
-  onDragLeave,
   anchor = 'left',
   alignY = 'top',
   minWidth,
@@ -69,8 +61,6 @@ export function ContextMenu({
   items: MenuItem[]
   onMouseEnter?: () => void
   onMouseLeave?: () => void
-  onDragEnter?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void
   /** 菜单水平锚点：left 以 x 为左边缘展开；right 以 x 为右边缘向左展开；center 以 x 为水平中心（头像下拉居中） */
   anchor?: 'left' | 'right' | 'center'
   /** 菜单垂直对齐：top 以 y 为顶部（默认，符合右键菜单 / 下拉）；middle 以 y 为中心（用于 avatar 等居中场景） */
@@ -161,11 +151,11 @@ export function ContextMenu({
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
     >
       {items.map((item, i) =>
-        item.separator ? (
+        item.render ? (
+          <Fragment key={i}>{item.render()}</Fragment>
+        ) : item.separator ? (
           <div
             key={i}
             className="h-px my-1 mx-2"
@@ -229,13 +219,6 @@ function ContextMenuItem({ item, onClose }: { item: MenuItem; onClose: () => voi
         event.preventDefault()
         item.onContext(event)
       }}
-      onDragOver={item.onDragOver}
-      onDrop={item.onDrop}
-      draggable={item.draggable}
-      onDragStart={item.onDragStart}
-      onDragEnd={item.onDragEnd}
-      onDragEnter={item.onDragEnter}
-      onDragLeave={item.onDragLeave}
       {...(item.onLongPress ? longPress : {})}
     >
       {item.icon && <span className="icon">{item.icon}</span>}
