@@ -879,7 +879,7 @@ function BookmarksPage() {
                   )),
                 ]
               })
-            : filtered.map((b, index) => (
+              : filtered.map((b, index) => (
                 <BookmarkCard
                   key={b.id}
                   bookmark={b}

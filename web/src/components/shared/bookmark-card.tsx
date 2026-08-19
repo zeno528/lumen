@@ -56,7 +56,6 @@ export function BookmarkCard({
   onExitDone?: (id: number) => void
   /** 正在刷新图标：图标容器加 .refreshing class 显示旋转*/
   refreshing?: boolean
-  /** 仅直接分类列表启用 dnd-kit 的拖动中实时换位；跨分类视图保留落点后提交。 */
   liveSort?: boolean
 }) {
   // 初始值读无图标记忆（favicon-cache）：路由切换重挂时若已知该书签无 favicon（updated_at 匹配），

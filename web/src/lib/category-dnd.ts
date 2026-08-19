@@ -1,5 +1,5 @@
-export type DragKind = 'bookmark' | 'category' | 'category-zone'
-export type DragItem = { kind: DragKind; id: number; name?: string }
+type DragKind = 'bookmark' | 'category' | 'category-zone'
+type DragItem = { kind: DragKind; id: number; name?: string }
 export type BookmarkDragData = DragItem & {
   kind: 'bookmark'
   title: string
@@ -34,7 +34,7 @@ export type CategoryDropAction =
   | { kind: 'make-child' }
 
 /** 以纵向中线为界返回落点侧；分类卡片排序与子分类浮层共用。 */
-export function getDropSide(offset: number, height: number): 'before' | 'after' {
+function getDropSide(offset: number, height: number): 'before' | 'after' {
   return offset < height / 2 ? 'before' : 'after'
 }
 
@@ -44,6 +44,8 @@ export function getCategoryDropAction(
   height: number,
   canMakeChild: boolean,
 ): CategoryDropAction {
-  if (canMakeChild && offset >= height * 0.25 && offset <= height * 0.75) return { kind: 'make-child' }
+  // 嵌套区收窄到中间 1/3（原 0.25-0.75）：排序边缘带各 ~10px → ~13px，
+  // 嵌套有整卡描边高亮 + hover 子分类浮层辅助，收窄后仍明确
+  if (canMakeChild && offset >= height * 0.33 && offset <= height * 0.67) return { kind: 'make-child' }
   return { kind: 'reorder', position: getDropSide(offset, height) }
 }

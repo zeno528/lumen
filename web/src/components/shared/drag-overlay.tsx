@@ -1,22 +1,15 @@
 import { useState } from 'react'
-import { ArrowRight } from 'lucide-react'
-import { DragOverlay, useDragOperation } from '@dnd-kit/react'
+import { DragOverlay } from '@dnd-kit/react'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import type { LumenDragData } from '@/lib/category-dnd'
 
 export function AppDragOverlay() {
-  const { target } = useDragOperation()
-  const targetData = target?.data as LumenDragData | undefined
-
   return (
     <DragOverlay className="app-drag-overlay" dropAnimation={null}>
       {(source) => {
         const data = source.data as LumenDragData
         if (data.kind === 'bookmark') {
-          const targetName = targetData?.kind === 'category' || targetData?.kind === 'category-zone'
-            ? targetData.name
-            : null
-          return <BookmarkDragPreview data={data} targetName={targetName} />
+          return <BookmarkDragPreview data={data} />
         }
         if (data.kind === 'category') return <CategoryDragPreview data={data} />
         return null
@@ -25,12 +18,8 @@ export function AppDragOverlay() {
   )
 }
 
-function BookmarkDragPreview({
-  data,
-  targetName,
-}: {
+function BookmarkDragPreview({ data }: {
   data: Extract<LumenDragData, { kind: 'bookmark' }>
-  targetName: string | null
 }) {
   const [faviconError, setFaviconError] = useState(false)
   const src = data.favicon
@@ -53,14 +42,6 @@ function BookmarkDragPreview({
         <span className="bookmark-drag-preview-title">{data.title}</span>
         <div className="bookmark-drag-preview-category-row">
           <span className="bookmark-tag category-tag bookmark-drag-preview-category">{data.categoryName}</span>
-          {targetName && targetName !== data.categoryName && (
-            <>
-              <ArrowRight size={13} className="bookmark-drag-preview-arrow" aria-hidden="true" />
-              <span className="bookmark-tag category-tag bookmark-drag-preview-category bookmark-drag-preview-category-target">
-                {targetName}
-              </span>
-            </>
-          )}
         </div>
       </div>
     </div>

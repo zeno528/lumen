@@ -61,6 +61,7 @@ export function SidebarItem({
     group,
     type: 'category',
     accept: (source) => source.id !== sortableId && source.type === 'category',
+    plugins: (defaults) => defaults.slice(0, 1),
     disabled: !isReal,
     data: {
       kind: 'category',
