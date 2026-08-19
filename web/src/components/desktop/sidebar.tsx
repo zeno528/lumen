@@ -907,6 +907,7 @@ function SortableCategoryMenuItem({
     group,
     type: 'category',
     accept: (source) => source.id !== id && source.type === 'category',
+    plugins: (defaults) => defaults.slice(0, 1),
     data: {
       kind: 'category',
       id: category.id,
