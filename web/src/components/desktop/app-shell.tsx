@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, CheckCheck, X } from 'lucide-react'
 import { useRouterState } from '@tanstack/react-router'
-import { DragDropProvider } from '@dnd-kit/react'
+import { DragDropProvider, KeyboardSensor, PointerSensor } from '@dnd-kit/react'
+import { PointerActivationConstraints } from '@dnd-kit/dom'
 import { Sidebar } from './sidebar'
 import { AddBookmarkFab } from './add-bookmark-fab'
 import { TopbarAvatar } from '@/components/shared/topbar-avatar'
@@ -22,6 +23,26 @@ import {
   MAX_CONTAINER_WIDTH,
   MAIN_CONTENT_HORIZONTAL_PADDING,
 } from '@/hooks/use-grid-metrics'
+
+/**
+ * 拖拽触发约束（覆盖库默认）：库默认鼠标「按住 200ms 或移动 5px」任一即触发，
+ * 长按片刻就误进拖拽。改为鼠标仅移动 5px 触发（长按不动永不拖拽）；
+ * 触摸/触控笔保持库默认（touch=长按 250ms，pen=长按 200ms 或移动 5px）。
+ * 无 drag handle 用法，鼠标分支无需保留 handle 豁免。键盘 sensor 一并带上（无障碍拖拽）。
+ */
+const dragSensors = [
+  PointerSensor.configure({
+    activationConstraints(event) {
+      if (event.pointerType === 'mouse') return [new PointerActivationConstraints.Distance({ value: 5 })]
+      if (event.pointerType === 'touch') return [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })]
+      return [
+        new PointerActivationConstraints.Delay({ value: 200, tolerance: 10 }),
+        new PointerActivationConstraints.Distance({ value: 5 }),
+      ]
+    },
+  }),
+  KeyboardSensor,
+]
 
 /**
  * 首帧 inset 估算：mount 后 rAF / ResizeObserver 真实计算前（约 1 帧），用视口宽度粗估一个
@@ -140,7 +161,7 @@ function useGridInset() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile(768)
   return (
-    <DragDropProvider>
+    <DragDropProvider sensors={dragSensors}>
       {isMobile ? <MobileShell>{children}</MobileShell> : <DesktopShell>{children}</DesktopShell>}
       <AppDragOverlay />
     </DragDropProvider>
