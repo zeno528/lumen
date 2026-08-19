@@ -27,8 +27,7 @@ export function SidebarItem({
   childCount = 0,
   expanded = false,
   onExpand,
-  dragResult = false,
-  index = 0,
+    index = 0,
   group = 'sidebar-categories',
 }: {
   icon: React.ReactNode
@@ -50,8 +49,7 @@ export function SidebarItem({
   childCount?: number
   expanded?: boolean
   onExpand?: (e: React.MouseEvent) => void
-  dragResult?: boolean
-  index?: number
+    index?: number
   group?: string
 }) {
   const isReal = !!category
@@ -162,7 +160,6 @@ export function SidebarItem({
         dragOver?.kind === 'bookmark' && 'cat-drag-over-bookmark',
         showPopIn && 'pop-in',
         selected && 'selected',
-        dragResult && 'drag-result',
       )}
       onClick={onSelect ? (e) => onSelect(e, category!.id) : onClick}
       onContextMenu={

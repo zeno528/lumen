@@ -127,11 +127,9 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const [childMenu, setChildMenu] = useState<{ category: Category; x: number; y: number } | null>(null)
   const [newChildParentId, setNewChildParentId] = useState<number | null>(null)
   const [draggedCatId, setDraggedCatId] = useState<number | null>(null)
-  const [dragResultId, setDragResultId] = useState<number | null>(null)
   const childMenuTimerRef = useRef<number | null>(null)
   const childMenuCloseTimerRef = useRef<number | null>(null)
   const childMenuTargetIdRef = useRef<number | null>(null)
-  const dragResultTimerRef = useRef<number | null>(null)
   const lastCategoryTargetRef = useRef<{
     sourceId: number
     targetData: Extract<LumenDragData, { kind: 'category' }>
@@ -408,7 +406,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   useEffect(() => () => {
     if (childMenuTimerRef.current != null) window.clearTimeout(childMenuTimerRef.current)
     if (childMenuCloseTimerRef.current != null) window.clearTimeout(childMenuCloseTimerRef.current)
-    if (dragResultTimerRef.current != null) window.clearTimeout(dragResultTimerRef.current)
   }, [])
 
   const cancelChildMenuClose = () => {
@@ -418,7 +415,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
   }
 
-  function clearDragState(draggedId: number | null = draggedCatId) {
+  function clearDragState() {
     lastCategoryTargetRef.current = null
     setDraggedCatId(null)
     setChildMenu(null)
@@ -428,17 +425,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
     childMenuTargetIdRef.current = null
     cancelChildMenuClose()
-    // 松手后给刚拖动的分类一个独立的着重色描边标记（与 hover 无关，互不打架）。
-    // 按 id 绑定、由 React 渲染：重排异步提交也不受影响，A 排到哪描边就跟到哪。
-    if (draggedId != null) {
-      setDragResultId(draggedId)
-      // 落位描边只短暂停留，1.5s 后自动解除（下次拖拽开始会提前清除）
-      if (dragResultTimerRef.current != null) window.clearTimeout(dragResultTimerRef.current)
-      dragResultTimerRef.current = window.setTimeout(() => {
-        setDragResultId(null)
-        dragResultTimerRef.current = null
-      }, 1500)
-    }
   }
 
   const showChildMenuOnNestHover = (target: Category, rect: DOMRect) => {
@@ -541,16 +527,11 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   useDragDropMonitor({
     onDragStart: ({ operation }) => {
       const sourceData = operation.source?.data as LumenDragData | undefined
-      if (sourceData?.kind !== 'category') return
-      lastCategoryTargetRef.current = null
-      setCatMenu(null)
-      if (dragResultTimerRef.current != null) {
-        window.clearTimeout(dragResultTimerRef.current)
-        dragResultTimerRef.current = null
-      }
-      setDragResultId(null)
-      setDraggedCatId(sourceData.id)
-    },
+        if (sourceData?.kind !== 'category') return
+        lastCategoryTargetRef.current = null
+        setCatMenu(null)
+        setDraggedCatId(sourceData.id)
+      },
     onDragMove: ({ operation }) => rememberCategoryTarget(operation),
     onDragOver: ({ operation }) => rememberCategoryTarget(operation),
     onCollision: (_event, manager) => rememberCategoryTarget(manager.dragOperation),
@@ -562,7 +543,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       const targetData = operation.target?.data as LumenDragData | undefined
 
       if (canceled) {
-        clearDragState(null)
+        clearDragState()
         return
       }
 
@@ -571,7 +552,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           const target = categories.find((category) => category.id === targetData.id)
           if (target) handleBookmarkDropToCategory(sourceData.id, target)
         }
-        clearDragState(null)
+        clearDragState()
         return
       }
 
@@ -581,7 +562,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           ? lastCategoryTarget.targetData
           : undefined
       if (sourceData.kind !== 'category' || !finalTargetData) {
-        clearDragState(sourceData.kind === 'category' ? sourceData.id : null)
+        clearDragState()
         return
       }
       const targetElement = operation.target?.element
@@ -593,7 +574,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           )
         : lastCategoryTarget?.action
       if (!action) {
-        clearDragState(sourceData.id)
+        clearDragState()
         return
       }
       const source = categories.find((category) => category.id === sourceData.id)
@@ -619,7 +600,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           toast.error('移动失败: ' + (error as Error).message)
         }
       }
-      clearDragState(sourceData.id)
+        clearDragState()
     },
   })
 
@@ -761,8 +742,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 isNew={c.id === recentlyAddedCatId}
                 selected={categoryBatchMode && selectedCategoryIds.has(c.id)}
                 onSelect={categoryBatchMode ? handleCategorySelect : undefined}
-                dragResult={dragResultId === c.id}
-              />
+                />
             )
           })}
       </div>

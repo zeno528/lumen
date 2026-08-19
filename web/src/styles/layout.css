@@ -682,10 +682,6 @@ select,
 [data-theme='notion-dark'] .sidebar-item:hover .sidebar-icon-category {
   transform: scale(1.12);
 }
-/* 拖拽完成后的落位标记：与 hover 独立的着重色描边（参考 Edge 书签拖拽），互不打架 */
-.sidebar-item.drag-result {
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
 .sidebar-item.active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
