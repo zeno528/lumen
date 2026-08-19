@@ -67,6 +67,9 @@ export function useHotkeys({
         if (searchQuery) {
           e.preventDefault()
           setSearchQuery('')
+          // 失焦后 ESC 清空：焦点回搜索框，清空后可直接继续输入（与 Ctrl+K 同路复用）
+          if (onFocusSearch) onFocusSearch()
+          else document.getElementById('global-search')?.focus()
           return
         }
         return
