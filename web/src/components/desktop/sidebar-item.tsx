@@ -1,9 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { useDragDropMonitor, useDroppable } from '@dnd-kit/react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { useDroppable } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
-import { ChevronRight } from 'lucide-react'
 import { useLongPress } from '@/hooks/use-long-press'
-import { getCategoryDropAction, makeCategoryZoneId, makeDragId, type CategoryDragData, type CategoryDropAction, type CategoryZoneDragData } from '@/lib/category-dnd'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/types'
 
@@ -15,20 +13,17 @@ export function SidebarItem({
   onClick,
   onContext,
   category,
-  canNestDrop = false,
-  onNestDragOver,
-  onTargetDragLeave,
   isNew = false,
   style,
   variant = 'default',
   iconColor,
   selected = false,
   onSelect,
-  childCount = 0,
-  expanded = false,
-  onExpand,
-    index = 0,
-  group = 'sidebar-categories',
+  depth = 0,
+  dragEnabled = false,
+  hasChildren = false,
+  index = 0,
+  group = 'categories:root',
 }: {
   icon: React.ReactNode
   label: string
@@ -37,103 +32,25 @@ export function SidebarItem({
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void
   onContext?: (e: React.MouseEvent) => void
   category?: Category
-  canNestDrop?: boolean
-  onNestDragOver?: (target: Category, rect: DOMRect) => void
-  onTargetDragLeave?: (target: Category) => void
   isNew?: boolean
   style?: React.CSSProperties
   variant?: 'default' | 'pill'
   iconColor?: string
   selected?: boolean
   onSelect?: (e: React.MouseEvent, id: number) => void
-  childCount?: number
-  expanded?: boolean
-  onExpand?: (e: React.MouseEvent) => void
-    index?: number
+  depth?: number
+  /** 分类拖拽开关；批量选择时关闭。 */
+  dragEnabled?: boolean
+  hasChildren?: boolean
+  index?: number
   group?: string
 }) {
-  const isReal = !!category
-  const sortableId = isReal ? makeDragId('category', category.id) : `virtual-category:${label}`
-  const categoryZoneId = isReal ? makeCategoryZoneId(category?.id ?? 0) : `virtual-category-zone:${label}`
-  const sortable = useSortable<CategoryDragData>({
-    id: sortableId,
-    index,
-    group,
-    type: 'category',
-    accept: (source) => source.id !== sortableId && source.type === 'category',
-    plugins: (defaults) => defaults.slice(0, 1),
-    disabled: !isReal,
-    data: {
-      kind: 'category',
-      id: category?.id ?? 0,
-      name: category?.name ?? label,
-      color: category?.color,
-      icon: category?.icon,
-      parentId: category?.parent_id ?? null,
-      canNest: isReal && canNestDrop,
-    },
-  })
-  const categoryZone = useDroppable<CategoryZoneDragData>({
-    id: categoryZoneId,
-    type: 'category-zone',
-    accept: 'bookmark',
-    disabled: !isReal,
-    data: isReal
-      ? { kind: 'category-zone', id: category.id, name: category.name }
-      : undefined,
-  })
-  const [dragOver, setDragOver] = useState<
-    { kind: 'cat'; action: CategoryDropAction } | { kind: 'bookmark' } | null
-  >(null)
-  const wasTarget = useRef(false)
   const [showPopIn, setShowPopIn] = useState(isNew)
 
   useEffect(() => {
     if (isNew) setShowPopIn(true)
   }, [isNew])
 
-  useDragDropMonitor({
-    onDragMove: ({ operation }) => {
-      const sourceData = operation.source?.data as { kind?: string } | undefined
-      const targetId = sourceData?.kind === 'bookmark' ? categoryZoneId : sortableId
-      const isTarget = isReal && operation.target?.id === targetId && operation.source?.id !== sortableId
-      if (!isTarget || !category || (sourceData?.kind !== 'bookmark' && sourceData?.kind !== 'category')) {
-        if (wasTarget.current) {
-          wasTarget.current = false
-          onTargetDragLeave?.(category!)
-        }
-        setDragOver((current) => current == null ? current : null)
-        return
-      }
-
-      wasTarget.current = true
-      const rect = operation.target?.element?.getBoundingClientRect()
-      if (!rect) return
-      if (sourceData.kind === 'bookmark') {
-        setDragOver((current) => current?.kind === 'bookmark' ? current : { kind: 'bookmark' })
-        onNestDragOver?.(category, rect)
-        return
-      }
-
-      const action = getCategoryDropAction(
-        operation.position.current.y - rect.top,
-        rect.height,
-        canNestDrop,
-      )
-      setDragOver((current) =>
-        current?.kind === 'cat' && sameDropAction(current.action, action)
-          ? current
-          : { kind: 'cat', action },
-      )
-      if (action.kind === 'make-child') onNestDragOver?.(category, rect)
-    },
-    onDragEnd: () => {
-      wasTarget.current = false
-      setDragOver(null)
-    },
-  })
-
-  const isDragging = isReal && sortable.isDragging
   const longPress = useLongPress(
     (x, y) => {
       if (!onContext) return
@@ -141,7 +58,33 @@ export function SidebarItem({
     },
     { delay: 350, triggerOnRelease: true },
   )
-
+  const sortable = useSortable({
+    id: category ? `category:${category.id}` : `virtual-category:${label}`,
+    index,
+    group,
+    type: 'category',
+    accept: (source) => {
+      if (!category || source.data.kind !== 'category' || source.data.id === category.id) return false
+      return category.parent_id == null || source.data.hasChildren !== true
+    },
+    disabled: !category || !dragEnabled,
+    transition: { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
+    data: {
+      kind: 'category',
+      id: category?.id ?? 0,
+      parentId: category?.parent_id ?? null,
+      hasChildren,
+    },
+  })
+  const categoryZone = useDroppable({
+    id: category ? `category-zone:${category.id}` : `virtual-category-zone:${label}`,
+    type: 'category-zone',
+    accept: 'bookmark',
+    disabled: !category || !dragEnabled,
+    data: category
+      ? { kind: 'category-zone', id: category.id, parentId: category.parent_id }
+      : undefined,
+  })
   const setRefs = (element: HTMLDivElement | null) => {
     sortable.ref(element)
     categoryZone.ref(element)
@@ -153,14 +96,11 @@ export function SidebarItem({
       style={style}
       className={cn(
         'sidebar-item',
+        depth > 0 && 'sidebar-item-child',
         active && 'active',
-        isDragging && 'cat-dragging',
-        dragOver?.kind === 'cat' && dragOver.action.kind === 'reorder' && dragOver.action.position === 'before' && 'cat-drag-over-before',
-        dragOver?.kind === 'cat' && dragOver.action.kind === 'reorder' && dragOver.action.position === 'after' && 'cat-drag-over-after',
-        dragOver?.kind === 'cat' && dragOver.action.kind === 'make-child' && 'cat-drag-over-inside',
-        dragOver?.kind === 'bookmark' && 'cat-drag-over-bookmark',
         showPopIn && 'pop-in',
         selected && 'selected',
+        (sortable.isDropTarget || categoryZone.isDropTarget) && 'dnd-drop-target',
       )}
       onClick={onSelect ? (e) => onSelect(e, category!.id) : onClick}
       onContextMenu={
@@ -195,24 +135,10 @@ export function SidebarItem({
       </div>
       <div className="sidebar-item-inner">
         <span className="sidebar-item-name">{label}</span>
-        {childCount > 0 ? (
-          <button
-            type="button"
-            className={cn('sidebar-item-expand', expanded && 'expanded')}
-            aria-label={`${label}子分类`}
-            aria-expanded={expanded}
-            onClick={onExpand}
-          >
-            <ChevronRight size={15} />
-          </button>
-        ) : count !== undefined ? (
+        {count !== undefined ? (
           <span className="sidebar-item-count">{count}</span>
         ) : null}
       </div>
     </div>
   )
-}
-
-function sameDropAction(a: CategoryDropAction, b: CategoryDropAction) {
-  return a.kind === b.kind && (a.kind !== 'reorder' || b.kind !== 'reorder' || a.position === b.position)
 }

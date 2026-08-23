@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useDragDropMonitor, useDroppable, type DragMoveEvent } from '@dnd-kit/react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useShallow } from 'zustand/react/shallow'
 import { useQueryClient } from '@tanstack/react-query'
@@ -27,7 +26,6 @@ import {
   useBatchMove,
   useReorderBookmarks,
   useUpdateBookmark,
-  notifyBatchMove,
 } from '@/hooks/useBookmarks'
 import { refreshBookmarkFavicon, faviconUrl, updateBookmark } from '@/api/bookmarks'
 import { blobToDataUri } from '@/lib/favicon'
@@ -49,12 +47,11 @@ import { filterBookmarksBySearch } from '@/lib/bookmark-search'
 import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
-import { makeCategoryZoneId, type LumenDragData } from '@/lib/category-dnd'
-import { getBookmarkDropPosition, getDraggedBookmarkIds, isCrossCategoryMove, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
 import { AI_PRESETS } from '@/lib/ai-providers'
 import type { Category } from '@/types'
 import { fetchAIMeta } from '@/api/utils'
 import type { AISettings } from '@/api/settings'
+import { useDragStore } from '@/stores/drag'
 
 /**
  * 书签页 —— 渲染在 AppShell 的 main 区。
@@ -71,43 +68,14 @@ export const Route = createFileRoute('/_authed/bookmarks')({
   component: BookmarksPage,
 })
 
-function BookmarkCategoryDropzone({
-  category,
-  empty,
-  children,
-}: {
-  category: Category
-  empty: boolean
-  children: React.ReactNode
-}) {
-  const { ref, isDropTarget } = useDroppable({
-    id: makeCategoryZoneId(category.id),
-    type: 'category-zone',
-    accept: 'bookmark',
-    data: { kind: 'category-zone', id: category.id, name: category.name },
-  })
-
-  return (
-    <div
-      ref={ref}
-      className={cn(
-        'bookmark-category-dropzone',
-        empty && 'empty',
-        isDropTarget && 'drop-target',
-      )}
-    >
-      {children}
-    </div>
-  )
-}
-
 function BookmarksPage() {
   const { data: bmData, isLoading, error } = useBookmarks()
   const { data: catData } = useCategories()
   const toggleFav = useToggleFavorite()
   const deleteMut = useDeleteBookmark()
   const batchDeleteMut = useBatchDelete()
-  const batchMove = useBatchMove()
+  const batchMoveMut = useBatchMove()
+  const reorderBookmarksMut = useReorderBookmarks()
   const updateMut = useUpdateBookmark()
   const qc = useQueryClient()
   // 退场动画标记：删除先标记后 mutate，卡片挂 pop-out 动画结束才真正删
@@ -264,7 +232,7 @@ function BookmarksPage() {
     }
     // 全部 / 收藏视图（非搜索）按 id DESC（创建顺序，最新在前），不按 sort_order：移动书签到新分类时
     // 后端会改 sort_order（目标分类末尾），若这两个视图也按 sort_order 排会导致书签在当前视图换位。
-    // 按 id 排让移动只改分类归属、不影响顺序。代价：全部/收藏视图不再支持拖拽重排（请在分类视图重排）。
+    // 按 id 排让移动只改分类归属，不影响全部/收藏视图的创建顺序。
     if (!q && (currentCategory === 'all' || currentCategory === '__favorites__')) {
       bookmarks = [...bookmarks].sort((a, b) => b.id - a.id)
     }
@@ -305,94 +273,58 @@ function BookmarksPage() {
   }, [filtered, categories, q, currentCategory])
   const cardGroups = q ? searchGroups : categoryGroups.length > 0 ? categoryGroups : null
   const aggregateParent = !q && categoryGroups.length > 0 ? activeCategory : undefined
-  const reorder = useReorderBookmarks()
-  const lastBookmarkTargetRef = useRef<{
-    sourceId: number
-    targetData: Extract<LumenDragData, { kind: 'bookmark' }>
-    position: BookmarkDropPosition
-  } | null>(null)
+  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number' && !aggregateParent
+  const lastDrop = useDragStore((state) => state.lastDrop)
+  const handledDropToken = useRef<number | null>(null)
 
-  const rememberBookmarkTarget = (operation: DragMoveEvent['operation']) => {
-    const sourceData = operation.source?.data as LumenDragData | undefined
-    const targetData = operation.target?.data as LumenDragData | undefined
-    if (sourceData?.kind !== 'bookmark' || targetData?.kind !== 'bookmark' || targetData.id === sourceData.id) return
-    const targetElement = operation.target?.element
-    if (!targetElement) return
-    lastBookmarkTargetRef.current = {
-      sourceId: sourceData.id,
-      targetData,
-      position: getBookmarkDropPosition(operation.position.current.x, targetElement.getBoundingClientRect()),
+  useEffect(() => {
+    if (
+      !lastDrop ||
+      lastDrop.token === handledDropToken.current ||
+      lastDrop.source.kind !== 'bookmark'
+    ) return
+    handledDropToken.current = lastDrop.token
+    const { source, target } = lastDrop
+    const run = async () => {
+      try {
+        if (target.kind === 'category') {
+          if (source.categoryId === target.id) return
+          await batchMoveMut.mutateAsync({ ids: [source.id], categoryId: target.id })
+          toast.success('书签已移动到分类')
+          return
+        }
+        if (source.id === target.id) return
+        if (aggregateParent) {
+          await batchMoveMut.mutateAsync({
+            ids: [source.id],
+            categoryId: target.categoryId,
+            targetBookmarkId: target.id,
+            position: target.position,
+          })
+          return
+        }
+        if (canReorderBookmarks && source.categoryId === target.categoryId) {
+          await reorderBookmarksMut.mutateAsync({
+            fromId: source.id,
+            toId: target.id,
+            position: target.position,
+          })
+          return
+        }
+        if (source.categoryId === target.categoryId) return
+        await batchMoveMut.mutateAsync({
+          ids: [source.id],
+          categoryId: target.categoryId,
+          targetBookmarkId: target.id,
+          position: target.position,
+        })
+        toast.success('书签已移动')
+      } catch (error) {
+        toast.error('书签拖拽失败: ' + (error as Error).message)
+      }
     }
-  }
-
-  useDragDropMonitor({
-    onDragStart: ({ operation }) => {
-      if ((operation.source?.data as LumenDragData | undefined)?.kind === 'bookmark') {
-        lastBookmarkTargetRef.current = null
-      }
-    },
-    onDragMove: ({ operation }) => rememberBookmarkTarget(operation),
-    onDragOver: ({ operation }) => rememberBookmarkTarget(operation),
-    onCollision: (_event, manager) => rememberBookmarkTarget(manager.dragOperation),
-    onDragEnd: ({ operation, canceled }) => {
-      const lastBookmarkTarget = lastBookmarkTargetRef.current
-      lastBookmarkTargetRef.current = null
-      if (canceled) return
-      const sourceData = operation.source?.data as LumenDragData | undefined
-      if (sourceData?.kind !== 'bookmark') return
-
-      const targetData = operation.target?.data as LumenDragData | undefined
-      if (targetData?.kind === 'category-zone') {
-        const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, sourceData.id)
-        const quiet = !isCrossCategoryMove(allBookmarks, ids, targetData.id)
-        notifyBatchMove(
-          batchMove.mutateAsync({ ids, categoryId: targetData.id }),
-          ids.length,
-          targetData.name,
-          isBatch,
-          clearSelection,
-          { quiet },
-        )
-        return
-      }
-
-      const finalTargetData = targetData?.kind === 'bookmark' && targetData.id !== sourceData.id
-        ? targetData
-        : lastBookmarkTarget?.sourceId === sourceData.id
-          ? lastBookmarkTarget.targetData
-          : undefined
-      if (!finalTargetData) return
-      const position = targetData?.kind === 'bookmark' && targetData.id !== sourceData.id && operation.target?.element
-        ? getBookmarkDropPosition(operation.position.current.x, operation.target.element.getBoundingClientRect())
-        : lastBookmarkTarget?.position
-      if (!position) return
-
-      if (aggregateParent) {
-        const targetCategoryId = finalTargetData.categoryId
-        if (targetCategoryId == null) return
-        const { ids, isBatch } = getDraggedBookmarkIds(allBookmarks, selectedIds, sourceData.id)
-        if (ids.includes(finalTargetData.id)) return
-        const quiet = !isCrossCategoryMove(allBookmarks, ids, targetCategoryId)
-        notifyBatchMove(
-          batchMove.mutateAsync({
-            ids,
-            categoryId: targetCategoryId,
-            targetBookmarkId: finalTargetData.id,
-            position,
-          }),
-          ids.length,
-          catMap.get(targetCategoryId) ?? '未分类',
-          isBatch,
-          clearSelection,
-          { quiet },
-        )
-        return
-      }
-
-      reorder.mutate({ fromId: sourceData.id, toId: finalTargetData.id, position })
-    },
-  })
-
+    void run()
+  }, [aggregateParent, batchMoveMut, canReorderBookmarks, lastDrop, reorderBookmarksMut])
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
   // - 数字分类已被删除（不在 categories 列表）→ 全部，避免登录后停在已删分类显示空白
@@ -819,17 +751,17 @@ function BookmarksPage() {
                       <span className="search-group-count">{group.bookmarks.length}</span>
                     </h2>,
                   ] : []),
-                  <BookmarkCategoryDropzone
-                    key={`dropzone-${groupKey}`}
-                    category={group.category}
-                    empty={group.bookmarks.length === 0}
+                  <div
+                    key={`group-content-${groupKey}`}
+                    className={cn(
+                      'bookmark-category-group',
+                      group.bookmarks.length === 0 && 'empty',
+                    )}
                   >
                     {group.bookmarks.map((b, index) => (
                       <BookmarkCard
                         key={b.id}
                         bookmark={b}
-                        index={index}
-                        group={`bookmarks:aggregate:${groupKey}`}
                         categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
                         searchQuery={q}
                         onMenuClick={(id, x, y) => setMenu({ id, x, y })}
@@ -837,13 +769,16 @@ function BookmarksPage() {
                         isNew={b.id === recentlyAddedId}
                         refreshing={refreshingFavId === b.id}
                         exiting={isBookmarkExiting(b.id)}
+                        dragEnabled={!q && !batchMode}
+                        index={index}
+                        group={`bookmarks:category:${groupKey}`}
                       />
                     ))}
-                  </BookmarkCategoryDropzone>,
+                  </div>,
                 ]
               })
             : cardGroups
-            ? cardGroups.flatMap((group) => {
+              ? cardGroups.flatMap((group) => {
                 const Icon = resolveCategoryIcon(group.category?.icon)
                 const name = group.category?.name ?? '未分类'
                 const groupKey = group.category?.id ?? '__uncategorized__'
@@ -866,8 +801,6 @@ function BookmarksPage() {
                     <BookmarkCard
                       key={b.id}
                       bookmark={b}
-                      index={index}
-                      group={`bookmarks:group:${groupKey}`}
                       categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
                       searchQuery={q}
                       onMenuClick={(id, x, y) => setMenu({ id, x, y })}
@@ -875,6 +808,9 @@ function BookmarksPage() {
                       isNew={b.id === recentlyAddedId}
                       refreshing={refreshingFavId === b.id}
                       exiting={isBookmarkExiting(b.id)}
+                      dragEnabled={!q && !batchMode}
+                      index={index}
+                      group={`bookmarks:category:${groupKey}`}
                     />
                   )),
                 ]
@@ -883,9 +819,6 @@ function BookmarksPage() {
                 <BookmarkCard
                   key={b.id}
                   bookmark={b}
-                  index={index}
-                  group={`bookmarks:filtered:${String(currentCategory)}`}
-                  liveSort={!q && !aggregateParent}
                   categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
                   searchQuery={q}
                   onMenuClick={(id, x, y) => setMenu({ id, x, y })}
@@ -893,6 +826,9 @@ function BookmarksPage() {
                   isNew={b.id === recentlyAddedId}
                   refreshing={refreshingFavId === b.id}
                   exiting={isBookmarkExiting(b.id)}
+                  dragEnabled={!q && !batchMode}
+                  index={index}
+                  group={`bookmarks:category:${currentCategory}`}
                 />
               ))}
         </div>

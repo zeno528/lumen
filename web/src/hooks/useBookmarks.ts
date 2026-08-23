@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getBookmarks,
   createBookmark,
@@ -10,8 +10,7 @@ import {
   batchAddTags,
   reorderBookmarks,
 } from '@/api/bookmarks'
-import { toast } from '@/components/ui/toast'
-import { moveBookmarkInList, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
+import { moveBookmarkInList, type BookmarkOrderPosition } from '@/lib/bookmark-order'
 import { deleteFavicon } from '@/lib/favicon-cache'
 import { createOptimisticMutation } from '@/lib/optimistic-mutation'
 import type { BookmarkInput, Bookmark } from '@/types'
@@ -192,8 +191,7 @@ export function useClearAllFavorites() {
  * 批量移动分类 —— 乐观更新 + 失败回滚。
  * onMutate 立即把 ids 的 category_id 改成目标值，原列表卡片瞬间被过滤移除（无闪烁）；
  * 失败 onError 回滚；onSettled invalidate 对账。
- * 必须乐观更新：拖拽移动时 sidebar 会 markBookmarkExiting 让卡片挂 pop-out，若只 invalidate 等refetch，
- * 卡片 category_id 迟迟不变 + exitingBookmarkIds 残留 → 点开新分类时卡片 pop-out 不可见（bug）。
+ * 必须乐观更新：移动后当前视图需要立即按新的 category_id 过滤，避免等待网络往返造成闪烁。
  */
 export function useBatchMove() {
   const qc = useQueryClient()
@@ -269,20 +267,20 @@ export function useBatchAddTags() {
 }
 
 /**
- * 卡片拖拽重排。
+ * 书签顺序重排。
  * 乐观更新：立即按新顺序重排 qc 缓存（UI 秒级响应），再异步 PUT /api/bookmarks/reorder。
  * 失败只 console.error 不回滚（排序错位非致命，下次拉取自愈）。
  *
- * @param fromId  被拖卡片 id
- * @param toId    放下目标卡片 id
+ * @param fromId  被移动书签 id
+ * @param toId    目标书签 id
  */
 export function useReorderBookmarks() {
   const qc = useQueryClient()
   return useMutation({
     // onMutate 已 await + 重排 cache（React Query 源码：await onMutate 完成后才跑 mutationFn）。
     // 直接用 cache 的 id 序列发 API —— 不能再 computeReorderedIds：那会基于重排后的 cache 再重排一次，
-    // 得到错误 order → 后端存错 sort_order → 刷新后顺序与拖动不一致（排序失效）。
-    mutationFn: (_vars: { fromId: number; toId: number; position: BookmarkDropPosition }) => {
+    // 得到错误 order → 后端存错 sort_order → 刷新后顺序与界面不一致。
+    mutationFn: (_vars: { fromId: number; toId: number; position: BookmarkOrderPosition }) => {
       const data = qc.getQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY)
       return reorderBookmarks((data?.bookmarks ?? []).map((b: Bookmark) => b.id))
     },
@@ -306,47 +304,4 @@ export function useReorderBookmarks() {
       qc.invalidateQueries({ queryKey: BOOKMARKS_KEY })
     },
   })
-}
-
-/**
- * 把 ids 的 category_id 乐观更新到目标值（onMutate 与拖动调用方共用）。
- * 拖动场景调用方需先于 unmarkExiting 手动调用：onMutate async（await cancelQueries 后才 setQueryData），
- * 若同步 unmarkExiting 会先于 setQueryData，卡片从 pop-out（opacity:0）闪回正常再卸载 → 闪一下。
- */
-export function applyBatchMoveToCache(
-  qc: QueryClient,
-  ids: number[],
-  categoryId: number | null,
-) {
-  const idSet = new Set(ids)
-  qc.setQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY, (old) => {
-    if (!old) return old
-    return {
-      ...old,
-      bookmarks: old.bookmarks.map((b: Bookmark) =>
-        idSet.has(b.id) ? { ...b, category_id: categoryId } : b,
-      ),
-    }
-  })
-}
-
-/**
- * 批量移动后的统一反馈尾巴：成功 toast + 批量清选中，失败 toast。
- * 书签网格卡片落点、聚合分组落点、侧栏分类落点三处共用。
- */
-export function notifyBatchMove(
-  promise: Promise<unknown>,
-  count: number,
-  categoryName: string,
-  isBatch: boolean,
-  clearSelection: () => void,
-  options?: { quiet?: boolean },
-) {
-  void promise
-    .then(() => {
-      // 同分类内排序不是跨分类移动：静默成功，只有真的换了分类才通知
-      if (!options?.quiet) toast.success(`已移动 ${count} 个书签到「${categoryName}」`)
-      if (isBatch) clearSelection()
-    })
-    .catch((error: Error) => toast.error('移动失败: ' + error.message))
 }
