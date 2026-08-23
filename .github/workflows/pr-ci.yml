@@ -86,16 +86,36 @@ jobs:
         shell: bash
         run: |
           # APP_ENV=development：冒烟用全新临时库，dev 模式让空 APP_PASSWORD 回退 admin（生产模式会拒空密码启动）
-          APP_ENV=development PORT=18081 DB_PATH="$RUNNER_TEMP/lumen-ci.db" JWT_SECRET=ci-test-secret ./lumen-ci > "$RUNNER_TEMP/lumen-ci.log" 2>&1 &
+          # 显式 set +e：GitHub 默认 --noprofile --norc -e -o pipefail，curl 失败 + pipefail 会提前退出并吞掉 cat 的 server 日志
+          set +e
+          LOG="$RUNNER_TEMP/lumen-ci.log"
+          APP_ENV=development PORT=18081 DB_PATH="$RUNNER_TEMP/lumen-ci.db" JWT_SECRET=ci-test-secret ./lumen-ci > "$LOG" 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
           for _ in {1..10}; do
-            if curl -fsS http://127.0.0.1:18081/api/health | grep -q '"status":"ok"'; then
+            if curl -fsS http://127.0.0.1:18081/api/health 2>/dev/null | grep -q '"status":"ok"'; then
+              echo "✅ /api/health OK"
               exit 0
+            fi
+            # server 进程已死（启动崩溃）就提前终止循环拿日志，不再傻等
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "❌ server 进程已退出（启动崩溃）"
+              break
             fi
             sleep 1
           done
-          cat "$RUNNER_TEMP/lumen-ci.log"
+          echo "---- server 启动日志 ($LOG) ----"
+          cat "$LOG" 2>/dev/null || echo "(log 文件不存在)"
+          echo "---- server 进程状态 ----"
+          if kill -0 "$server_pid" 2>/dev/null; then
+            echo "server 仍在运行 (PID=$server_pid)"
+            echo "---- 末尾重试 curl ----"
+            curl -fsS http://127.0.0.1:18081/api/health || echo "curl 失败 exit=$?"
+          else
+            wait "$server_pid" 2>/dev/null
+            rc=$?
+            echo "server 已退出，exit code=$rc"
+          fi
           exit 1
 
   # ─────────── 汇总（让 GitHub 顶层 checks 一次性给出整体状态） ───────────
