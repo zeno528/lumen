@@ -658,7 +658,7 @@ select,
 /* 边界热区：覆盖分类项之间 .sidebar-categories 的 2px gap。
    与书签视图同款「before 伪元素扩热区」做法（星标 before:-inset-3 / 箭头 ::before inset:-4px）：
    伪元素只参与命中测试、不绘制，hover 视觉不变；上下各扩 1px 正好铺满 2px 间隙，
-   鼠标扫过 A/B 之间不再掉出 hover（同样覆盖拖拽 dragover 命中）。 */
+   鼠标扫过 A/B 之间不再掉出 hover。 */
 .sidebar-item-inner::before {
   content: '';
   position: absolute;
@@ -666,6 +666,27 @@ select,
   right: 0;
   top: -1px;
   bottom: -1px;
+}
+.sidebar-item-child {
+  width: calc(100% - 22px);
+  margin-left: 22px;
+}
+.sidebar-item-child::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--border);
+}
+.sidebar-item-child::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 10px;
+  border-top: 1px solid var(--border);
 }
 .sidebar-item:hover {
   background: rgba(0, 0, 0, 0.06);
@@ -685,6 +706,10 @@ select,
 .sidebar-item.active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
+}
+.sidebar-item.dnd-drop-target {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 /* 批量模式选中（区别 active：加 inset 边框，对齐书签批量选中视觉）*/
 .sidebar-item.selected {
@@ -747,150 +772,6 @@ select,
   background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
-/* ===== 分类拖拽 =====
-   - 拖拽不改变鼠标指针样式
-   - cat-dragging：来源分类锚定态
-   - cat-drag-over-before/after：分类排序目标，用弧形插入线表示前/后位置
-   - cat-drag-over-bookmark：书签拖入目标，绿色调区别用途
-   虚拟分类（all/favorites/uncategorized）在 JS 层拒绝拖入。*/
-.sidebar-item.cat-dragging {
-  /* 来源分类做“幽灵态”（整体降透明）：与目标位的 accent 整卡高亮（cat-drag-over-inside）明确区分 */
-  opacity: 0.45;
-  background: transparent;
-}
-/* 排序只显示弧形插入线，不借用“归入父级”的整卡片高亮。 */
-.sidebar-item.cat-drag-over-before::before,
-.sidebar-item.cat-drag-over-after::after {
-  content: '';
-  position: absolute;
-  /* 与“归入父级”的整卡片描边共用左右边界，避免两种反馈看起来像不同宽度的组件。 */
-  left: 0;
-  right: 0;
-  height: 8px;
-  pointer-events: none;
-}
-.sidebar-item.cat-drag-over-before::before {
-  top: -4px;
-  border-top: 3px solid var(--accent);
-  border-radius: 14px 14px 0 0;
-}
-.sidebar-item.cat-drag-over-after::after {
-  bottom: -4px;
-  border-bottom: 3px solid var(--accent);
-  border-radius: 0 0 14px 14px;
-}
-.context-menu-item.category-drag-over-before,
-.context-menu-item.category-drag-over-after {
-  position: relative;
-}
-.context-menu-item.category-drag-over-before::before,
-.context-menu-item.category-drag-over-after::after {
-  content: '';
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  height: 6px;
-  pointer-events: none;
-}
-.context-menu-item.category-drag-over-before::before {
-  top: -3px;
-  border-top: 2px solid var(--accent);
-  border-radius: 10px 10px 0 0;
-}
-.context-menu-item.category-drag-over-after::after {
-  bottom: -3px;
-  border-bottom: 2px solid var(--accent);
-  border-radius: 0 0 10px 10px;
-}
-.sidebar-item.cat-drag-over-inside {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
-}
-.sidebar-item.cat-drag-over-bookmark,
-.context-menu-item.category-drag-over-bookmark {
-  /* 书签投放是“移动到此分类”，用完整圆角描边而非左/上两条断线。 */
-  box-shadow: inset 0 0 0 2px var(--status-ok);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--status-ok) 16%, transparent), color-mix(in srgb, var(--status-ok) 5%, transparent));
-}
-.category-drag-preview,
-.bookmark-drag-preview {
-  position: fixed;
-  z-index: 2100;
-  left: -9999px;
-  top: -9999px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 240px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-primary);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-primary) 16%, transparent);
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  opacity: 1;
-  pointer-events: none;
-}
-.app-drag-overlay-preview {
-  position: relative;
-  left: auto;
-  top: auto;
-  z-index: auto;
-}
-.category-drag-preview span,
-.bookmark-drag-preview span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bookmark-drag-preview-icon-bg {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
-  aspect-ratio: 1;
-  border-radius: 10px;
-}
-.bookmark-drag-preview-icon-bg > .bookmark-drag-preview-icon {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  border-radius: 4px;
-  object-fit: contain;
-}
-.bookmark-drag-preview-fallback {
-  display: grid;
-  place-items: center;
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  font-size: 18px;
-}
-.bookmark-drag-preview-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  min-width: 0;
-}
-.bookmark-drag-preview {
-  max-width: 320px;
-}
-.bookmark-drag-preview-title {
-  min-width: 0;
-  max-width: 240px;
-}
-.bookmark-drag-preview-category-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.bookmark-drag-preview .bookmark-tag.category-tag {
-  max-width: 92px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 0 0 auto;
-}
 .sidebar-icon {
   width: 26px;
   height: 26px;
@@ -1140,34 +1021,6 @@ select,
   overscroll-behavior-y: contain;
   padding: 10px 12px 12px;
 }
-.sidebar-item-expand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  position: relative;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.18s ease;
-}
-.sidebar-item-expand::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-}
-.sidebar-item-expand:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-}
-.sidebar-item-expand.expanded {
-  transform: rotate(90deg);
-  color: var(--accent);
-}
 .bookmarks-view-title {
   grid-column: 1 / -1;
   display: flex;
@@ -1198,7 +1051,7 @@ select,
   max-width: 1680px;
   margin: 0 auto;
 }
-.bookmark-category-dropzone {
+.bookmark-category-group {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(auto-fill, 300px);
@@ -1206,7 +1059,7 @@ select,
   justify-content: center;
   min-width: 0;
 }
-.bookmark-category-dropzone.empty {
+.bookmark-category-group.empty {
   min-height: 150px;
 }
 
@@ -1276,23 +1129,14 @@ select,
   transform: none;
   background: var(--bg-card);
 }
+.bookmark-card.dnd-drop-target {
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.bookmark-card[data-dnd-kit-feedback='true'],
+.sidebar-item[data-dnd-kit-feedback='true'] {
+  visibility: hidden;
+}
 
-/* ===== 拖拽排序 =====
-   仅桌面端：移动端 mobile-shell 不渲染 BookmarkCard，天然不触发。*/
-.bookmark-card.dragging {
-  background: var(--accent-soft-bg);
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-.bookmark-card.drag-over-before,
-.bookmark-card.drag-over-after {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent) 3%, transparent));
-}
-.bookmark-card.drag-over-before {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-.bookmark-card.drag-over-after {
-  box-shadow: inset -3px 0 0 var(--accent);
-}
 .bookmark-header {
   display: flex;
   align-items: flex-start;
@@ -1538,7 +1382,7 @@ select,
     margin: 0;
     padding: 0 8px;
   }
-  .bookmark-category-dropzone {
+  .bookmark-category-group {
     grid-template-columns: 1fr;
     justify-content: stretch;
   }

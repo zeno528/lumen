@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getCategoryDescendantIds, filterBookmarksByCategory, getCategoryCount } from '../src/lib/category-tree.ts'
+import {
+  getCategoryDescendantIds,
+  filterBookmarksByCategory,
+  getCategoryCount,
+  getCategoryTreeRows,
+} from '../src/lib/category-tree.ts'
 
 const categories = [
   { id: 1, name: '开发', icon: 'fa-folder', color: '', sort_order: 0, parent_id: null },
@@ -30,4 +35,26 @@ test('parent view aggregates direct and child bookmarks while child view stays d
 test('parent count includes direct and child bookmarks', () => {
   assert.equal(getCategoryCount(bookmarks, categories, 1), 3)
   assert.equal(getCategoryCount(bookmarks, categories, 2), 1)
+})
+
+test('category tree rows keep sibling metadata and aggregated bookmark counts', () => {
+  assert.deepEqual(
+    getCategoryTreeRows(categories, new Set([1]), bookmarks).map(
+      ({ category, depth, childCount, siblingIndex, bookmarkCount }) =>
+        [category.id, depth, childCount, siblingIndex, bookmarkCount],
+    ),
+    [
+      [1, 0, 2, 0, 3],
+      [2, 1, 0, 0, 1],
+      [3, 1, 0, 1, 1],
+      [4, 0, 0, 1, 1],
+    ],
+  )
+  assert.deepEqual(
+    getCategoryTreeRows(categories, new Set(), bookmarks).map(
+      ({ category, depth, childCount, siblingIndex, bookmarkCount }) =>
+        [category.id, depth, childCount, siblingIndex, bookmarkCount],
+    ),
+    [[1, 0, 2, 0, 3], [4, 0, 0, 1, 1]],
+  )
 })

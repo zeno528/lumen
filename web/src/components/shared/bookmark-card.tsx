@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Star, Copy, Globe, Check, Hash, Menu } from 'lucide-react'
-import { useDragDropMonitor } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
+import { Star, Copy, Globe, Check, Hash, Menu } from 'lucide-react'
 import type { Bookmark } from '@/types'
 import { faviconUrl } from '@/api/bookmarks'
 import { getFavicon, hasNoFavicon, markNoFavicon } from '@/lib/favicon-cache'
@@ -9,8 +8,6 @@ import { useToggleFavorite } from '@/hooks/useBookmarks'
 import { useLongPress } from '@/hooks/use-long-press'
 import { useUIStore } from '@/stores/ui'
 import { highlightText } from '@/lib/bookmark-utils'
-import { makeDragId, type BookmarkDragData } from '@/lib/category-dnd'
-import { getBookmarkDropPosition, type BookmarkDropPosition } from '@/lib/bookmark-dnd'
 import { cn, openInNewTab } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 
@@ -22,14 +19,10 @@ import { toast } from '@/components/ui/toast'
  * - 桌面端无三点菜单按钮：菜单靠右键 contextmenu 触发；
  *   footer 的 .copy-btn / .id-badge 默认隐藏，hover 才显示
  * - 批量模式下点击选中；搜索高亮
- * - 拖拽重排：仅非批量模式可拖；移动端不渲染本组件天然不触发。
- *
- * 拖拽由 dnd-kit 的 sortable 实例管理；卡片只保留落点侧的语义高亮。
+ * - 移动端不渲染本组件，桌面卡片保留纯展示与点击交互。
  */
 export function BookmarkCard({
   bookmark,
-  index,
-  group,
   categoryName,
   searchQuery,
   onMenuClick,
@@ -38,11 +31,11 @@ export function BookmarkCard({
   exiting = false,
   onExitDone,
   refreshing = false,
-  liveSort = false,
+  dragEnabled = false,
+  index = 0,
+  group = 'bookmarks',
 }: {
   bookmark: Bookmark
-  index: number
-  group: string
   categoryName?: string
   searchQuery: string
   onMenuClick: (id: number, x: number, y: number) => void
@@ -56,7 +49,10 @@ export function BookmarkCard({
   onExitDone?: (id: number) => void
   /** 正在刷新图标：图标容器加 .refreshing class 显示旋转*/
   refreshing?: boolean
-  liveSort?: boolean
+  /** 书签排序开关；搜索/批量模式由调用方关闭。 */
+  dragEnabled?: boolean
+  index?: number
+  group?: string
 }) {
   // 初始值读无图标记忆（favicon-cache）：路由切换重挂时若已知该书签无 favicon（updated_at 匹配），
   // 直接显示 Globe 不发请求，避免"空白->Globe"闪烁。首次或书签更新后走 false 重新尝试 <img>。
@@ -76,48 +72,22 @@ export function BookmarkCard({
     setFaviconError(hasNoFavicon(bookmark.id, bookmark.updated_at))
   }, [bookmark.favicon, bookmark.updated_at, bookmark.id])
   const [copiedId, setCopiedId] = useState(false)
-  const [dragOver, setDragOver] = useState<BookmarkDropPosition | null>(null)
   const toggleFav = useToggleFavorite()
   const { batchMode, selectedIds, toggleSelection } = useUIStore()
   const selected = selectedIds.has(bookmark.id)
-
-  const sortableId = makeDragId('bookmark', bookmark.id)
-  const sortable = useSortable<BookmarkDragData>({
-    id: sortableId,
+  const sortable = useSortable({
+    id: `bookmark:${bookmark.id}`,
     index,
     group,
     type: 'bookmark',
     accept: 'bookmark',
-    plugins: liveSort ? undefined : (defaults) => defaults.slice(0, 1),
-    disabled: batchMode ? { draggable: true } : undefined,
+    disabled: !dragEnabled || batchMode,
+    transition: { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
     data: {
       kind: 'bookmark',
       id: bookmark.id,
-      title: bookmark.title,
       categoryId: bookmark.category_id,
-      categoryName: categoryName ?? '未分类',
-      favicon: bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at),
     },
-  })
-
-  useDragDropMonitor({
-    onDragMove: ({ operation }) => {
-      const source = operation.source
-      const target = operation.target
-      const sourceData = source?.data as { kind?: string } | undefined
-      if (sourceData?.kind !== 'bookmark' || target?.id !== sortableId || source?.id === sortableId) {
-        setDragOver((current) => current == null ? current : null)
-        return
-      }
-      const element = target.element
-      if (!element) return
-      const position = getBookmarkDropPosition(
-        operation.position.current.x,
-        element.getBoundingClientRect(),
-      )
-      setDragOver((current) => current === position ? current : position)
-    },
-    onDragEnd: () => setDragOver(null),
   })
 
   // 移动端长按：不触发菜单（菜单已由汉堡按钮承担），只标记忽略后续 contextmenu，
@@ -171,6 +141,7 @@ export function BookmarkCard({
 
   return (
     <article
+      ref={sortable.ref}
       data-bookmark-id={bookmark.id}
       className={cn(
         'bookmark-card group',
@@ -179,15 +150,13 @@ export function BookmarkCard({
         // 选中态挂语义类 selected，样式交 layout.css 的 .bookmark-card.selected
         // （accent 边框 + 双层描边外发光）
         selected && 'selected',
-        sortable.isDragging && 'dragging',
-        dragOver && `drag-over-${dragOver}`,
         // 进出场动画
         isNew && 'bookmark-highlight',
         showPopIn && 'pop-in',
         exiting && 'pop-out',
         refreshing && 'favicon-refreshing',
+        sortable.isDropTarget && 'dnd-drop-target',
       )}
-      ref={sortable.ref}
       onAnimationEnd={(e) => {
         // 只在 pop-out 动画结束时触发，避免与 fadeInUp 冲突
         if (exiting && e.animationName === 'popOut') {

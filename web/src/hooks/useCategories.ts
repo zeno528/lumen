@@ -73,7 +73,7 @@ export function useUpdateCategory() {
   )
 }
 
-/** 拖拽归类 —— 可在同一请求内改 parent_id 并插入目标分类前/后。 */
+/** 移动分类 —— 可在同一请求内改 parent_id 并插入目标分类前/后。 */
 export function useMoveCategory() {
   const qc = useQueryClient()
   return useMutation(
@@ -205,13 +205,12 @@ export function useBatchDeleteCategories() {
 }
 
 /**
- * 分类拖拽重排。
+ * 分类顺序重排。
  * 乐观更新：立即按新顺序重排 qc 缓存，再异步 PUT /api/categories/reorder。
  * 失败只 console.error 不回滚（排序错位非致命）。
  *
  * 排序语义：由调用方传入 `position: 'before' | 'after'`，决定被拖项插到目标项的前面还是后面。
- * 原实现固定 `before`，往下拖视觉位移极小（落点命中 from 已经在它前面的目标 →
- * "插到前面" = 现状）用户感觉"往下拖没反应"。
+ * 调用方按目标位置传入 `before` 或 `after`，服务端只负责保存最终顺序。
  * 修复：drop 时按鼠标在 target 内的 offsetY 决定 before/after（中线为界）。
  *
  * 关键点：先移除 from，再用 findIndex 在移除后的数组里重新定位 to 并按 position 插入。
