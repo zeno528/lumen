@@ -688,17 +688,23 @@ body:hover,
   cursor: pointer;
 }
 .toast .toast-action {
+  display: inline-flex;
+  align-items: center;
   border: 0;
-  border-bottom: 1px solid currentColor;
-  background: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--toast-text) 12%, transparent);
   color: inherit;
   cursor: pointer;
-  padding: 0;
+  width: auto;
+  height: 20px;
+  padding: 0 9px;
   font: inherit;
-  opacity: 0.8;
-  transition: opacity 0.15s;
+  line-height: 1;
+  opacity: 1;
+  transition: background 0.15s, color 0.15s;
 }
 .toast .toast-action:hover {
+  background: color-mix(in srgb, var(--toast-text) 18%, transparent);
   opacity: 1;
 }
 .toast .toast-close {

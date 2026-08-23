@@ -28,6 +28,14 @@ const ACTION_TOAST_DURATION = 5000
 /** loading toast 的 dismiss 回调表（用户主动取消时调，通常 abort fetch）。
  *  resolve 看到 id 已被 dismiss 时静默 —— 避免"用户 X 关掉 → fetch 完成又复活 toast"的体验 bug */
 const onDismissMap = new Map<number, () => void>()
+type ToastTimer = {
+  timeout: ReturnType<typeof setTimeout> | null
+  startedAt: number
+  remaining: number
+  paused: boolean
+}
+const toastTimers = new Map<number, ToastTimer>()
+const hoveredToastIds = new Set<number>()
 
 function notify() {
   for (const l of listeners) l(toastQueue)
@@ -35,8 +43,58 @@ function notify() {
 
 /** 从队列移除（退场动画播完后调用） */
 function removeItem(id: number) {
+  clearAutoHide(id)
+  hoveredToastIds.delete(id)
   toastQueue = toastQueue.filter((x) => x.id !== id)
   notify()
+}
+
+function clearAutoHide(id: number) {
+  const timer = toastTimers.get(id)
+  if (timer?.timeout != null) clearTimeout(timer.timeout)
+  toastTimers.delete(id)
+}
+
+function scheduleAutoHide(id: number, duration: number) {
+  clearAutoHide(id)
+  const timer: ToastTimer = {
+    timeout: null,
+    startedAt: performance.now(),
+    remaining: duration,
+    paused: hoveredToastIds.has(id),
+  }
+  toastTimers.set(id, timer)
+  if (timer.paused) return
+  timer.timeout = setTimeout(() => {
+    toastTimers.delete(id)
+    startHiding(id)
+  }, duration)
+}
+
+function pauseAutoHide(id: number) {
+  hoveredToastIds.add(id)
+  const timer = toastTimers.get(id)
+  if (!timer || timer.paused) return
+  if (timer.timeout != null) clearTimeout(timer.timeout)
+  timer.remaining = Math.max(0, timer.remaining - (performance.now() - timer.startedAt))
+  timer.paused = true
+}
+
+function resumeAutoHide(id: number) {
+  hoveredToastIds.delete(id)
+  const timer = toastTimers.get(id)
+  if (!timer || !timer.paused) return
+  if (timer.remaining <= 0) {
+    toastTimers.delete(id)
+    startHiding(id)
+    return
+  }
+  timer.paused = false
+  timer.startedAt = performance.now()
+  timer.timeout = setTimeout(() => {
+    toastTimers.delete(id)
+    startHiding(id)
+  }, timer.remaining)
 }
 
 export const toast = {
@@ -65,6 +123,8 @@ export const toast = {
    *  非 loading toast 不应调用（success/error/warning 用 X 按钮的 startHiding 走退场动画即可）。*/
   dismiss(id: number) {
     onDismissMap.get(id)?.()
+    clearAutoHide(id)
+    hoveredToastIds.delete(id)
     toastQueue = toastQueue.filter((x) => x.id !== id)
     notify()
   },
@@ -81,7 +141,7 @@ export const toast = {
         x.id === id ? { ...x, msg, type, icon: undefined, action } : x,
       )
       notify()
-      setTimeout(() => startHiding(id), action ? ACTION_TOAST_DURATION : TOAST_DURATION)
+      scheduleAutoHide(id, action ? ACTION_TOAST_DURATION : TOAST_DURATION)
     } else if (!onDismissMap.has(id)) {
       push({ id: ++toastIdCounter, msg, type })
     }
@@ -94,13 +154,16 @@ function push(t: ToastItem, autoHide = true) {
   notify()
   // 带操作入口的提示保留 5s，普通提示保持 2.65s
   // loading 类型不自动消失，等 resolve 调用
-  if (autoHide) setTimeout(() => startHiding(t.id), t.action ? ACTION_TOAST_DURATION : TOAST_DURATION)
+  if (autoHide) scheduleAutoHide(t.id, t.action ? ACTION_TOAST_DURATION : TOAST_DURATION)
 }
 
 /**
  * 触发退场动画：标记 hiding → 渲染加 .hide class → CSS toastOut 0.4s → 移除
  */
 function startHiding(id: number) {
+  clearAutoHide(id)
+  hoveredToastIds.delete(id)
+  if (!toastQueue.some((x) => x.id === id && !x.hiding)) return
   toastQueue = toastQueue.map((x) =>
     x.id === id && !x.hiding ? { ...x, hiding: true } : x,
   )
@@ -159,6 +222,8 @@ export function ToastContainer() {
           key={t.id}
           className={cn('toast', t.type, t.action && 'has-action', t.hiding && 'hide')}
           onClick={t.action ? () => activateAction(t) : undefined}
+          onMouseEnter={() => pauseAutoHide(t.id)}
+          onMouseLeave={() => resumeAutoHide(t.id)}
         >
           <Icon type={t.type} icon={t.icon} />
           <span>{t.msg}</span>

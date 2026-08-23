@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { useLongPress } from '@/hooks/use-long-press'
@@ -22,6 +23,7 @@ export function SidebarItem({
   depth = 0,
   dragEnabled = false,
   hasChildren = false,
+  expanded = false,
   index = 0,
   group = 'categories:root',
 }: {
@@ -42,6 +44,7 @@ export function SidebarItem({
   /** 分类拖拽开关；批量选择时关闭。 */
   dragEnabled?: boolean
   hasChildren?: boolean
+  expanded?: boolean
   index?: number
   group?: string
 }) {
@@ -100,7 +103,8 @@ export function SidebarItem({
         active && 'active',
         showPopIn && 'pop-in',
         selected && 'selected',
-        (sortable.isDropTarget || categoryZone.isDropTarget) && 'dnd-drop-target',
+        sortable.isDropTarget && 'dnd-drop-target',
+        categoryZone.isDropTarget && 'bookmark-drop-target',
       )}
       onClick={onSelect ? (e) => onSelect(e, category!.id) : onClick}
       onContextMenu={
@@ -116,6 +120,14 @@ export function SidebarItem({
         if (showPopIn && e.animationName === 'popIn') setShowPopIn(false)
       }}
     >
+      {category ? (
+        <span
+          className={cn('sidebar-item-expand', expanded && 'expanded')}
+          aria-hidden="true"
+        >
+          {hasChildren ? <ChevronRight size={15} /> : null}
+        </span>
+      ) : null}
       <div
         className={cn(
           'sidebar-icon',
