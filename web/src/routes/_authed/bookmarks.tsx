@@ -290,7 +290,7 @@ function BookmarksPage() {
         if (target.kind === 'category') {
           if (source.categoryId === target.id) return
           await batchMoveMut.mutateAsync({ ids: [source.id], categoryId: target.id })
-          toast.success('书签已移动到分类')
+          toast.success(`书签已移动到「${catMap.get(target.id) ?? '分类'}」`)
           return
         }
         if (source.id === target.id) return
@@ -324,7 +324,7 @@ function BookmarksPage() {
       }
     }
     void run()
-  }, [aggregateParent, batchMoveMut, canReorderBookmarks, lastDrop, reorderBookmarksMut])
+  }, [aggregateParent, batchMoveMut, canReorderBookmarks, catMap, lastDrop, reorderBookmarksMut])
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
   // - 数字分类已被删除（不在 categories 列表）→ 全部，避免登录后停在已删分类显示空白

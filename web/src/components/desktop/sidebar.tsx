@@ -521,6 +521,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
                 depth={depth}
                 dragEnabled={!categoryBatchMode}
                 hasChildren={childCount > 0}
+                expanded={expandedCategoryIds.has(c.id)}
                 index={siblingIndex}
                 group={`categories:${c.parent_id ?? 'root'}`}
                 iconColor={c.color || 'var(--default-category-color)'}

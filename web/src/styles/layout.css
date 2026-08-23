@@ -644,6 +644,24 @@ select,
   padding-left: 11px;
   transition: background 0.15s, color 0.15s;
 }
+.sidebar-item-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: var(--text-muted);
+}
+.sidebar-item-expand svg {
+  transition: transform 0.18s ease;
+}
+.sidebar-item-expand.expanded {
+  color: var(--accent);
+}
+.sidebar-item-expand.expanded svg {
+  transform: rotate(90deg);
+}
 .sidebar-item-inner {
   display: flex;
   align-items: center;
@@ -710,6 +728,11 @@ select,
 .sidebar-item.dnd-drop-target {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.sidebar-item.bookmark-drop-target {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-card));
+  box-shadow: inset 0 0 0 2px var(--accent), var(--shadow-card);
+  color: var(--accent);
 }
 /* 批量模式选中（区别 active：加 inset 边框，对齐书签批量选中视觉）*/
 .sidebar-item.selected {
@@ -1132,9 +1155,13 @@ select,
 .bookmark-card.dnd-drop-target {
   box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0, 0, 0, 0.15);
 }
-.bookmark-card[data-dnd-kit-feedback='true'],
-.sidebar-item[data-dnd-kit-feedback='true'] {
-  visibility: hidden;
+.sidebar-item[data-dnd-dragging='true'] {
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='true'] {
+  scale: 0.65 !important;
+  transform-origin: var(--dnd-transform-origin) !important;
 }
 
 .bookmark-header {
