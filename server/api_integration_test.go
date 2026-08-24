@@ -489,8 +489,25 @@ func TestMoveCategoryIntoParent(t *testing.T) {
 	parentWithChildID := createCategory(t, api, jwt, "Parent with child")
 	childRes := api.request(t, http.MethodPost, "/api/categories", jwt, CategoryInput{Name: "Child", ParentID: &parentWithChildID})
 	requireStatus(t, childRes, http.StatusCreated)
+	childID := decodeJSON[struct {
+		Category Category `json:"category"`
+	}](t, childRes).Category.ID
 	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(parentWithChildID, 10)+"/parent", jwt, map[string]any{
 		"parent_id": targetID,
+	}), http.StatusOK)
+	categories = decodeJSON[struct {
+		Categories []Category `json:"categories"`
+	}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+	for _, category := range categories {
+		if category.ID == parentWithChildID && (category.ParentID == nil || *category.ParentID != targetID) {
+			t.Fatalf("moved parent parent_id = %v, want %d", category.ParentID, targetID)
+		}
+		if category.ID == childID && (category.ParentID == nil || *category.ParentID != parentWithChildID) {
+			t.Fatalf("child parent_id = %v, want %d", category.ParentID, parentWithChildID)
+		}
+	}
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(targetID, 10)+"/parent", jwt, map[string]any{
+		"parent_id": childID,
 	}), http.StatusBadRequest)
 }
 

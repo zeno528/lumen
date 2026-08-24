@@ -23,9 +23,11 @@ export function SidebarItem({
   depth = 0,
   dragEnabled = false,
   hasChildren = false,
+  descendantIds = [],
   expanded = false,
   index = 0,
   group = 'categories:root',
+  children,
 }: {
   icon: React.ReactNode
   label: string
@@ -44,9 +46,11 @@ export function SidebarItem({
   /** 分类拖拽开关；批量选择时关闭。 */
   dragEnabled?: boolean
   hasChildren?: boolean
+  descendantIds?: number[]
   expanded?: boolean
   index?: number
   group?: string
+  children?: React.ReactNode
 }) {
   const [showPopIn, setShowPopIn] = useState(isNew)
 
@@ -68,7 +72,8 @@ export function SidebarItem({
     type: 'category',
     accept: (source) => {
       if (!category || source.data.kind !== 'category' || source.data.id === category.id) return false
-      return category.parent_id == null || source.data.hasChildren !== true
+      const sourceDescendantIds = source.data.descendantIds
+      return !Array.isArray(sourceDescendantIds) || !sourceDescendantIds.includes(category.id)
     },
     disabled: !category || !dragEnabled,
     transition: { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
@@ -77,6 +82,7 @@ export function SidebarItem({
       id: category?.id ?? 0,
       parentId: category?.parent_id ?? null,
       hasChildren,
+      descendantIds,
     },
   })
   const categoryZone = useDroppable({
@@ -88,14 +94,15 @@ export function SidebarItem({
       ? { kind: 'category-zone', id: category.id, parentId: category.parent_id }
       : undefined,
   })
-  const setRefs = (element: HTMLDivElement | null) => {
-    sortable.ref(element)
+  const setRowRefs = (element: HTMLDivElement | null) => {
+    if (children != null) sortable.targetRef(element)
+    else sortable.ref(element)
     categoryZone.ref(element)
   }
 
-  return (
+  const row = (
     <div
-      ref={setRefs}
+      ref={setRowRefs}
       style={style}
       className={cn(
         'sidebar-item',
@@ -153,4 +160,11 @@ export function SidebarItem({
       </div>
     </div>
   )
+
+  return children != null ? (
+    <div ref={sortable.ref} className="sidebar-category-subtree">
+      {row}
+      {children}
+    </div>
+  ) : row
 }

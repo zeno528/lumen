@@ -18,14 +18,26 @@ func (s *Server) validateCategoryParent(parentID *int64, selfID int64) error {
 	if *parentID <= 0 || *parentID == selfID {
 		return fmt.Errorf("父分类无效")
 	}
-	var parentParent sql.NullInt64
-	if err := s.db.QueryRow("SELECT parent_id FROM categories WHERE id = ?", *parentID).Scan(&parentParent); err == sql.ErrNoRows {
-		return fmt.Errorf("父分类不存在")
-	} else if err != nil {
-		return fmt.Errorf("父分类校验失败")
-	}
-	if parentParent.Valid {
-		return fmt.Errorf("只支持一级子分类")
+	currentID := *parentID
+	seen := map[int64]bool{}
+	for {
+		if seen[currentID] {
+			return fmt.Errorf("分类层级存在循环")
+		}
+		seen[currentID] = true
+		var ancestor sql.NullInt64
+		if err := s.db.QueryRow("SELECT parent_id FROM categories WHERE id = ?", currentID).Scan(&ancestor); err == sql.ErrNoRows {
+			return fmt.Errorf("父分类不存在")
+		} else if err != nil {
+			return fmt.Errorf("父分类校验失败")
+		}
+		if ancestor.Valid && ancestor.Int64 == selfID {
+			return fmt.Errorf("不能移动到自己的子分类")
+		}
+		if !ancestor.Valid {
+			break
+		}
+		currentID = ancestor.Int64
 	}
 	return nil
 }
@@ -194,17 +206,6 @@ func (s *Server) handleMoveCategory(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if input.Position != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序落点无效"})
-		return
-	}
-
-	var hasChildren bool
-	if err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM categories WHERE parent_id = ?)", id).Scan(&hasChildren); err != nil {
-		log.Printf("查询子分类失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if hasChildren && input.ParentID != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "有子分类的父分类不能变更父级"})
 		return
 	}
 

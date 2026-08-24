@@ -28,14 +28,9 @@ const ACTION_TOAST_DURATION = 5000
 /** loading toast 的 dismiss 回调表（用户主动取消时调，通常 abort fetch）。
  *  resolve 看到 id 已被 dismiss 时静默 —— 避免"用户 X 关掉 → fetch 完成又复活 toast"的体验 bug */
 const onDismissMap = new Map<number, () => void>()
-type ToastTimer = {
-  timeout: ReturnType<typeof setTimeout> | null
-  startedAt: number
-  remaining: number
-  paused: boolean
-}
-const toastTimers = new Map<number, ToastTimer>()
+const toastTimers = new Map<number, ReturnType<typeof setTimeout>>()
 const hoveredToastIds = new Set<number>()
+const expiredToastIds = new Set<number>()
 
 function notify() {
   for (const l of listeners) l(toastQueue)
@@ -51,50 +46,17 @@ function removeItem(id: number) {
 
 function clearAutoHide(id: number) {
   const timer = toastTimers.get(id)
-  if (timer?.timeout != null) clearTimeout(timer.timeout)
+  if (timer != null) clearTimeout(timer)
   toastTimers.delete(id)
 }
 
 function scheduleAutoHide(id: number, duration: number) {
   clearAutoHide(id)
-  const timer: ToastTimer = {
-    timeout: null,
-    startedAt: performance.now(),
-    remaining: duration,
-    paused: hoveredToastIds.has(id),
-  }
-  toastTimers.set(id, timer)
-  if (timer.paused) return
-  timer.timeout = setTimeout(() => {
+  toastTimers.set(id, setTimeout(() => {
     toastTimers.delete(id)
-    startHiding(id)
-  }, duration)
-}
-
-function pauseAutoHide(id: number) {
-  hoveredToastIds.add(id)
-  const timer = toastTimers.get(id)
-  if (!timer || timer.paused) return
-  if (timer.timeout != null) clearTimeout(timer.timeout)
-  timer.remaining = Math.max(0, timer.remaining - (performance.now() - timer.startedAt))
-  timer.paused = true
-}
-
-function resumeAutoHide(id: number) {
-  hoveredToastIds.delete(id)
-  const timer = toastTimers.get(id)
-  if (!timer || !timer.paused) return
-  if (timer.remaining <= 0) {
-    toastTimers.delete(id)
-    startHiding(id)
-    return
-  }
-  timer.paused = false
-  timer.startedAt = performance.now()
-  timer.timeout = setTimeout(() => {
-    toastTimers.delete(id)
-    startHiding(id)
-  }, timer.remaining)
+    if (hoveredToastIds.has(id)) expiredToastIds.add(id)
+    else startHiding(id)
+  }, duration))
 }
 
 export const toast = {
@@ -125,6 +87,7 @@ export const toast = {
     onDismissMap.get(id)?.()
     clearAutoHide(id)
     hoveredToastIds.delete(id)
+    expiredToastIds.delete(id)
     toastQueue = toastQueue.filter((x) => x.id !== id)
     notify()
   },
@@ -163,6 +126,7 @@ function push(t: ToastItem, autoHide = true) {
 function startHiding(id: number) {
   clearAutoHide(id)
   hoveredToastIds.delete(id)
+  expiredToastIds.delete(id)
   if (!toastQueue.some((x) => x.id === id && !x.hiding)) return
   toastQueue = toastQueue.map((x) =>
     x.id === id && !x.hiding ? { ...x, hiding: true } : x,
@@ -222,8 +186,11 @@ export function ToastContainer() {
           key={t.id}
           className={cn('toast', t.type, t.action && 'has-action', t.hiding && 'hide')}
           onClick={t.action ? () => activateAction(t) : undefined}
-          onMouseEnter={() => pauseAutoHide(t.id)}
-          onMouseLeave={() => resumeAutoHide(t.id)}
+          onMouseEnter={() => hoveredToastIds.add(t.id)}
+          onMouseLeave={() => {
+            hoveredToastIds.delete(t.id)
+            if (expiredToastIds.delete(t.id)) startHiding(t.id)
+          }}
         >
           <Icon type={t.type} icon={t.icon} />
           <span>{t.msg}</span>

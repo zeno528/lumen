@@ -143,6 +143,7 @@ export function BookmarkCard({
     <article
       ref={sortable.ref}
       data-bookmark-id={bookmark.id}
+      data-category-id={bookmark.category_id ?? ''}
       className={cn(
         'bookmark-card group',
         // 批量模式取消 hover 上浮/背景变化

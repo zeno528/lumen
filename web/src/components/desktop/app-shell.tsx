@@ -15,7 +15,11 @@ import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { MobileShell } from '@/components/mobile/mobile-shell'
 import { useBookmarks } from '@/hooks/useBookmarks'
 import { useCategories } from '@/hooks/useCategories'
-import { getDragSource, getDragTarget, useDragStore } from '@/stores/drag'
+import { getDragSource, getDragTarget, useDragStore, type DragSource } from '@/stores/drag'
+import {
+  getBookmarkDropPosition,
+  type BookmarkDropTarget,
+} from '@/lib/bookmark-order'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { openInNewTab } from '@/lib/utils'
 import {
@@ -24,16 +28,109 @@ import {
   MAIN_CONTENT_HORIZONTAL_PADDING,
 } from '@/hooks/use-grid-metrics'
 
+type DragMoveEvent = Parameters<NonNullable<React.ComponentProps<typeof DragDropProvider>['onDragMove']>>[0]
+type DragOperation = DragMoveEvent['operation']
+type SortableBookmarkSource = {
+  index?: unknown
+  initialIndex?: unknown
+  group?: unknown
+}
+
+function getProjectedBookmarkSort(source: DragSource, operation: DragOperation) {
+  if (source.kind !== 'bookmark') return undefined
+  const sortableSource = operation.source as SortableBookmarkSource | null
+  if (sortableSource?.group !== `bookmarks:category:${source.categoryId}`) return undefined
+  if (typeof sortableSource.index !== 'number' || typeof sortableSource.initialIndex !== 'number') return undefined
+  return { index: sortableSource.index, initialIndex: sortableSource.initialIndex }
+}
+
+function getOperationTarget(source: DragSource, operation: DragOperation) {
+  const target = operation.target
+  if (!target?.element) return null
+  const targetRect = target.element.getBoundingClientRect()
+  return getDragTarget(source, target.data, operation.position.current, targetRect)
+}
+
+function getBookmarkTargetAtPointer(source: DragSource, operation: DragOperation): BookmarkDropTarget | null {
+  if (source.kind !== 'bookmark') return null
+  const targetElement = document.elementsFromPoint(operation.position.current.x, operation.position.current.y)
+    .map((element) => element.closest<HTMLElement>('.bookmark-card'))
+    .find((element): element is HTMLElement => {
+      if (!element) return false
+      const id = Number(element.dataset.bookmarkId)
+      return Number.isFinite(id) && id !== source.id
+    })
+  if (!targetElement) return null
+
+  const id = Number(targetElement.dataset.bookmarkId)
+  const rawCategoryId = targetElement.dataset.categoryId ?? ''
+  const categoryId = rawCategoryId === '' ? null : Number(rawCategoryId)
+  if (!Number.isFinite(id) || categoryId !== source.categoryId) return null
+
+  const targetRect = targetElement.getBoundingClientRect()
+  return {
+    kind: 'bookmark',
+    id,
+    categoryId,
+    position: getBookmarkDropPosition(operation.position.current.x, targetRect),
+  }
+}
+
+function handleDragStart() {
+  useDragStore.getState().clearBookmarkTarget()
+}
+
+function rememberBookmarkTarget({ operation }: DragMoveEvent) {
+  const source = getDragSource(operation.source?.data ?? {})
+  const target = operation.target
+  if (
+    source?.kind !== 'bookmark' ||
+    target?.data.kind !== 'bookmark' ||
+    target.data.id === source.id ||
+    !target.element
+  ) return
+
+  const candidate = getOperationTarget(source, operation)
+  if (candidate?.kind === 'bookmark') {
+    useDragStore.getState().rememberBookmarkTarget({ sourceId: source.id, target: candidate })
+  }
+}
+
 function handleDragEnd({ operation, canceled }: Parameters<NonNullable<React.ComponentProps<typeof DragDropProvider>['onDragEnd']>>[0]) {
-  if (canceled || !operation.source || !operation.target?.element) return
+  if (canceled || !operation.source) {
+    useDragStore.getState().clearBookmarkTarget()
+    return
+  }
   const source = getDragSource(operation.source.data)
-  if (!source) return
-  const target = getDragTarget(
-    source,
-    operation.target.data,
-    operation.position.current,
-    operation.target.element.getBoundingClientRect(),
-  )
+  if (!source) {
+    useDragStore.getState().clearBookmarkTarget()
+    return
+  }
+  const projectedSort = getProjectedBookmarkSort(source, operation)
+  const directTarget = getOperationTarget(source, operation)
+  const fallback = useDragStore.getState().lastBookmarkTarget
+  const visualTarget = source.kind === 'bookmark' && !projectedSort && directTarget?.kind !== 'bookmark'
+    ? getBookmarkTargetAtPointer(source, operation)
+    : null
+  const bookmarkTarget = source.kind === 'bookmark'
+    ? (directTarget?.kind === 'bookmark' ? directTarget : visualTarget)
+      ?? (fallback?.sourceId === source.id ? fallback.target : null)
+    : null
+  const target = directTarget?.kind === 'category'
+    ? directTarget
+    : source.kind === 'bookmark'
+      ? projectedSort && projectedSort.index !== projectedSort.initialIndex
+        ? {
+          kind: 'bookmark' as const,
+          id: bookmarkTarget?.id ?? source.id,
+          categoryId: source.categoryId,
+          position: bookmarkTarget?.position ?? 'after',
+          sortIndex: projectedSort.index,
+        }
+        : projectedSort
+          ? null
+          : bookmarkTarget
+      : directTarget
   useDragStore.getState().finish(source, target)
 }
 
@@ -156,6 +253,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <DragDropProvider
       plugins={(defaults) => defaults.map((plugin) => plugin === Feedback ? Feedback.configure({ dropAnimation: null }) : plugin)}
+      onDragStart={handleDragStart}
+      onDragMove={rememberBookmarkTarget}
+      onDragOver={rememberBookmarkTarget}
       onDragEnd={handleDragEnd}
     >
       {isMobile ? <MobileShell>{children}</MobileShell> : <DesktopShell>{children}</DesktopShell>}
