@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, ChevronLeft, Layers, Star, Folder, Bookmark } from 'lucide-react'
+import { Search, Plus, CheckCheck, X, Menu, PanelLeft, Rocket, Keyboard, ChevronDown, Layers, Star, Folder, Bookmark } from 'lucide-react'
 import { TopbarAvatar } from '@/components/shared/topbar-avatar'
 import { TopbarAIButton } from '@/components/shared/topbar-ai-button'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
@@ -14,7 +14,7 @@ import { useDebouncedValue } from '@/hooks/use-debounce'
 import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
-import { getCategoryCount, getChildCategories, getParentCategory, hasChildCategories } from '@/lib/category-tree'
+import { getCategoryCount } from '@/lib/category-tree'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 
 /**
@@ -399,7 +399,7 @@ function MobileCategorySelect() {
     ).length,
   }
   const countByCat = (id: number) =>
-    getCategoryCount(bookmarks, categories, id)
+    getCategoryCount(bookmarks, id)
   const selectCategory = (category: typeof currentCategory) => {
     setCurrentCategory(category)
   }
@@ -440,47 +440,16 @@ function MobileCategorySelect() {
     }
   })()
 
-  // 聚合上下文：子分类 → 父分类；顶级聚合 → 自己；孤儿子分类（父分类已被删除）→ 只给「返回全部」逃生口。
-  const currentCat =
-    typeof currentCategory === 'number' ? (categories.find((c) => c.id === currentCategory) ?? null) : null
-  const parentCat = currentCat?.parent_id != null ? getParentCategory(categories, currentCat.id) : null
-  const isOrphan = currentCat != null && currentCat.parent_id != null && parentCat == null
-  const aggregate =
-    parentCat ?? (currentCat != null && !isOrphan && hasChildCategories(categories, currentCat.id) ? currentCat : null)
-  const siblings = aggregate ? getChildCategories(categories, aggregate.id) : []
-  const canExpand = aggregate != null || isOrphan
-  const isChildView = currentCat != null && aggregate != null && currentCat.id !== aggregate.id
-
-  const items: MenuItem[] = isOrphan
-    ? [{
-        label: '返回全部',
-        icon: <Layers size={13} style={{ color: 'var(--icon-all)' }} />,
-        onClick: () => selectCategory('all'),
-      }]
-    : aggregate
-      ? [
-          ...(isChildView
-            ? [{
-                label: '返回父分类',
-                icon: <ChevronLeft size={14} />,
-                onClick: () => selectCategory(aggregate.id),
-              }]
-            : [{
-                label: aggregate.name,
-                header: true,
-                trailing: <span className="sidebar-item-count">{countByCat(aggregate.id)}</span>,
-              }]),
-          ...siblings.map((child) => {
-            const ChildIcon = resolveCategoryIcon(child.icon)
-            return {
-              label: `${child.name}（${countByCat(child.id)}）`,
-              icon: <ChildIcon size={13} style={{ color: child.color || 'var(--default-category-color)' }} />,
-              active: currentCategory === child.id,
-              onClick: () => selectCategory(child.id),
-            }
-          }),
-        ]
-      : []
+  const canExpand = categories.length > 0
+  const items: MenuItem[] = categories.map((category) => {
+    const Icon = resolveCategoryIcon(category.icon)
+    return {
+      label: `${category.name}（${countByCat(category.id)}）`,
+      icon: <Icon size={13} style={{ color: category.color || 'var(--default-category-color)' }} />,
+      active: currentCategory === category.id,
+      onClick: () => selectCategory(category.id),
+    }
+  })
 
   return (
     <>

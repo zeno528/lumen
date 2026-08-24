@@ -618,13 +618,6 @@ select,
 .sidebar-categories::-webkit-scrollbar {
   display: none;
 }
-.sidebar-category-subtree {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-}
-
 /* 分类项 —— 双层 flex 结构：
    outer (.sidebar-item) flex row 让 .sidebar-icon 和 .sidebar-item-inner 横向排；
    inner (.sidebar-item-inner) flex row 让 name 和 count 横向排。
@@ -650,24 +643,6 @@ select,
   padding-left: 11px;
   transition: background 0.15s, color 0.15s;
 }
-.sidebar-item-expand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  color: var(--text-muted);
-}
-.sidebar-item-expand svg {
-  transition: transform 0.18s ease;
-}
-.sidebar-item-expand.expanded {
-  color: var(--accent);
-}
-.sidebar-item-expand.expanded svg {
-  transform: rotate(90deg);
-}
 .sidebar-item-inner {
   display: flex;
   align-items: center;
@@ -690,27 +665,6 @@ select,
   right: 0;
   top: -1px;
   bottom: -1px;
-}
-.sidebar-item-child {
-  width: calc(100% - 22px);
-  margin-left: 22px;
-}
-.sidebar-item-child::before {
-  content: '';
-  position: absolute;
-  left: -10px;
-  top: -1px;
-  bottom: -1px;
-  width: 1px;
-  background: var(--border);
-}
-.sidebar-item-child::after {
-  content: '';
-  position: absolute;
-  left: -10px;
-  top: 50%;
-  width: 10px;
-  border-top: 1px solid var(--border);
 }
 .sidebar-item:hover {
   background: rgba(0, 0, 0, 0.06);
@@ -1080,18 +1034,6 @@ select,
   max-width: 1680px;
   margin: 0 auto;
 }
-.bookmark-category-group {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 300px);
-  gap: 18px;
-  justify-content: center;
-  min-width: 0;
-}
-.bookmark-category-group.empty {
-  min-height: 150px;
-}
-
 /* ===== 搜索结果分组标题 =====
    搜索时在单个 .bookmarks-grid 内按分类分段，标题作为跨列网格项插入卡片之间。 */
 .search-group-title {
@@ -1414,10 +1356,6 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     max-width: 100%;
     margin: 0;
     padding: 0 8px;
-  }
-  .bookmark-category-group {
-    grid-template-columns: 1fr;
-    justify-content: stretch;
   }
   .main,
   [data-theme='notion-dark'] .main {

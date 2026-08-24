@@ -197,8 +197,6 @@ func main() {
 		r.Post("/api/categories/merge", srv.handleMergeCategories)
 		r.Delete("/api/categories/batch", srv.handleBatchDeleteCategories)
 		r.Put("/api/categories/reorder", srv.handleReorderCategories)
-		r.Put("/api/categories/{id}/children/release", srv.handleReleaseCategoryChildren)
-		r.Put("/api/categories/{id}/parent", srv.handleMoveCategory)
 		r.Put("/api/categories/{id}", srv.handleUpdateCategory)
 		r.Delete("/api/categories/{id}", srv.handleDeleteCategory)
 

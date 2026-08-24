@@ -140,7 +140,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 // 辅助方法
 
 func (s *Server) getAllCategories() ([]Category, error) {
-	rows, err := s.db.Query("SELECT id, name, icon, COALESCE(color, ''), sort_order, parent_id FROM categories ORDER BY sort_order, id")
+	rows, err := s.db.Query("SELECT id, name, icon, COALESCE(color, ''), sort_order FROM categories ORDER BY sort_order, id")
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (s *Server) getAllCategories() ([]Category, error) {
 	cats := []Category{}
 	for rows.Next() {
 		var c Category
-		if err := rows.Scan(&c.ID, &c.Name, &c.Icon, &c.Color, &c.SortOrder, &c.ParentID); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Icon, &c.Color, &c.SortOrder); err != nil {
 			return nil, fmt.Errorf("扫描分类行失败: %w", err)
 		}
 		cats = append(cats, c)
@@ -254,7 +254,6 @@ type ImportCategory struct {
 	Color     string     `json:"color"`
 	IsDefault bool       `json:"isDefault"`
 	SortOrder *int       `json:"sort_order"`
-	ParentID  FlexNumber `json:"parent_id"`
 }
 
 type ImportBookmark struct {
@@ -302,79 +301,51 @@ func (s *Server) importJSON(categories []ImportCategory, bookmarks []ImportBookm
 		if _, err := tx.Exec("DELETE FROM bookmarks"); err != nil {
 			return 0, 0, nil, nil, 0, fmt.Errorf("清空书签失败: %v", err)
 		}
-		// parent_id 使用 ON DELETE RESTRICT；当前仅支持一级子分类，按子→父顺序删除。
-		if _, err := tx.Exec("DELETE FROM categories WHERE parent_id IS NOT NULL"); err != nil {
-			return 0, 0, nil, nil, 0, fmt.Errorf("清空子分类失败: %v", err)
-		}
-		if _, err := tx.Exec("DELETE FROM categories WHERE parent_id IS NULL"); err != nil {
+		if _, err := tx.Exec("DELETE FROM categories"); err != nil {
 			return 0, 0, nil, nil, 0, fmt.Errorf("清空分类失败: %v", err)
 		}
 	}
 
-	// 导入分类（跳过 'all' 虚拟分类）。父分类先写入，子分类再按旧 ID 映射写入。
+	// 导入分类（跳过 'all' 虚拟分类）。旧导出中的层级字段会被忽略。
 	// RowsAffected>0 为新增（记名供前端展示「新增了哪些分类」），=0 为已存在跳过。
 	importedCategories = []string{}
 	catIDMap := make(map[string]int64)
-	for pass := 0; pass < 2; pass++ {
-		for i, cat := range categories {
-			catIDStr := cat.ID.String()
-			if catIDStr == "all" || cat.IsDefault {
-				continue
-			}
-			// 第二遍只补第一遍因父分类尚未写入而跳过的子分类；已处理（插入或名称去重）的
-			// 不再重入，避免第一遍已导入的子分类被重复计入 skipped。
-			if pass == 1 {
-				if _, done := catIDMap[catIDStr]; done {
-					continue
-				}
-			}
-			icon := cat.Icon
-			if icon == "" {
-				icon = "fa-folder"
-			}
-			sortOrder := i
-			if cat.SortOrder != nil {
-				sortOrder = *cat.SortOrder
-			}
-			parentID := any(nil)
-			if rawParent := cat.ParentID.String(); rawParent != "" && rawParent != "0" {
-				mapped, ok := catIDMap[rawParent]
-				if !ok {
-					// 第二遍仍未解析 = 父分类被跳过（isDefault / "all" / id 缺失），
-					// 计入跳过而不是静默丢弃。
-					if pass == 1 {
-						skippedCategories++
-					}
-					continue
-				}
-				parentID = mapped
-			}
-
-			// 合并导入沿用名称去重规则；手动创建分类则允许同名。
-			var existingID int64
-			err := tx.QueryRow("SELECT id FROM categories WHERE name = ? LIMIT 1", cat.Name).Scan(&existingID)
-			if err == nil {
-				catIDMap[catIDStr] = existingID
-				skippedCategories++
-				continue
-			}
-			if err != sql.ErrNoRows {
-				return 0, 0, nil, nil, 0, fmt.Errorf("查询分类失败: %w", err)
-			}
-
-			result, err := tx.Exec("INSERT INTO categories (name, icon, color, sort_order, parent_id) VALUES (?, ?, ?, ?, ?)",
-				cat.Name, icon, cat.Color, sortOrder, parentID)
-			if err != nil {
-				return 0, 0, nil, nil, 0, fmt.Errorf("导入分类失败: %w", err)
-			}
-			id, _ := result.LastInsertId()
-			importedCategories = append(importedCategories, cat.Name)
-			catIDMap[catIDStr] = id
+	for i, cat := range categories {
+		catIDStr := cat.ID.String()
+		if catIDStr == "all" || cat.IsDefault {
+			continue
 		}
+		icon := cat.Icon
+		if icon == "" {
+			icon = "fa-folder"
+		}
+		sortOrder := i
+		if cat.SortOrder != nil {
+			sortOrder = *cat.SortOrder
+		}
+		// 合并导入沿用名称去重规则；手动创建分类则允许同名。
+		var existingID int64
+		err := tx.QueryRow("SELECT id FROM categories WHERE name = ? LIMIT 1", cat.Name).Scan(&existingID)
+		if err == nil {
+			catIDMap[catIDStr] = existingID
+			skippedCategories++
+			continue
+		}
+		if err != sql.ErrNoRows {
+			return 0, 0, nil, nil, 0, fmt.Errorf("查询分类失败: %w", err)
+		}
+
+		result, err := tx.Exec("INSERT INTO categories (name, icon, color, sort_order) VALUES (?, ?, ?, ?)",
+			cat.Name, icon, cat.Color, sortOrder)
+		if err != nil {
+			return 0, 0, nil, nil, 0, fmt.Errorf("导入分类失败: %w", err)
+		}
+		id, _ := result.LastInsertId()
+		importedCategories = append(importedCategories, cat.Name)
+		catIDMap[catIDStr] = id
 	}
 
-	// 插入完成后统一查询 DB 构建 ID 映射（避免 LastInsertId 在 INSERT OR IGNORE 时返回残留值）
-	// 上面的两遍插入已建立旧 ID -> 新 DB ID 映射；再按名称补齐旧格式缺失 ID。
+	// 插入完成后统一按名称补齐旧格式缺失 ID。
 	rows, err := tx.Query("SELECT id, name FROM categories")
 	if err != nil {
 		return 0, 0, nil, nil, 0, fmt.Errorf("查询分类失败: %w", err)

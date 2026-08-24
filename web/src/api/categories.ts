@@ -26,26 +26,8 @@ export function updateCategory(
   })
 }
 
-/** PUT /api/categories/{id}/parent —— 调整层级；带落点时同时插入目标分类前/后。 */
-export function moveCategory(
-  id: number,
-  parentId: number | null,
-  targetId?: number,
-  position?: 'before' | 'after',
-): Promise<{ ok: boolean }> {
-  return api(`/categories/${id}/parent`, {
-    method: 'PUT',
-    body: JSON.stringify({ parent_id: parentId, target_id: targetId, position }),
-  })
-}
-
-/** PUT /api/categories/{id}/children/release —— 将直接子分类释放为顶级分类。 */
-export function releaseCategoryChildren(id: number): Promise<{ ok: boolean }> {
-  return api(`/categories/${id}/children/release`, { method: 'PUT' })
-}
-
 /** DELETE /api/categories/{id} —— 关联书签由后端 ON DELETE SET NULL 自动变未分类 */
-export type CategoryDeleteMode = 'promote' | 'keep' | 'all'
+export type CategoryDeleteMode = 'keep' | 'all'
 
 export function deleteCategory(id: number, mode: CategoryDeleteMode = 'keep'): Promise<{ ok: boolean }> {
   return api(`/categories/${id}?mode=${mode}`, { method: 'DELETE' })

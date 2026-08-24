@@ -44,7 +44,6 @@ import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
-import { filterBookmarksByCategory, getCategoryDescendantIds } from '@/lib/category-tree'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { AI_PRESETS } from '@/lib/ai-providers'
@@ -83,9 +82,10 @@ function BookmarksPage() {
   const { markBookmarkExiting, unmarkBookmarkExiting, isBookmarkExiting } = useAnimatedExit()
   // 新书签高亮标记：1.5s 后自动清除（橙色 ring 强调）
   const [recentlyAddedId, setRecentlyAddedId] = useState<number | null>(null)
+  // 移动后点击通知“查看”的书签：2s 后自动清除现有高亮
+  const [recentlyMovedId, setRecentlyMovedId] = useState<number | null>(null)
   // favicon 预加载：让"切分类时 <img> 重建从缓存秒显"，避免改图标后切过去"空白->新图"闪烁。
-  // - 首屏（prev=null）：预热全部书签。首屏可能停在持久化的子分类（stores/ui.ts persist），
-  //   其他分类的 favicon 还没请求过，切过去会因缓存未命中而闪；提前把全部 favicon 下进
+  // - 首屏（prev=null）：预热全部书签。其他分类的 favicon 还没请求过，切过去会因缓存未命中而闪；提前把全部 favicon 下进
   //   1 年强缓存。当前分类卡片挂载时 <img> 也会请求同 URL，浏览器自动合并，不重复下载。
   // - 后续 refetch（WS 推送/刷新）：只预热 updated_at 变化的，数据没变零网络。
   // - 执行时机放 requestIdleCallback 空闲期，不与首屏 LCP 关键渲染争带宽/主线程；
@@ -228,7 +228,7 @@ function BookmarksPage() {
         (b) => b.category_id == null || !catIds.has(b.category_id),
       )
     } else if (currentCategory !== 'all') {
-      bookmarks = filterBookmarksByCategory(bookmarks, categories, currentCategory)
+      bookmarks = bookmarks.filter((bookmark) => bookmark.category_id === currentCategory)
     }
     // 全部 / 收藏视图（非搜索）按 id DESC（创建顺序，最新在前），不按 sort_order：移动书签到新分类时
     // 后端会改 sort_order（目标分类末尾），若这两个视图也按 sort_order 排会导致书签在当前视图换位。
@@ -257,25 +257,8 @@ function BookmarksPage() {
     return groups
   }, [filtered, categories, q])
 
-  // 分类视图沿用搜索结果的分组网格：当前分类直属书签与每个后代分类的书签分别成组，
-  // 仍在同一个网格中平铺，而不是把子分类做成入口卡片。
-  const categoryGroups = useMemo<{ category: Category; bookmarks: Bookmark[]; showTitle: boolean }[]>(() => {
-    if (q || typeof currentCategory !== 'number') return []
-    const parent = categories.find((category) => category.id === currentCategory)
-    const children = getCategoryDescendantIds(categories, currentCategory)
-      .map((id) => categories.find((category) => category.id === id))
-      .filter((category): category is Category => category != null)
-    if (!parent || children.length === 0) return []
-    return [parent, ...children]
-      .map((category) => ({
-        category,
-        bookmarks: filtered.filter((bookmark) => bookmark.category_id === category.id),
-        showTitle: category.id !== parent.id,
-      }))
-  }, [filtered, categories, q, currentCategory])
-  const cardGroups = q ? searchGroups : categoryGroups.length > 0 ? categoryGroups : null
-  const aggregateParent = !q && categoryGroups.length > 0 ? activeCategory : undefined
-  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number' && !aggregateParent
+  const cardGroups = q ? searchGroups : null
+  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number'
   const lastDrop = useDragStore((state) => state.lastDrop)
   const handledDropToken = useRef<number | null>(null)
 
@@ -294,16 +277,10 @@ function BookmarksPage() {
           await batchMoveMut.mutateAsync({ ids: [source.id], categoryId: target.id })
           toast.success(`书签已移动到「${catMap.get(target.id) ?? '分类'}」`, undefined, {
             label: '查看',
-            onClick: () => setCurrentCategory(target.id),
-          })
-          return
-        }
-        if (aggregateParent) {
-          await batchMoveMut.mutateAsync({
-            ids: [source.id],
-            categoryId: target.categoryId,
-            targetBookmarkId: target.id,
-            position: target.position,
+            onClick: () => {
+              setRecentlyMovedId(source.id)
+              setCurrentCategory(target.id)
+            },
           })
           return
         }
@@ -330,7 +307,7 @@ function BookmarksPage() {
       }
     }
     void run()
-  }, [aggregateParent, batchMoveMut, canReorderBookmarks, catMap, lastDrop, reorderBookmarksMut])
+  }, [batchMoveMut, canReorderBookmarks, catMap, lastDrop, reorderBookmarksMut])
   // 分类失效时自动切回全部
   // - 虚拟分类（收藏/未分类）为空 → 全部
   // - 数字分类已被删除（不在 categories 列表）→ 全部，避免登录后停在已删分类显示空白
@@ -417,6 +394,12 @@ function BookmarksPage() {
     const t = window.setTimeout(() => setRecentlyAddedId(null), 1000)
     return () => window.clearTimeout(t)
   }, [recentlyAddedId])
+
+  useEffect(() => {
+    if (recentlyMovedId == null) return
+    const t = window.setTimeout(() => setRecentlyMovedId(null), 2000)
+    return () => window.clearTimeout(t)
+  }, [recentlyMovedId])
 
   // 新书签保存后滚动到卡片
   useEffect(() => {
@@ -694,8 +677,6 @@ function BookmarksPage() {
   }
   if (error) return <div className="p-10 text-center text-[var(--destructive)]">加载失败：{error.message}</div>
 
-  let aggregateDragIndex = 0
-
   return (
     <>
       {!q && (
@@ -716,7 +697,7 @@ function BookmarksPage() {
         </div>
       )}
 
-      {filtered.length === 0 && !aggregateParent ? (
+      {filtered.length === 0 ? (
         <div
           key={`empty-${currentCategory}-${q ? 'search' : 'cat'}`}
           className={cn('empty-state animate-enter', q && 'searching')}
@@ -746,45 +727,7 @@ function BookmarksPage() {
         </div>
       ) : (
         <div key={currentCategory} className={cn('bookmarks-grid', enterAnimate && 'animate-enter', q && 'searching', batchMode && 'select-none')}>
-          {aggregateParent
-            ? categoryGroups.flatMap((group) => {
-                const Icon = resolveCategoryIcon(group.category?.icon)
-                const name = group.category?.name ?? '未分类'
-                const groupKey = group.category?.id ?? '__uncategorized__'
-                return [
-                  ...(group.showTitle ? [
-                    <h2 key={`group-${groupKey}`} className="search-group-title">
-                      <Icon size={14} style={{ color: group.category?.color || 'var(--text-muted)' }} aria-hidden="true" />
-                      <span>{name}</span>
-                      <span className="search-group-count">{group.bookmarks.length}</span>
-                    </h2>,
-                  ] : []),
-                  ...(group.bookmarks.length === 0
-                    ? [
-                      <div
-                        key={`group-content-${groupKey}`}
-                        className="bookmark-category-group empty"
-                      />,
-                    ]
-                    : group.bookmarks.map((b) => (
-                      <BookmarkCard
-                        key={b.id}
-                        bookmark={b}
-                        categoryName={b.category_id != null ? catMap.get(b.category_id) : undefined}
-                        searchQuery={q}
-                        onMenuClick={(id, x, y) => setMenu({ id, x, y })}
-                        onSelect={handleCardSelect}
-                        isNew={b.id === recentlyAddedId}
-                        refreshing={refreshingFavId === b.id}
-                        exiting={isBookmarkExiting(b.id)}
-                        dragEnabled={!q && !batchMode}
-                        index={aggregateDragIndex++}
-                        group={`bookmarks:aggregate:${currentCategory}`}
-                      />
-                    ))),
-                ]
-              })
-            : cardGroups
+          {cardGroups
               ? cardGroups.flatMap((group) => {
                 const Icon = resolveCategoryIcon(group.category?.icon)
                 const name = group.category?.name ?? '未分类'
@@ -813,6 +756,7 @@ function BookmarksPage() {
                       onMenuClick={(id, x, y) => setMenu({ id, x, y })}
                       onSelect={handleCardSelect}
                       isNew={b.id === recentlyAddedId}
+                      highlighted={b.id === recentlyMovedId}
                       refreshing={refreshingFavId === b.id}
                       exiting={isBookmarkExiting(b.id)}
                       dragEnabled={!q && !batchMode}
@@ -831,6 +775,7 @@ function BookmarksPage() {
                   onMenuClick={(id, x, y) => setMenu({ id, x, y })}
                   onSelect={handleCardSelect}
                   isNew={b.id === recentlyAddedId}
+                  highlighted={b.id === recentlyMovedId}
                   refreshing={refreshingFavId === b.id}
                   exiting={isBookmarkExiting(b.id)}
                   dragEnabled={!q && !batchMode}

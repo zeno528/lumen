@@ -3,13 +3,12 @@ import {
   getCategories,
   createCategory,
   updateCategory,
-  moveCategory,
-  releaseCategoryChildren,
   deleteCategory,
   batchDeleteCategories,
   reorderCategories,
 } from '@/api/categories'
 import { createOptimisticMutation } from '@/lib/optimistic-mutation'
+import { moveCategoryToIndex } from '@/lib/category-order'
 import type { Category, CategoryInput, Bookmark } from '@/types'
 import type { CategoryDeleteMode } from '@/api/categories'
 
@@ -73,46 +72,6 @@ export function useUpdateCategory() {
   )
 }
 
-/** 移动分类 —— 可在同一请求内改 parent_id 并插入目标分类前/后。 */
-export function useMoveCategory() {
-  const qc = useQueryClient()
-  return useMutation(
-    createOptimisticMutation<{ id: number; parentId: number | null; targetId?: number; position?: 'before' | 'after' }>(qc, {
-      mutationFn: ({ id, parentId, targetId, position }) => moveCategory(id, parentId, targetId, position),
-      targets: [
-        {
-          queryKey: CATEGORIES_KEY,
-          apply: (old: { categories: Category[] } | undefined, { id, parentId, targetId, position }) => {
-            if (!old) return old
-            const categories = old.categories.map((category) => category.id === id ? { ...category, parent_id: parentId } : category)
-            return {
-              ...old,
-              categories: targetId != null && position != null
-                ? reorderCategory(categories, id, targetId, position)
-                : categories,
-            }
-          },
-        },
-      ],
-    }),
-  )
-}
-
-/** 释放父分类下的全部直接子分类。 */
-export function useReleaseCategoryChildren() {
-  const qc = useQueryClient()
-  return useMutation(
-    createOptimisticMutation<number>(qc, {
-      mutationFn: releaseCategoryChildren,
-      targets: [{
-        queryKey: CATEGORIES_KEY,
-        apply: (old: { categories: Category[] } | undefined, id) =>
-          old ? { ...old, categories: old.categories.map((category) => category.parent_id === id ? { ...category, parent_id: null } : category) } : old,
-      }],
-    }),
-  )
-}
-
 /**
  * 删除分类 —— 乐观更新：onMutate 立即从 categories 缓存 filter 掉 id，并模拟后端
  * ON DELETE SET NULL 把关联书签的 category_id 置 null（mode='keep' 语义）。
@@ -126,33 +85,30 @@ export function useReleaseCategoryChildren() {
 export function useDeleteCategory() {
   const qc = useQueryClient()
   return useMutation(
-    createOptimisticMutation<{ id: number; mode?: CategoryDeleteMode; childIds?: number[] }>(qc, {
+    createOptimisticMutation<{ id: number; mode?: CategoryDeleteMode }>(qc, {
       mutationFn: (args) => deleteCategory(args.id, args.mode),
       targets: [
         {
           queryKey: CATEGORIES_KEY,
-          apply: (old: { categories: Category[] } | undefined, { id, mode = 'keep' }) => {
+          apply: (old: { categories: Category[] } | undefined, { id }) => {
             if (!old) return old
             return {
               ...old,
-              categories: old.categories
-                .filter((c: Category) => c.id !== id)
-                .map((c: Category) => (mode === 'promote' && c.parent_id === id ? { ...c, parent_id: null } : c)),
+              categories: old.categories.filter((c: Category) => c.id !== id),
             }
           },
         },
         {
           queryKey: BOOKMARKS_KEY,
-          apply: (old: { bookmarks: Bookmark[] } | undefined, { id, mode = 'keep', childIds = [] }) => {
+          apply: (old: { bookmarks: Bookmark[] } | undefined, { id, mode = 'keep' }) => {
             if (!old) return old
-            const deletedIds = new Set(mode === 'promote' ? [id] : [id, ...childIds])
             return {
               ...old,
               bookmarks:
                 mode === 'all'
-                  ? old.bookmarks.filter((b: Bookmark) => !deletedIds.has(b.category_id ?? -1))
+                  ? old.bookmarks.filter((b: Bookmark) => b.category_id !== id)
                   : old.bookmarks.map((b: Bookmark) =>
-                      b.category_id != null && deletedIds.has(b.category_id) ? { ...b, category_id: null } : b,
+                      b.category_id === id ? { ...b, category_id: null } : b,
                     ),
             }
           },
@@ -224,25 +180,32 @@ export function useReorderCategories() {
       fromId,
       toId,
       position,
+      sortIndex,
     }: {
       fromId: number
       toId: number
       position: 'before' | 'after'
+      sortIndex?: number
     }) => {
       const data = qc.getQueryData<{ categories: Category[] }>(CATEGORIES_KEY)
-      const order = reorderCategory(data?.categories ?? [], fromId, toId, position).map(
+      const order = (sortIndex == null
+        ? reorderCategory(data?.categories ?? [], fromId, toId, position)
+        : moveCategoryToIndex(data?.categories ?? [], fromId, sortIndex)
+      ).map(
         (c) => c.id,
       )
       return reorderCategories(order)
     },
-    onMutate: async ({ fromId, toId, position }) => {
+    onMutate: async ({ fromId, toId, position, sortIndex }) => {
       await qc.cancelQueries({ queryKey: CATEGORIES_KEY })
       const prev = qc.getQueryData<{ categories: Category[] }>(CATEGORIES_KEY)
       qc.setQueryData<{ categories: Category[] }>(CATEGORIES_KEY, (old: { categories: Category[] } | undefined) => {
         if (!old) return old
         return {
           ...old,
-          categories: reorderCategory(old.categories, fromId, toId, position),
+          categories: sortIndex == null
+            ? reorderCategory(old.categories, fromId, toId, position)
+            : moveCategoryToIndex(old.categories, fromId, sortIndex),
         }
       })
       return { prev }
