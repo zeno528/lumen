@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -52,7 +55,7 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 
 	// ========== 第一层：本地 Tokenizer 提取 ==========
 	t1 := time.Now()
-	meta := fetchPageMetaStreaming(req.URL)
+	meta := fetchPageMetaStreaming(r.Context(), req.URL)
 	log.Printf("[AI Meta] 本地提取耗时: %v", time.Since(t1))
 
 	// 第一层抓空（反爬 403 / JS 渲染站直连拿不到）→ Serper 搜索兜底：借 Google 拿 title + snippet
@@ -60,7 +63,7 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 	serperKey := s.getSerperKey()
 	if meta.Title == "" && meta.Description == "" && serperKey != "" {
 		tSerper := time.Now()
-		if sm := searchSerper(req.URL, serperKey); sm.Title != "" || sm.Description != "" {
+		if sm := searchSerper(r.Context(), req.URL, serperKey); sm.Title != "" || sm.Description != "" {
 			meta = sm
 			usedSerper = true
 			log.Printf("[AI Meta] Serper 兜底命中, 耗时: %v", time.Since(tSerper))
@@ -68,6 +71,7 @@ func (s *Server) handleAIMeta(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[AI Meta] Serper 兜底未命中, 耗时: %v", time.Since(tSerper))
 		}
 	}
+	log.Printf("[AI Meta] 页面证据 title=%t description=%t usedSerper=%t", meta.Title != "", meta.Description != "", usedSerper)
 
 	// ========== 第二层：构建轻量 Prompt ==========
 	var prompt string
@@ -145,10 +149,10 @@ URL: %s
 </output_contract>
 <category_profiles>%s</category_profiles>`, formatCategoryProfiles(categoryProfiles))
 
-	text, err := callAI(ai, prompt)
+	text, err := callAIWithContext(r.Context(), ai, prompt)
 	log.Printf("[AI Meta] AI 翻译耗时: %v", time.Since(t1))
 	if err != nil {
-		log.Printf("AI 翻译失败: %v", err)
+		log.Printf("[AI Meta] provider=%s model=%s AI 翻译失败: %v", ai.Provider, ai.Model, err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "AI 服务未返回结果，请重试或检查供应商配置"})
 		return
 	}
@@ -162,8 +166,8 @@ URL: %s
 		err = validateAIResult(result, req.Categories, meta.Title+"\n"+meta.Description)
 	}
 	if err != nil {
-		log.Printf("AI 结果不合格，修复一次: %v", err)
-		text, err = callAI(ai, prompt+"\n<repair>上次输出未通过代码校验："+err.Error()+"。只修复不合格字段后重新输出完整 JSON。</repair>")
+		log.Printf("[AI Meta] provider=%s model=%s 结果不合格，修复一次: %v", ai.Provider, ai.Model, err)
+		text, err = callAIWithContext(r.Context(), ai, prompt+"\n<repair>上次输出未通过代码校验："+err.Error()+"。只修复不合格字段后重新输出完整 JSON。</repair>")
 		if err == nil {
 			text = strings.TrimSpace(regexp.MustCompile(`(?s)<think.*?>.*?</think\s*>`).ReplaceAllString(text, ""))
 			result, err = parseAIResult(text)
@@ -172,7 +176,7 @@ URL: %s
 			}
 		}
 		if err != nil {
-			log.Printf("AI 修复后仍不合格: %v", err)
+			log.Printf("[AI Meta] provider=%s model=%s 修复后仍不合格: %v", ai.Provider, ai.Model, err)
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "AI 返回内容不完整，未写入任何字段；请重试或更换模型"})
 			return
 		}
@@ -192,12 +196,64 @@ URL: %s
 	writeJSON(w, http.StatusOK, result)
 }
 
-// callAI 根据 provider 调用对应的 API，返回响应文本
-func callAI(cfg AIConfig, prompt string) (string, error) {
-	if usesAnthropicFormat(cfg) {
-		return callAnthropicProvider(cfg, prompt)
+// callAIWithContext 根据 provider 调用对应的 API，支持取消和瞬时失败重试。
+func callAIWithContext(ctx context.Context, cfg AIConfig, prompt string) (string, error) {
+	const maxAttempts = 2
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			timer := time.NewTimer(250 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", ctx.Err()
+			case <-timer.C:
+			}
+		}
+
+		result, err := callAIOnce(ctx, cfg, prompt)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		if !isRetryableAIError(err) || attempt == maxAttempts {
+			return "", err
+		}
+		log.Printf("[AI Meta] provider=%s model=%s 第%d次请求失败，准备重试: %v", cfg.Provider, cfg.Model, attempt, err)
 	}
-	return callOpenAIProvider(cfg, prompt)
+	return "", lastErr
+}
+
+type aiHTTPError struct {
+	status int
+	body   string
+}
+
+func (e *aiHTTPError) Error() string {
+	return fmt.Sprintf("API 返回 %d: %s", e.status, e.body)
+}
+
+func isRetryableAIStatus(status int) bool {
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= 500
+}
+
+func isRetryableAIError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var httpErr *aiHTTPError
+	if errors.As(err, &httpErr) {
+		return isRetryableAIStatus(httpErr.status)
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) || errors.Is(err, io.EOF)
+}
+
+func callAIOnce(ctx context.Context, cfg AIConfig, prompt string) (string, error) {
+	if usesAnthropicFormat(cfg) {
+		return callAnthropicProvider(ctx, cfg, prompt)
+	}
+	return callOpenAIProvider(ctx, cfg, prompt)
 }
 
 // usesAnthropicFormat 预设供应商也尊重显式保存的协议；旧配置仍按 Anthropic 端点兼容判断。
@@ -398,16 +454,16 @@ type openaiAPIResponse struct {
 	} `json:"error"`
 }
 
-func callOpenAIProvider(cfg AIConfig, prompt string) (string, error) {
+func callOpenAIProvider(ctx context.Context, cfg AIConfig, prompt string) (string, error) {
 	reqBody := openAIRequestBody(cfg, prompt)
-	req, err := newOpenAIRequest(cfg, reqBody)
+	req, err := newOpenAIRequestWithContext(ctx, cfg, reqBody)
 	if err != nil {
 		return "", err
 	}
 
 	resp, err := aiClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("请求失败: %v", err)
+		return "", fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -417,7 +473,7 @@ func callOpenAIProvider(cfg AIConfig, prompt string) (string, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API 返回 %d: %s", resp.StatusCode, string(body))
+		return "", &aiHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
 	var openaiResp openaiAPIResponse
@@ -467,11 +523,15 @@ func openAIRequestBody(cfg AIConfig, prompt string) map[string]any {
 
 // newOpenAIRequest 是所有 Chat Completions 调用的唯一入口，避免自定义配置和连通性测试漂移。
 func newOpenAIRequest(cfg AIConfig, body map[string]any) (*http.Request, error) {
+	return newOpenAIRequestWithContext(context.Background(), cfg, body)
+}
+
+func newOpenAIRequestWithContext(ctx context.Context, cfg AIConfig, body map[string]any) (*http.Request, error) {
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest("POST", strings.TrimRight(cfg.BaseURL, "/")+"/chat/completions", strings.NewReader(string(bodyBytes)))
+	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(cfg.BaseURL, "/")+"/chat/completions", strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return nil, err
 	}
@@ -492,7 +552,7 @@ type anthropicAPIResponse struct {
 	} `json:"error"`
 }
 
-func callAnthropicProvider(cfg AIConfig, prompt string) (string, error) {
+func callAnthropicProvider(ctx context.Context, cfg AIConfig, prompt string) (string, error) {
 	apiURL := strings.TrimRight(cfg.BaseURL, "/") + "/v1/messages"
 
 	reqBody := map[string]any{
@@ -511,7 +571,7 @@ func callAnthropicProvider(cfg AIConfig, prompt string) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(bodyBytes)))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return "", err
 	}
@@ -521,7 +581,7 @@ func callAnthropicProvider(cfg AIConfig, prompt string) (string, error) {
 
 	resp, err := aiClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("请求失败: %v", err)
+		return "", fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -531,7 +591,7 @@ func callAnthropicProvider(cfg AIConfig, prompt string) (string, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API 返回 %d: %s", resp.StatusCode, string(body))
+		return "", &aiHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
 	var anthropicResp anthropicAPIResponse
@@ -664,7 +724,7 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 			"thinking":   map[string]string{"type": "disabled"},
 		}
 		bodyBytes, _ := json.Marshal(reqBody)
-		httpReq, _ := http.NewRequest("POST", apiURL, strings.NewReader(string(bodyBytes)))
+		httpReq, _ := http.NewRequestWithContext(r.Context(), "POST", apiURL, strings.NewReader(string(bodyBytes)))
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("x-api-key", apiKey)
 		httpReq.Header.Set("anthropic-version", "2023-06-01")
@@ -688,7 +748,7 @@ func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
 			},
 			"max_tokens": 1,
 		}
-		httpReq, reqErr := newOpenAIRequest(AIConfig{APIKey: apiKey, BaseURL: baseURL}, reqBody)
+		httpReq, reqErr := newOpenAIRequestWithContext(r.Context(), AIConfig{APIKey: apiKey, BaseURL: baseURL}, reqBody)
 		var resp *http.Response
 		var doErr error
 		if reqErr != nil {
