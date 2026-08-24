@@ -65,7 +65,7 @@ function getBookmarkTargetAtPointer(source: DragSource, operation: DragOperation
   const id = Number(targetElement.dataset.bookmarkId)
   const rawCategoryId = targetElement.dataset.categoryId ?? ''
   const categoryId = rawCategoryId === '' ? null : Number(rawCategoryId)
-  if (!Number.isFinite(id) || categoryId !== source.categoryId) return null
+  if (!Number.isFinite(id) || (rawCategoryId !== '' && !Number.isFinite(categoryId))) return null
 
   const targetRect = targetElement.getBoundingClientRect()
   return {
