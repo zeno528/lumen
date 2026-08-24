@@ -22,9 +22,20 @@ const bookmarks = [
   { id: 5, category_id: null },
 ]
 
-test('parent category descendants include only its direct children', () => {
+test('shallow parent category descendants include its children', () => {
   assert.deepEqual(getCategoryDescendantIds(categories, 1), [2, 3])
   assert.deepEqual(getCategoryDescendantIds(categories, 4), [])
+})
+
+test('nested parent descendants and counts include every level', () => {
+  const nestedCategories = [
+    ...categories,
+    { id: 5, name: 'Vim', icon: 'fa-folder', color: '', sort_order: 4, parent_id: 2 },
+  ]
+  const nestedBookmarks = [...bookmarks, { id: 6, category_id: 5 }]
+  assert.deepEqual(getCategoryDescendantIds(nestedCategories, 1), [2, 5, 3])
+  assert.deepEqual(filterBookmarksByCategory(nestedBookmarks, nestedCategories, 1).map((b) => b.id), [1, 2, 3, 6])
+  assert.equal(getCategoryCount(nestedBookmarks, nestedCategories, 1), 4)
 })
 
 test('parent view aggregates direct and child bookmarks while child view stays direct', () => {

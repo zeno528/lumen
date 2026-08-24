@@ -618,6 +618,12 @@ select,
 .sidebar-categories::-webkit-scrollbar {
   display: none;
 }
+.sidebar-category-subtree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
 
 /* 分类项 —— 双层 flex 结构：
    outer (.sidebar-item) flex row 让 .sidebar-icon 和 .sidebar-item-inner 横向排；

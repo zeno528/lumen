@@ -10,7 +10,7 @@ import {
   batchAddTags,
   reorderBookmarks,
 } from '@/api/bookmarks'
-import { moveBookmarkInList, type BookmarkOrderPosition } from '@/lib/bookmark-order'
+import { moveBookmarkToIndex } from '@/lib/bookmark-order'
 import { deleteFavicon } from '@/lib/favicon-cache'
 import { createOptimisticMutation } from '@/lib/optimistic-mutation'
 import type { BookmarkInput, Bookmark } from '@/types'
@@ -277,21 +277,17 @@ export function useBatchAddTags() {
 export function useReorderBookmarks() {
   const qc = useQueryClient()
   return useMutation({
-    // onMutate 已 await + 重排 cache（React Query 源码：await onMutate 完成后才跑 mutationFn）。
-    // 直接用 cache 的 id 序列发 API —— 不能再 computeReorderedIds：那会基于重排后的 cache 再重排一次，
-    // 得到错误 order → 后端存错 sort_order → 刷新后顺序与界面不一致。
-    mutationFn: (_vars: { fromId: number; toId: number; position: BookmarkOrderPosition }) => {
+    mutationFn: (_vars: { fromId: number; categoryId: number | null; toIndex: number }) => {
       const data = qc.getQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY)
-      return reorderBookmarks((data?.bookmarks ?? []).map((b: Bookmark) => b.id))
+      const order = moveBookmarkToIndex(data?.bookmarks ?? [], _vars.categoryId, _vars.fromId, _vars.toIndex)
+      return reorderBookmarks(order.map((b: Bookmark) => b.id))
     },
-    onMutate: async ({ fromId, toId, position }) => {
+    onMutate: async ({ fromId, categoryId, toIndex }) => {
       await qc.cancelQueries({ queryKey: BOOKMARKS_KEY })
       const prev = qc.getQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY)
       qc.setQueryData<{ bookmarks: Bookmark[] }>(BOOKMARKS_KEY, (old) => {
         if (!old) return old
-        const next = moveBookmarkInList(old.bookmarks, fromId, toId, position)
-        if (next === old.bookmarks) return old
-        return { ...old, bookmarks: next }
+        return { ...old, bookmarks: moveBookmarkToIndex(old.bookmarks, categoryId, fromId, toIndex) }
       })
       return { prev }
     },

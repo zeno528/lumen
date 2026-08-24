@@ -37,7 +37,7 @@ import { ExportDialog } from '@/components/shared/export-dialog'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
 import type { Category } from '@/types'
 import type { CategoryDeleteMode } from '@/api/categories'
-import { getCategoryTreeRows, getChildCategories, getCategoryCount, getParentCategory, hasChildCategories } from '@/lib/category-tree'
+import { getCategoryTreeRows, getChildCategories, getCategoryCount, getCategoryDescendantIds, getParentCategory, hasChildCategories } from '@/lib/category-tree'
 import { useDragStore } from '@/stores/drag'
 
 /**
@@ -127,7 +127,14 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     () => getCategoryTreeRows(categories, expandedCategoryIds, bookmarks),
     [bookmarks, categories, expandedCategoryIds],
   )
+  const categoryRowsById = useMemo(
+    () => new Map(categoryRows.map((row) => [row.category.id, row])),
+    [categoryRows],
+  )
   const lastDrop = useDragStore((state) => state.lastDrop)
+  // dnd-kit 拖动时会直接调整分类节点的 DOM 顺序；分类层级落库后重建这一小段列表，
+  // 让 React 的父子树顺序重新接管 DOM，避免下一次展开时子项残留在父项之前。
+  const categoryDropKey = lastDrop?.source.kind === 'category' ? lastDrop.token : 0
   const handledDropToken = useRef<number | null>(null)
 
   useEffect(() => {
@@ -418,6 +425,44 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const staggerStyle = (): CSSProperties | undefined =>
     catAnimate ? { animationDelay: `${staggerIdx++ * 0.04}s` } : undefined
 
+  const renderCategory = (c: Category): React.ReactNode => {
+    const row = categoryRowsById.get(c.id)
+    if (!row) return null
+    const Icon = resolveCategoryIcon(c.icon)
+    const children = row.childCount > 0 && expandedCategoryIds.has(c.id)
+      ? getChildCategories(categories, c.id).map(renderCategory)
+      : null
+    return (
+      <SidebarItem
+        key={c.id}
+        style={staggerStyle()}
+        category={c}
+        depth={row.depth}
+        dragEnabled={!categoryBatchMode}
+        hasChildren={row.childCount > 0}
+        descendantIds={getCategoryDescendantIds(categories, c.id)}
+        expanded={expandedCategoryIds.has(c.id)}
+        index={row.siblingIndex}
+        group={`categories:${c.parent_id ?? 'root'}`}
+        iconColor={c.color || 'var(--default-category-color)'}
+        icon={<Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />}
+        label={c.name}
+        count={row.bookmarkCount}
+        active={currentCategory === c.id}
+        onClick={() => {
+          selectCategory(c.id)
+          if (row.childCount > 0) toggleCategoryExpansion(c.id)
+        }}
+        onContext={(e) => setCatMenu({ kind: 'cat', id: c.id, x: e.clientX, y: e.clientY })}
+        isNew={c.id === recentlyAddedCatId}
+        selected={categoryBatchMode && selectedCategoryIds.has(c.id)}
+        onSelect={categoryBatchMode ? handleCategorySelect : undefined}
+      >
+        {children}
+      </SidebarItem>
+    )
+  }
+
   return (
     /* liquid-glass 已去掉：backdrop-filter saturate(180%) 会把 panel 暖色拉到冷青调，
        跟 body panel 暖米色不一致，main 圆角塌角透出来形成"小三角"色差 */
@@ -469,6 +514,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         </div>
       )}
       <div
+        key={categoryDropKey}
         className={cn(
           'sidebar-categories',
           catAnimate && !bmLoading && bookmarks.length > 0 && 'animate-enter',
@@ -510,36 +556,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
             onContext={(e) => setCatMenu({ kind: 'uncat', x: e.clientX, y: e.clientY })}
           />
         )}
-        {!isLoading &&
-          categoryRows.map(({ category: c, depth, childCount, siblingIndex, bookmarkCount }) => {
-            const Icon = resolveCategoryIcon(c.icon)
-            return (
-              <SidebarItem
-                key={c.id}
-                style={staggerStyle()}
-                category={c}
-                depth={depth}
-                dragEnabled={!categoryBatchMode}
-                hasChildren={childCount > 0}
-                expanded={expandedCategoryIds.has(c.id)}
-                index={siblingIndex}
-                group={`categories:${c.parent_id ?? 'root'}`}
-                iconColor={c.color || 'var(--default-category-color)'}
-                icon={<Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />}
-                label={c.name}
-                count={bookmarkCount}
-                active={currentCategory === c.id}
-                onClick={() => {
-                  selectCategory(c.id)
-                  if (childCount > 0) toggleCategoryExpansion(c.id)
-                }}
-                onContext={(e) => setCatMenu({ kind: 'cat', id: c.id, x: e.clientX, y: e.clientY })}
-                isNew={c.id === recentlyAddedCatId}
-                selected={categoryBatchMode && selectedCategoryIds.has(c.id)}
-                onSelect={categoryBatchMode ? handleCategorySelect : undefined}
-              />
-            )
-          })}
+        {!isLoading && categoryRows.filter((row) => row.depth === 0).map(({ category }) => renderCategory(category))}
       </div>
 
       {/* 分类批量操作栏（批量模式时显示）*/}

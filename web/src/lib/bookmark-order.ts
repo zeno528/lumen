@@ -1,5 +1,18 @@
 export type BookmarkOrderPosition = 'before' | 'after'
 
+export type BookmarkDropTarget = {
+  kind: 'bookmark'
+  id: number
+  categoryId: number | null
+  position: BookmarkOrderPosition
+  sortIndex?: number
+}
+
+export type BookmarkDropFallback = {
+  sourceId: number
+  target: BookmarkDropTarget
+}
+
 export function getBookmarkDropPosition(
   clientX: number,
   rect: Pick<DOMRect, 'left' | 'width'>,
@@ -7,18 +20,24 @@ export function getBookmarkDropPosition(
   return clientX < rect.left + rect.width / 2 ? 'before' : 'after'
 }
 
-export function moveBookmarkInList<T extends { id: number }>(
+export function moveBookmarkToIndex<T extends { id: number; category_id: number | null }>(
   items: T[],
+  categoryId: number | null,
   fromId: number,
-  toId: number,
-  position: BookmarkOrderPosition,
+  toIndex: number,
 ): T[] {
-  const fromIdx = items.findIndex((item) => item.id === fromId)
-  const toIdx = items.findIndex((item) => item.id === toId)
-  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return items
-  const next = [...items]
-  const [moved] = next.splice(fromIdx, 1)
-  const targetIdx = fromIdx < toIdx ? toIdx - 1 : toIdx
-  next.splice(position === 'after' ? targetIdx + 1 : targetIdx, 0, moved)
-  return next
+  const categoryItems = items.filter((item) => item.category_id === categoryId)
+  const fromIndex = categoryItems.findIndex((item) => item.id === fromId)
+  if (fromIndex === -1) return items
+  const boundedIndex = Math.max(0, Math.min(toIndex, categoryItems.length - 1))
+  if (fromIndex === boundedIndex) return items
+
+  const nextCategoryItems = [...categoryItems]
+  const [moved] = nextCategoryItems.splice(fromIndex, 1)
+  nextCategoryItems.splice(boundedIndex, 0, moved)
+
+  let categoryIndex = 0
+  return items.map((item) => (
+    item.category_id === categoryId ? nextCategoryItems[categoryIndex++] : item
+  ))
 }

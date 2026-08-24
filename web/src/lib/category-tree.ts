@@ -1,7 +1,24 @@
 import type { Bookmark, Category } from '@/types'
 
 export function getCategoryDescendantIds(categories: Category[], parentId: number): number[] {
-  return categories.filter((category) => category.parent_id === parentId).map((category) => category.id)
+  const childrenByParent = new Map<number | null, Category[]>()
+  for (const category of categories) {
+    const children = childrenByParent.get(category.parent_id) ?? []
+    children.push(category)
+    childrenByParent.set(category.parent_id, children)
+  }
+  const descendants: number[] = []
+  const seen = new Set([parentId])
+  const visit = (id: number) => {
+    for (const child of childrenByParent.get(id) ?? []) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      descendants.push(child.id)
+      visit(child.id)
+    }
+  }
+  visit(parentId)
+  return descendants
 }
 
 export function getCategoryCount(bookmarks: Pick<Bookmark, 'category_id'>[], categories: Category[], categoryId: number): number {
@@ -53,14 +70,19 @@ export function getCategoryTreeRows(
     directBookmarkCounts.set(bookmark.category_id, (directBookmarkCounts.get(bookmark.category_id) ?? 0) + 1)
   }
 
-  const bookmarkCounts = new Map(directBookmarkCounts)
-  for (const category of categories) {
-    const childBookmarkCount = (childrenByParent.get(category.id) ?? []).reduce(
-      (count, child) => count + (directBookmarkCounts.get(child.id) ?? 0),
-      0,
-    )
-    bookmarkCounts.set(category.id, (directBookmarkCounts.get(category.id) ?? 0) + childBookmarkCount)
+  const bookmarkCounts = new Map<number, number>()
+  const countBookmarks = (categoryId: number, visiting = new Set<number>()): number => {
+    const cached = bookmarkCounts.get(categoryId)
+    if (cached !== undefined) return cached
+    if (visiting.has(categoryId)) return directBookmarkCounts.get(categoryId) ?? 0
+    visiting.add(categoryId)
+    const count = (directBookmarkCounts.get(categoryId) ?? 0) + (childrenByParent.get(categoryId) ?? [])
+      .reduce((total, child) => total + countBookmarks(child.id, visiting), 0)
+    visiting.delete(categoryId)
+    bookmarkCounts.set(categoryId, count)
+    return count
   }
+  for (const category of categories) countBookmarks(category.id)
 
   const rows: CategoryTreeRow[] = []
 

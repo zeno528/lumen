@@ -44,7 +44,7 @@ import { useUIStore } from '@/stores/ui'
 import { useAnimatedExit } from '@/lib/use-animated-exit'
 import { cn } from '@/lib/utils'
 import { filterBookmarksBySearch } from '@/lib/bookmark-search'
-import { filterBookmarksByCategory, getChildCategories } from '@/lib/category-tree'
+import { filterBookmarksByCategory, getCategoryDescendantIds } from '@/lib/category-tree'
 import { parseTags } from '@/lib/bookmark-utils'
 import { resolveCategoryIcon } from '@/lib/icon-map'
 import { AI_PRESETS } from '@/lib/ai-providers'
@@ -257,12 +257,14 @@ function BookmarksPage() {
     return groups
   }, [filtered, categories, q])
 
-  // 父分类视图沿用搜索结果的分组网格：父分类直属书签与每个子分类的书签分别成组，
+  // 分类视图沿用搜索结果的分组网格：当前分类直属书签与每个后代分类的书签分别成组，
   // 仍在同一个网格中平铺，而不是把子分类做成入口卡片。
   const categoryGroups = useMemo<{ category: Category; bookmarks: Bookmark[]; showTitle: boolean }[]>(() => {
     if (q || typeof currentCategory !== 'number') return []
     const parent = categories.find((category) => category.id === currentCategory)
-    const children = getChildCategories(categories, currentCategory)
+    const children = getCategoryDescendantIds(categories, currentCategory)
+      .map((id) => categories.find((category) => category.id === id))
+      .filter((category): category is Category => category != null)
     if (!parent || children.length === 0) return []
     return [parent, ...children]
       .map((category) => ({
@@ -290,10 +292,12 @@ function BookmarksPage() {
         if (target.kind === 'category') {
           if (source.categoryId === target.id) return
           await batchMoveMut.mutateAsync({ ids: [source.id], categoryId: target.id })
-          toast.success(`书签已移动到「${catMap.get(target.id) ?? '分类'}」`)
+          toast.success(`书签已移动到「${catMap.get(target.id) ?? '分类'}」`, undefined, {
+            label: '查看',
+            onClick: () => setCurrentCategory(target.id),
+          })
           return
         }
-        if (source.id === target.id) return
         if (aggregateParent) {
           await batchMoveMut.mutateAsync({
             ids: [source.id],
@@ -304,13 +308,15 @@ function BookmarksPage() {
           return
         }
         if (canReorderBookmarks && source.categoryId === target.categoryId) {
+          if (target.sortIndex == null) return
           await reorderBookmarksMut.mutateAsync({
             fromId: source.id,
-            toId: target.id,
-            position: target.position,
+            categoryId: target.categoryId,
+            toIndex: target.sortIndex,
           })
           return
         }
+        if (source.id === target.id) return
         if (source.categoryId === target.categoryId) return
         await batchMoveMut.mutateAsync({
           ids: [source.id],
@@ -688,6 +694,8 @@ function BookmarksPage() {
   }
   if (error) return <div className="p-10 text-center text-[var(--destructive)]">加载失败：{error.message}</div>
 
+  let aggregateDragIndex = 0
+
   return (
     <>
       {!q && (
@@ -758,7 +766,7 @@ function BookmarksPage() {
                       group.bookmarks.length === 0 && 'empty',
                     )}
                   >
-                    {group.bookmarks.map((b, index) => (
+                    {group.bookmarks.map((b) => (
                       <BookmarkCard
                         key={b.id}
                         bookmark={b}
@@ -770,8 +778,8 @@ function BookmarksPage() {
                         refreshing={refreshingFavId === b.id}
                         exiting={isBookmarkExiting(b.id)}
                         dragEnabled={!q && !batchMode}
-                        index={index}
-                        group={`bookmarks:category:${groupKey}`}
+                        index={aggregateDragIndex++}
+                        group={`bookmarks:aggregate:${currentCategory}`}
                       />
                     ))}
                   </div>,
