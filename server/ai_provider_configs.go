@@ -184,6 +184,7 @@ func (s *Server) setActiveConfig(id int64) error {
 	s.config.AI.Model = cfg.Model
 	s.config.AI.BaseURL = cfg.BaseURL
 	s.config.AI.APIFormat = cfg.APIFormat
+	s.config.AI.APIKey = ""
 	if cfg.APIKeyEncrypted != "" {
 		if dec, err := Decrypt(cfg.APIKeyEncrypted); err == nil {
 			s.config.AI.APIKey = dec

@@ -183,6 +183,9 @@ func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "保存设置失败"})
 		return
 	}
+	if s.getActiveConfigID() == newID {
+		s.ReloadAIConfig()
+	}
 
 	s.broadcastInvalidated("ai-settings")
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -313,6 +316,7 @@ func (s *Server) ReloadAIConfig() {
 	s.config.AI.Model = cfg.Model
 	s.config.AI.BaseURL = cfg.BaseURL
 	s.config.AI.APIFormat = cfg.APIFormat
+	s.config.AI.APIKey = ""
 	if cfg.APIKeyEncrypted != "" {
 		if dec, err := Decrypt(cfg.APIKeyEncrypted); err == nil {
 			s.config.AI.APIKey = dec

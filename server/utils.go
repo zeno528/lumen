@@ -416,18 +416,18 @@ func cleanTitle(title string) string {
 // fetchPageMetaStreaming 直连抓取 + tokenizer 提取（含 head meta 与 body 正文兜底）。
 // 仅直连，不走代理降级——AI 提取链路（handleAIMeta）直连失败时由 Serper 搜索兜底（searchSerper）。
 // 公共 CORS 代理降级（fetchHTMLByProxy）保留给 handleFetchTitle（普通抓标题）使用。
-func fetchPageMetaStreaming(targetURL string) PageMeta {
+func fetchPageMetaStreaming(ctx context.Context, targetURL string) PageMeta {
 	if !isValidURL(targetURL) {
 		return PageMeta{}
 	}
-	meta, _ := fetchPageMetaDirectStreaming(targetURL)
+	meta, _ := fetchPageMetaDirectStreaming(ctx, targetURL)
 	return meta
 }
 
 // fetchPageMetaDirectStreaming 直连目标站点，流式提取元数据。
 // 返回 (meta, ok)：ok=true 表示抓到了标题或描述。
-func fetchPageMetaDirectStreaming(targetURL string) (PageMeta, bool) {
-	req, err := http.NewRequest("GET", targetURL, nil)
+func fetchPageMetaDirectStreaming(ctx context.Context, targetURL string) (PageMeta, bool) {
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		return PageMeta{}, false
 	}
@@ -457,7 +457,7 @@ func fetchPageMetaDirectStreaming(targetURL string) (PageMeta, bool) {
 // searchSerper 调用 Serper Google 搜索 API，用 URL 作查询，返回首个命中结果的
 // title + snippet。用于直连抓取失败（反爬 403 等）时的搜索兜底——借 Google 间接
 // 拿到目标站点的标题与一句话描述（snippet 已是高质量摘要，无需再抓正文）。
-func searchSerper(targetURL, apiKey string) PageMeta {
+func searchSerper(ctx context.Context, targetURL, apiKey string) PageMeta {
 	if apiKey == "" {
 		return PageMeta{}
 	}
@@ -472,7 +472,7 @@ func searchSerper(targetURL, apiKey string) PageMeta {
 		return PageMeta{}
 	}
 
-	req, err := http.NewRequest("POST", "https://google.serper.dev/search", bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://google.serper.dev/search", bytes.NewReader(bodyBytes))
 	if err != nil {
 		return PageMeta{}
 	}
