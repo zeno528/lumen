@@ -759,14 +759,14 @@ function BookmarksPage() {
                       <span className="search-group-count">{group.bookmarks.length}</span>
                     </h2>,
                   ] : []),
-                  <div
-                    key={`group-content-${groupKey}`}
-                    className={cn(
-                      'bookmark-category-group',
-                      group.bookmarks.length === 0 && 'empty',
-                    )}
-                  >
-                    {group.bookmarks.map((b) => (
+                  ...(group.bookmarks.length === 0
+                    ? [
+                      <div
+                        key={`group-content-${groupKey}`}
+                        className="bookmark-category-group empty"
+                      />,
+                    ]
+                    : group.bookmarks.map((b) => (
                       <BookmarkCard
                         key={b.id}
                         bookmark={b}
@@ -781,8 +781,7 @@ function BookmarksPage() {
                         index={aggregateDragIndex++}
                         group={`bookmarks:aggregate:${currentCategory}`}
                       />
-                    ))}
-                  </div>,
+                    ))),
                 ]
               })
             : cardGroups
