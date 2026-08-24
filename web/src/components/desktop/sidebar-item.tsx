@@ -1,5 +1,4 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { ChevronRight } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { useLongPress } from '@/hooks/use-long-press'
@@ -20,14 +19,9 @@ export function SidebarItem({
   iconColor,
   selected = false,
   onSelect,
-  depth = 0,
   dragEnabled = false,
-  hasChildren = false,
-  descendantIds = [],
-  expanded = false,
   index = 0,
   group = 'categories:root',
-  children,
 }: {
   icon: React.ReactNode
   label: string
@@ -42,15 +36,10 @@ export function SidebarItem({
   iconColor?: string
   selected?: boolean
   onSelect?: (e: React.MouseEvent, id: number) => void
-  depth?: number
-  /** 分类拖拽开关；批量选择时关闭。 */
+  /** 顶级分类排序开关；批量选择时关闭。 */
   dragEnabled?: boolean
-  hasChildren?: boolean
-  descendantIds?: number[]
-  expanded?: boolean
   index?: number
   group?: string
-  children?: React.ReactNode
 }) {
   const [showPopIn, setShowPopIn] = useState(isNew)
 
@@ -70,43 +59,29 @@ export function SidebarItem({
     index,
     group,
     type: 'category',
-    accept: (source) => {
-      if (!category || source.data.kind !== 'category' || source.data.id === category.id) return false
-      const sourceDescendantIds = source.data.descendantIds
-      return !Array.isArray(sourceDescendantIds) || !sourceDescendantIds.includes(category.id)
-    },
+    accept: (source) => Boolean(category && source.data.kind === 'category' && source.data.id !== category.id),
     disabled: !category || !dragEnabled,
     transition: { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
-    data: {
-      kind: 'category',
-      id: category?.id ?? 0,
-      parentId: category?.parent_id ?? null,
-      hasChildren,
-      descendantIds,
-    },
+    data: category ? { kind: 'category', id: category.id } : undefined,
   })
   const categoryZone = useDroppable({
     id: category ? `category-zone:${category.id}` : `virtual-category-zone:${label}`,
     type: 'category-zone',
     accept: 'bookmark',
     disabled: !category || !dragEnabled,
-    data: category
-      ? { kind: 'category-zone', id: category.id, parentId: category.parent_id }
-      : undefined,
+    data: category ? { kind: 'category-zone', id: category.id } : undefined,
   })
-  const setRowRefs = (element: HTMLDivElement | null) => {
-    if (children != null) sortable.targetRef(element)
-    else sortable.ref(element)
-    categoryZone.ref(element)
-  }
 
-  const row = (
+  return (
     <div
-      ref={setRowRefs}
+      ref={(element) => {
+        sortable.ref(element)
+        categoryZone.ref(element)
+      }}
+      data-category-id={category?.id}
       style={style}
       className={cn(
         'sidebar-item',
-        depth > 0 && 'sidebar-item-child',
         active && 'active',
         showPopIn && 'pop-in',
         selected && 'selected',
@@ -127,14 +102,6 @@ export function SidebarItem({
         if (showPopIn && e.animationName === 'popIn') setShowPopIn(false)
       }}
     >
-      {category ? (
-        <span
-          className={cn('sidebar-item-expand', expanded && 'expanded')}
-          aria-hidden="true"
-        >
-          {hasChildren ? <ChevronRight size={15} /> : null}
-        </span>
-      ) : null}
       <div
         className={cn(
           'sidebar-icon',
@@ -154,17 +121,8 @@ export function SidebarItem({
       </div>
       <div className="sidebar-item-inner">
         <span className="sidebar-item-name">{label}</span>
-        {count !== undefined ? (
-          <span className="sidebar-item-count">{count}</span>
-        ) : null}
+        {count !== undefined ? <span className="sidebar-item-count">{count}</span> : null}
       </div>
     </div>
   )
-
-  return children != null ? (
-    <div ref={sortable.ref} className="sidebar-category-subtree">
-      {row}
-      {children}
-    </div>
-  ) : row
 }

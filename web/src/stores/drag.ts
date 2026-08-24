@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import {
   getBookmarkDropPosition,
-  type BookmarkDropFallback,
   type BookmarkDropTarget,
   type BookmarkOrderPosition,
 } from '@/lib/bookmark-order'
@@ -9,19 +8,24 @@ import { getCategoryDropAction } from '@/lib/category-order'
 
 export type DragSource =
   | { kind: 'bookmark'; id: number; categoryId: number | null }
-  | { kind: 'category'; id: number; parentId: number | null; hasChildren: boolean; descendantIds: number[] }
+  | { kind: 'category'; id: number }
 
 export type DragTarget =
   | { kind: 'bookmark'; id: number; categoryId: number | null; position: 'before' | 'after'; sortIndex?: number }
-  | { kind: 'category'; id: number; parentId: number | null; action: 'before' | 'after' | 'inside' }
+  | { kind: 'category'; id: number; action: 'before' | 'after'; sortIndex?: number }
+
+export type DragTargetFallback = {
+  sourceId: number
+  target: DragTarget
+}
 
 export type DragDrop = { token: number; source: DragSource; target: DragTarget }
 
 type DragState = {
   lastDrop: DragDrop | null
-  lastBookmarkTarget: BookmarkDropFallback | null
-  rememberBookmarkTarget: (fallback: BookmarkDropFallback) => void
-  clearBookmarkTarget: () => void
+  lastTarget: DragTargetFallback | null
+  rememberTarget: (fallback: DragTargetFallback) => void
+  clearTarget: () => void
   finish: (source: DragSource, target: DragTarget | null) => void
 }
 
@@ -29,12 +33,12 @@ let dropToken = 0
 
 export const useDragStore = create<DragState>((set) => ({
   lastDrop: null,
-  lastBookmarkTarget: null,
-  rememberBookmarkTarget: (fallback) => set({ lastBookmarkTarget: fallback }),
-  clearBookmarkTarget: () => set({ lastBookmarkTarget: null }),
+  lastTarget: null,
+  rememberTarget: (fallback) => set({ lastTarget: fallback }),
+  clearTarget: () => set({ lastTarget: null }),
   finish: (source, target) => set({
     lastDrop: target ? { token: ++dropToken, source, target } : null,
-    lastBookmarkTarget: null,
+    lastTarget: null,
   }),
 }))
 
@@ -48,18 +52,9 @@ export function getDragSource(data: Record<string | symbol, unknown>): DragSourc
   }
   if (
     data.kind === 'category' &&
-    typeof data.id === 'number' &&
-    (typeof data.parentId === 'number' || data.parentId == null)
+    typeof data.id === 'number'
   ) {
-    return {
-      kind: 'category',
-      id: data.id,
-      parentId: typeof data.parentId === 'number' ? data.parentId : null,
-      hasChildren: data.hasChildren === true,
-      descendantIds: Array.isArray(data.descendantIds)
-        ? data.descendantIds.filter((id): id is number => typeof id === 'number')
-        : [],
-    }
+    return { kind: 'category', id: data.id }
   }
   return null
 }
@@ -74,7 +69,7 @@ export function getDragTarget(
   if (typeof data.id !== 'number') return null
   if (source.kind === 'bookmark') {
     if (data.kind === 'category-zone') {
-      return { kind: 'category', id: data.id, parentId: null, action: 'inside' }
+      return { kind: 'category', id: data.id, action: 'after' }
     }
     if (data.kind !== 'bookmark') return null
     const target: BookmarkDropTarget | null = source.id === data.id ? null : {
@@ -86,16 +81,9 @@ export function getDragTarget(
     return target
   }
   if (data.kind !== 'category' || source.id === data.id) return null
-  if (source.descendantIds.includes(data.id)) return null
-  const parentId = typeof data.parentId === 'number' ? data.parentId : null
   return {
     kind: 'category',
     id: data.id,
-    parentId,
-    action: getCategoryDropAction(
-      position.y - rect.top,
-      rect.height,
-      true,
-    ),
+    action: getCategoryDropAction(position.y - rect.top, rect.height),
   }
 }

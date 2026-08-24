@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,40 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (s *Server) validateCategoryParent(parentID *int64, selfID int64) error {
-	if parentID == nil {
-		return nil
-	}
-	if *parentID <= 0 || *parentID == selfID {
-		return fmt.Errorf("父分类无效")
-	}
-	currentID := *parentID
-	seen := map[int64]bool{}
-	for {
-		if seen[currentID] {
-			return fmt.Errorf("分类层级存在循环")
-		}
-		seen[currentID] = true
-		var ancestor sql.NullInt64
-		if err := s.db.QueryRow("SELECT parent_id FROM categories WHERE id = ?", currentID).Scan(&ancestor); err == sql.ErrNoRows {
-			return fmt.Errorf("父分类不存在")
-		} else if err != nil {
-			return fmt.Errorf("父分类校验失败")
-		}
-		if ancestor.Valid && ancestor.Int64 == selfID {
-			return fmt.Errorf("不能移动到自己的子分类")
-		}
-		if !ancestor.Valid {
-			break
-		}
-		currentID = ancestor.Int64
-	}
-	return nil
-}
-
 // handleGetCategories GET /api/categories
 func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query("SELECT id, name, icon, COALESCE(color, ''), sort_order, parent_id FROM categories ORDER BY sort_order, id")
+	rows, err := s.db.Query("SELECT id, name, icon, COALESCE(color, ''), sort_order FROM categories ORDER BY sort_order, id")
 	if err != nil {
 		log.Printf("查询分类失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "查询失败"})
@@ -55,7 +23,7 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 	categories := []Category{}
 	for rows.Next() {
 		var c Category
-		if err := rows.Scan(&c.ID, &c.Name, &c.Icon, &c.Color, &c.SortOrder, &c.ParentID); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Icon, &c.Color, &c.SortOrder); err != nil {
 			log.Printf("扫描分类行失败: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "数据读取失败"})
 			return
@@ -89,11 +57,6 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	if input.Icon == "" {
 		input.Icon = "fa-folder"
 	}
-	if err := s.validateCategoryParent(input.ParentID, 0); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-
 	// 获取当前最大 sort_order
 	var maxOrder sql.NullInt64
 	if err := s.db.QueryRow("SELECT MAX(sort_order) FROM categories").Scan(&maxOrder); err != nil {
@@ -105,8 +68,8 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := s.db.Exec(
-		"INSERT INTO categories (name, icon, color, sort_order, parent_id) VALUES (?, ?, ?, ?, ?)",
-		input.Name, input.Icon, input.Color, newOrder, input.ParentID,
+		"INSERT INTO categories (name, icon, color, sort_order) VALUES (?, ?, ?, ?)",
+		input.Name, input.Icon, input.Color, newOrder,
 	)
 	if err != nil {
 		log.Printf("创建分类失败: %v", err)
@@ -123,7 +86,6 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 			Icon:      input.Icon,
 			Color:     input.Color,
 			SortOrder: newOrder,
-			ParentID:  input.ParentID,
 		},
 	})
 }
@@ -142,23 +104,9 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 		return
 	}
-	if err := s.validateCategoryParent(input.ParentID, id); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	var hasChildren bool
-	if err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM categories WHERE parent_id = ?)", id).Scan(&hasChildren); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if hasChildren && input.ParentID != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "有子分类的父分类不能变更父级"})
-		return
-	}
-
 	result, err := s.db.Exec(
-		"UPDATE categories SET name = ?, icon = ?, color = ?, parent_id = ? WHERE id = ?",
-		input.Name, input.Icon, input.Color, input.ParentID, id,
+		"UPDATE categories SET name = ?, icon = ?, color = ? WHERE id = ?",
+		input.Name, input.Icon, input.Color, id,
 	)
 	if err != nil {
 		log.Printf("操作失败: %v", err)
@@ -176,139 +124,6 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// handleMoveCategory PUT /api/categories/{id}/parent
-// 仅调整层级，不触碰分类名称、图标或书签。
-func (s *Server) handleMoveCategory(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效 ID"})
-		return
-	}
-
-	var input struct {
-		ParentID *int64 `json:"parent_id"`
-		TargetID *int64 `json:"target_id"`
-		Position string `json:"position"`
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
-		return
-	}
-	if err := s.validateCategoryParent(input.ParentID, id); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	if input.TargetID != nil {
-		if input.ParentID == nil || *input.TargetID == id || (input.Position != "before" && input.Position != "after") {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序落点无效"})
-			return
-		}
-	} else if input.Position != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序落点无效"})
-		return
-	}
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		log.Printf("开始移动分类事务失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	defer tx.Rollback()
-
-	var targetOrder []int64
-	if input.TargetID != nil {
-		rows, err := tx.Query("SELECT id FROM categories WHERE parent_id = ? AND id != ? ORDER BY sort_order, id", input.ParentID, id)
-		if err != nil {
-			log.Printf("查询目标子分类失败: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-			return
-		}
-		for rows.Next() {
-			var categoryID int64
-			if err := rows.Scan(&categoryID); err != nil {
-				rows.Close()
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-				return
-			}
-			targetOrder = append(targetOrder, categoryID)
-		}
-		if err := rows.Close(); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-			return
-		}
-		insertAt := -1
-		for index, categoryID := range targetOrder {
-			if categoryID == *input.TargetID {
-				insertAt = index
-				break
-			}
-		}
-		if insertAt == -1 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "排序目标不属于父分类"})
-			return
-		}
-		if input.Position == "after" {
-			insertAt++
-		}
-		targetOrder = append(targetOrder, 0)
-		copy(targetOrder[insertAt+1:], targetOrder[insertAt:])
-		targetOrder[insertAt] = id
-	}
-
-	result, err := tx.Exec("UPDATE categories SET parent_id = ? WHERE id = ?", input.ParentID, id)
-	if err != nil {
-		log.Printf("更新分类父级失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if affected, _ := result.RowsAffected(); affected == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "分类不存在"})
-		return
-	}
-	for index, categoryID := range targetOrder {
-		if _, err := tx.Exec("UPDATE categories SET sort_order = ? WHERE id = ?", index, categoryID); err != nil {
-			log.Printf("更新分类排序失败: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		log.Printf("提交移动分类事务失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-
-	s.broadcastInvalidated("categories")
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// handleReleaseCategoryChildren PUT /api/categories/{id}/children/release
-// 将直接子分类提升为顶级分类，分类与书签本身均保留。
-func (s *Server) handleReleaseCategoryChildren(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效 ID"})
-		return
-	}
-	result, err := s.db.Exec("UPDATE categories SET parent_id = NULL WHERE parent_id = ?", id)
-	if err != nil {
-		log.Printf("释放子分类失败: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if affected, _ := result.RowsAffected(); affected == 0 {
-		var exists bool
-		if err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM categories WHERE id = ?)", id).Scan(&exists); err != nil || !exists {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "分类不存在"})
-			return
-		}
-	}
-	s.broadcastInvalidated("categories")
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
 // handleDeleteCategory DELETE /api/categories/{id}
 func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -320,7 +135,7 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	if mode == "" {
 		mode = "keep"
 	}
-	if mode != "promote" && mode != "keep" && mode != "all" {
+	if mode != "keep" && mode != "all" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效删除方式"})
 		return
 	}
@@ -333,34 +148,7 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	var childCount int
-	if err := tx.QueryRow("SELECT COUNT(*) FROM categories WHERE parent_id = ?", id).Scan(&childCount); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if childCount > 0 {
-		switch mode {
-		case "promote":
-			if _, err := tx.Exec("UPDATE categories SET parent_id = NULL WHERE parent_id = ?", id); err != nil {
-				log.Printf("提升子分类失败: %v", err)
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-				return
-			}
-		case "all":
-			if _, err := tx.Exec("DELETE FROM bookmarks WHERE category_id = ? OR category_id IN (SELECT id FROM categories WHERE parent_id = ?)", id, id); err != nil {
-				log.Printf("删除分类书签失败: %v", err)
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-				return
-			}
-		}
-		if mode != "promote" {
-			if _, err := tx.Exec("DELETE FROM categories WHERE parent_id = ?", id); err != nil {
-				log.Printf("删除子分类失败: %v", err)
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-				return
-			}
-		}
-	} else if mode == "all" {
+	if mode == "all" {
 		if _, err := tx.Exec("DELETE FROM bookmarks WHERE category_id = ?", id); err != nil {
 			log.Printf("删除分类书签失败: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
@@ -407,16 +195,6 @@ func (s *Server) handleBatchDeleteCategories(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ids 不能为空"})
 		return
 	}
-	var childCount int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM categories WHERE parent_id IN ("+placeholders(len(input.IDs))+")", toArgs(input.IDs)...).Scan(&childCount); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if childCount > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "请先处理子分类"})
-		return
-	}
-
 	result, err := s.db.Exec("DELETE FROM categories WHERE id IN ("+placeholders(len(input.IDs))+")", toArgs(input.IDs)...)
 	if err != nil {
 		log.Printf("批量删除分类失败: %v", err)
@@ -458,43 +236,6 @@ func (s *Server) handleMergeCategories(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var childCount int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM categories WHERE parent_id IN ("+placeholders(len(input.SourceIDs))+")", toArgs(input.SourceIDs)...).Scan(&childCount); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if childCount > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "含子分类的分类不能合并"})
-		return
-	}
-	var sourceUnderTarget int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM categories WHERE id IN ("+placeholders(len(input.SourceIDs))+") AND parent_id = ?", append(toArgs(input.SourceIDs), input.TargetID)...).Scan(&sourceUnderTarget); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if sourceUnderTarget > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "含层级关系的分类不能合并"})
-		return
-	}
-	var sourceWithParent int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM categories WHERE id IN ("+placeholders(len(input.SourceIDs))+") AND parent_id IS NOT NULL", toArgs(input.SourceIDs)...).Scan(&sourceWithParent); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if sourceWithParent > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "含层级关系的分类不能合并"})
-		return
-	}
-	var targetHasParent int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM categories WHERE id = ? AND parent_id IS NOT NULL", input.TargetID).Scan(&targetHasParent); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
-		return
-	}
-	if targetHasParent > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "含层级关系的分类不能合并"})
-		return
-	}
-
 	tx, err := s.db.Begin()
 	if err != nil {
 		log.Printf("合并分类事务启动失败: %v", err)

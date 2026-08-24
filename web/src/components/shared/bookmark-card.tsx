@@ -28,6 +28,7 @@ export function BookmarkCard({
   onMenuClick,
   onSelect,
   isNew = false,
+  highlighted = false,
   exiting = false,
   onExitDone,
   refreshing = false,
@@ -43,6 +44,8 @@ export function BookmarkCard({
   onSelect?: (e: React.MouseEvent, id: number) => void
   /** 新添加的书签：挂 bookmark-highlight + pop-in*/
   isNew?: boolean
+  /** 移动后从通知条跳转过来的书签：复用 bookmark-highlight */
+  highlighted?: boolean
   /** 正在退出（删除）：挂 pop-out，动画结束触发 onExitDone*/
   exiting?: boolean
   /** pop-out 动画结束回调，调用方在此真正删数据*/
@@ -152,7 +155,7 @@ export function BookmarkCard({
         // （accent 边框 + 双层描边外发光）
         selected && 'selected',
         // 进出场动画
-        isNew && 'bookmark-highlight',
+        (isNew || highlighted) && 'bookmark-highlight',
         showPopIn && 'pop-in',
         exiting && 'pop-out',
         refreshing && 'favicon-refreshing',

@@ -112,16 +112,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	api := newImportExportTestAPI(t)
 	jwt := login(t, api)
 
-	// 预置数据：父子分类 + 3 书签（一个无分类、一个带 tags/favorite/description）
+	// 预置数据：两个顶级分类 + 3 书签（一个无分类、一个带 tags/favorite/description）
 	workID := createCategory(t, api, jwt, "Work")
-	readingRes := api.request(t, http.MethodPost, "/api/categories", jwt, map[string]any{
-		"name":      "Reading",
-		"parent_id": workID,
-	})
-	requireStatus(t, readingRes, http.StatusCreated)
-	readingID := decodeJSON[struct {
-		Category Category `json:"category"`
-	}](t, readingRes).Category.ID
+	readingID := createCategory(t, api, jwt, "Reading")
 	bookmarkID := createBookmark(t, api, jwt, "https://example.com/docs", "Docs", &workID)
 	createBookmark(t, api, jwt, "https://example.com/article", "Article", &readingID)
 	createBookmark(t, api, jwt, "https://example.com/nocat", "NoCat", nil)
@@ -199,15 +192,6 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	if workCat == nil {
 		t.Fatal("Work category missing after round-trip")
-	}
-	var readingCat *Category
-	for i := range cats.Categories {
-		if cats.Categories[i].Name == "Reading" {
-			readingCat = &cats.Categories[i]
-		}
-	}
-	if readingCat == nil || readingCat.ParentID == nil || *readingCat.ParentID != workCat.ID {
-		t.Fatalf("Reading parent_id = %v, want Work id=%d", readingCat.ParentID, workCat.ID)
 	}
 	if *docs.CategoryID != workCat.ID {
 		t.Fatalf("Docs category_id = %d, want %d (Work)", *docs.CategoryID, workCat.ID)

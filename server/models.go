@@ -7,15 +7,13 @@ type Category struct {
 	Icon      string `json:"icon"`
 	Color     string `json:"color"`
 	SortOrder int    `json:"sort_order"`
-	ParentID  *int64 `json:"parent_id"`
 }
 
 // CategoryInput 分类输入
 type CategoryInput struct {
-	Name     string `json:"name"`
-	Icon     string `json:"icon,omitempty"`
-	Color    string `json:"color,omitempty"`
-	ParentID *int64 `json:"parent_id,omitempty"`
+	Name  string `json:"name"`
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
 }
 
 // Bookmark 书签
