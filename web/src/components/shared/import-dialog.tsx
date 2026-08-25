@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, Loader2, Check, AlertCircle, Repeat, FolderPlus, Folder } from 'lucide-react'
+import { FileUp, Loader2, Check, Bookmark, AlertCircle, Repeat, FolderPlus, Inbox } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,7 @@ export function ImportDialog({
   onImported: (res: ImportResult) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const dragDepth = useRef(0)
   const qc = useQueryClient()
   const [dragging, setDragging] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
@@ -57,6 +58,8 @@ export function ImportDialog({
     setPhase('idle')
     setResult(null)
     setError(null)
+    dragDepth.current = 0
+    setDragging(false)
   }, [open])
 
   const doImport = async (file: File) => {
@@ -89,6 +92,7 @@ export function ImportDialog({
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    dragDepth.current = 0
     setDragging(false)
     if (phase === 'importing') return
     const file = e.dataTransfer.files?.[0]
@@ -96,6 +100,9 @@ export function ImportDialog({
   }
 
   const busy = phase === 'importing'
+  const totalProcessed = (result?.imported ?? 0) + (result?.skipped ?? 0)
+  const importedCategoryCount = result?.imported_categories?.length ?? 0
+  const reusedCategoryCount = result?.skipped_categories ?? 0
 
   return (
     <Dialog
@@ -110,8 +117,8 @@ export function ImportDialog({
       }
     >
       {phase === 'success' && result ? (
-        // 成功态：勾选光晕 + 统计卡片（--shadow-card 三层阴影质感）+ 分类标签卡
-        <div className="flex flex-col items-center gap-6 py-6">
+        // 成功态：强成功反馈 + 书签主统计 + 分类汇总
+        <div className="flex flex-col items-center gap-5 py-5">
           <div className="flex flex-col items-center gap-3">
             <div
               className="check-pop flex items-center justify-center size-16 rounded-full"
@@ -119,70 +126,49 @@ export function ImportDialog({
                 background:
                   'radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--success) 88%, white), var(--success))',
                 boxShadow:
-                  'inset 0 1px 0 color-mix(in srgb, white 35%, transparent), 0 0 0 1px color-mix(in srgb, var(--success) 35%, transparent), 0 10px 28px color-mix(in srgb, var(--success) 35%, transparent)',
+                    'inset 0 1px 0 color-mix(in srgb, white 35%, transparent), 0 0 0 1px color-mix(in srgb, var(--success) 35%, transparent), 0 10px 28px color-mix(in srgb, var(--success) 35%, transparent)',
               }}
             >
-              <Check size={28} strokeWidth={3.5} className="text-white" />
+              <Check size={30} strokeWidth={3.5} className="text-white" />
             </div>
             <p className="text-base font-semibold text-(--text-primary)">导入成功</p>
-            <p className="text-xs text-(--text-muted)">
-              {result.skipped
-                ? `共处理 ${(result.imported ?? 0) + (result.skipped ?? 0)} 条 · 跳过重复 ${result.skipped} 条`
-                : `全部 ${result.imported ?? 0} 条书签已导入`}
-            </p>
+            <p className="text-xs text-(--text-muted)">共处理 {totalProcessed} 条书签</p>
           </div>
 
-          {/* 数字统计卡片：bg-card + border + 三层阴影，数字等宽大号 */}
-          <div className="flex gap-3 w-full">
+          {/* 书签主统计：参考成功结果页的双卡布局 */}
+          <div className="grid grid-cols-2 gap-3 w-full">
             <div
-              className="flex-1 flex flex-col items-center gap-1.5 py-4 rounded-2xl bg-(--bg-card) border border-(--border)"
+              className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-(--bg-card) border border-(--border)"
               style={{ boxShadow: 'var(--shadow-card)' }}
             >
-              <span className="text-3xl font-semibold text-(--success) tabular-nums">
-                {result.imported ?? 0}
-              </span>
-              <span className="flex items-center gap-1 text-xs text-(--text-muted)">
-                <Check size={11} strokeWidth={3} className="text-(--success)" />
+              <span className="text-3xl leading-none font-semibold text-(--success) tabular-nums">{result.imported ?? 0}</span>
+              <span className="flex items-center gap-1.5 text-xs text-(--text-muted)">
+                <Bookmark size={14} className="text-(--success)" />
                 新增书签
               </span>
             </div>
             <div
-              className="flex-1 flex flex-col items-center gap-1.5 py-4 rounded-2xl bg-(--bg-card) border border-(--border)"
+              className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-(--bg-card) border border-(--border)"
               style={{ boxShadow: 'var(--shadow-card)' }}
             >
-              <span className="text-2xl font-semibold text-(--text-secondary) tabular-nums">
-                {result.skipped ?? 0}
-              </span>
-              <span className="flex items-center gap-1 text-xs text-(--text-muted)">
-                <Repeat size={11} className="text-(--text-secondary)" />
+              <span className="text-3xl leading-none font-semibold text-(--text-secondary) tabular-nums">{result.skipped ?? 0}</span>
+              <span className="flex items-center gap-1.5 text-xs text-(--text-muted)">
+                <Repeat size={14} className="text-(--text-secondary)" />
                 跳过重复
               </span>
             </div>
           </div>
 
-          {/* 新增分类：外层卡包裹 + 内层 chip 独立小卡 */}
-          {result.imported_categories && result.imported_categories.length > 0 && (
-            <div className="flex flex-col gap-2.5 w-full p-3.5 rounded-2xl bg-(--bg-secondary) border border-(--border)">
-              <p className="flex items-center justify-center gap-1.5 text-xs text-(--text-muted)">
-                <FolderPlus size={13} className="text-(--accent)" />
-                新增 <span className="font-semibold text-(--text-primary)">{result.imported_categories.length}</span> 个分类
-              </p>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {result.imported_categories.slice(0, 5).map((cat) => (
-                  <span
-                    key={cat}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-(--bg-card) border border-(--border) text-xs font-medium text-(--text-primary)"
-                  >
-                    <Folder size={11} className="text-(--text-muted) shrink-0" />
-                    {cat}
-                  </span>
-                ))}
-                {result.imported_categories.length > 5 && (
-                  <span className="inline-flex items-center px-1.5 py-1 text-xs text-(--text-muted)">
-                    共 {result.imported_categories.length} 个
-                  </span>
-                )}
-              </div>
+          {/* 分类次级汇总：只展示数量，不展示分类名称 */}
+          {(importedCategoryCount > 0 || reusedCategoryCount > 0) && (
+            <div className="flex items-center justify-center gap-2 w-full px-4 py-4 rounded-2xl bg-(--bg-secondary) border border-(--border)">
+              <FolderPlus size={16} className="text-(--accent)" />
+              <span className="text-sm text-(--text-secondary)">新增</span>
+              <span className="text-xl leading-none font-semibold text-(--text-primary) tabular-nums">{importedCategoryCount}</span>
+              <span className="text-sm text-(--text-secondary)">个分类</span>
+              {reusedCategoryCount > 0 && (
+                <span className="ml-1 text-xs text-(--text-muted)">· 复用 {reusedCategoryCount} 个</span>
+              )}
             </div>
           )}
         </div>
@@ -204,32 +190,52 @@ export function ImportDialog({
                 inputRef.current?.click()
               }
             }}
-            onDragOver={(e) => {
+            onDragEnter={(e) => {
               e.preventDefault()
-              if (!busy) setDragging(true)
+              if (busy) return
+              dragDepth.current += 1
+              setDragging(true)
             }}
-            onDragLeave={() => setDragging(false)}
+            onDragOver={(e) => e.preventDefault()}
+            onDragLeave={(e) => {
+              e.preventDefault()
+              dragDepth.current = Math.max(0, dragDepth.current - 1)
+              if (dragDepth.current === 0) setDragging(false)
+            }}
             onDrop={onDrop}
             className={cn(
-              'group flex flex-col items-center justify-center gap-4 py-12 px-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200',
+              'group flex flex-col items-center justify-center gap-4 py-12 px-6 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
               'border-(--border-hover) hover:border-(--accent) hover:bg-(--bg-secondary)',
-              dragging && 'border-(--accent) bg-(--bg-secondary)',
+              dragging && 'scale-[1.01] border-(--accent) bg-(--accent-soft-bg)',
               busy && 'opacity-60 pointer-events-none',
             )}
+            style={
+              dragging
+                ? {
+                    boxShadow:
+                      '0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-card)',
+                  }
+                : undefined
+            }
           >
-            {/* 图标容器：独立小卡，hover 随拖拽区放大 */}
+            {/* 图标容器：拖拽进入时切换为接收态 */}
             <div
-              className="flex items-center justify-center size-14 rounded-2xl border border-(--border) bg-(--bg-card) transition-transform duration-200 group-hover:scale-105"
+              className={cn(
+                'flex items-center justify-center size-14 rounded-2xl border border-(--border) bg-(--bg-card) transition-all duration-300 group-hover:scale-105',
+                dragging && 'scale-110 border-(--accent) bg-(--accent-hover-bg)',
+              )}
               style={{ boxShadow: 'var(--shadow-card)' }}
             >
               {busy ? (
                 <Loader2 size={26} className="text-(--accent) animate-spin" strokeWidth={2} />
+              ) : dragging ? (
+                <Inbox size={28} className="text-(--accent)" strokeWidth={2.2} />
               ) : (
-                <Download size={26} className="text-(--accent)" strokeWidth={2} />
+                <FileUp size={26} className="text-(--accent)" strokeWidth={2} />
               )}
             </div>
-            <p className="text-sm font-medium text-(--text-primary)">
-              {busy ? '导入中…' : '点击选择文件 / 拖拽 JSON 到此处'}
+            <p className="text-sm font-medium text-(--text-primary) transition-colors duration-300">
+              {busy ? '导入中…' : dragging ? '松开即可导入' : '点击选择文件，或拖拽备份文件到这里'}
             </p>
           </div>
 

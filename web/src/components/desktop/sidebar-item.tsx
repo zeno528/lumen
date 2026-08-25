@@ -1,9 +1,37 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useDroppable } from '@dnd-kit/react'
-import { useSortable } from '@dnd-kit/react/sortable'
+import { useSortable, type UseSortableInput } from '@dnd-kit/react/sortable'
 import { useLongPress } from '@/hooks/use-long-press'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/types'
+
+type CollisionDetector = NonNullable<UseSortableInput['collisionDetector']>
+
+const detectAdjacentCategoryCollision: CollisionDetector = ({ dragOperation, droppable }) => {
+  const source = dragOperation.source as { index?: unknown; group?: unknown } | null
+  const target = droppable as { index?: unknown; group?: unknown }
+  const rectangle = droppable.shape?.boundingRectangle
+  const pointer = dragOperation.position.current
+
+  if (
+    source?.group !== 'categories' ||
+    target.group !== 'categories' ||
+    typeof source.index !== 'number' ||
+    typeof target.index !== 'number' ||
+    !rectangle ||
+    pointer.x < rectangle.left - 8 ||
+    pointer.x > rectangle.right + 8
+  ) {
+    return null
+  }
+
+  const midpoint = rectangle.top + rectangle.height / 2
+  const direction = pointer.y > midpoint ? 1 : pointer.y < midpoint ? -1 : 0
+
+  return direction !== 0 && target.index === source.index + direction
+    ? { id: droppable.id, priority: 1, type: 2, value: 1 }
+    : null
+}
 
 export function SidebarItem({
   icon,
@@ -62,6 +90,7 @@ export function SidebarItem({
     accept: (source) => Boolean(category && source.data.kind === 'category' && source.data.id !== category.id),
     disabled: !category || !dragEnabled,
     transition: { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
+    collisionDetector: group === 'categories' ? detectAdjacentCategoryCollision : undefined,
     data: category ? { kind: 'category', id: category.id } : undefined,
   })
   const categoryZone = useDroppable({
@@ -85,7 +114,6 @@ export function SidebarItem({
         active && 'active',
         showPopIn && 'pop-in',
         selected && 'selected',
-        sortable.isDropTarget && 'dnd-drop-target',
         categoryZone.isDropTarget && 'bookmark-drop-target',
       )}
       onClick={onSelect ? (e) => onSelect(e, category!.id) : onClick}
