@@ -106,6 +106,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
 
   const [confirmClearFavorites, setConfirmClearFavorites] = useState(false)
   const [confirmClearUncategorized, setConfirmClearUncategorized] = useState(false)
+  const [confirmDeleteEmptyCats, setConfirmDeleteEmptyCats] = useState(false)
   const [confirmBatchDeleteCat, setConfirmBatchDeleteCat] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
   const catIds = new Set(categories.map((c) => c.id))
@@ -117,6 +118,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     ).length,
   }
   const countByCat = (id: number) => getCategoryCount(bookmarks, id)
+  const emptyCategoryIds = categories.filter((category) => countByCat(category.id) === 0).map((category) => category.id)
   const lastDrop = useDragStore((state) => state.lastDrop)
   const handledDropToken = useRef<number | null>(null)
 
@@ -281,6 +283,21 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     }
   }
 
+  const onConfirmDeleteEmptyCats = async () => {
+    const ids = emptyCategoryIds
+    setConfirmDeleteEmptyCats(false)
+    if (ids.length === 0) return
+    if (typeof currentCategory === 'number' && ids.includes(currentCategory)) {
+      setCurrentCategory('all')
+    }
+    toast.success(`已删除 ${ids.length} 个空分类`)
+    try {
+      await batchDeleteCats.mutateAsync(ids)
+    } catch (e) {
+      toast.error('删除空分类失败: ' + (e as Error).message)
+    }
+  }
+
   // 删除入口：无书签直接删，有书签弹确认
   const handleDeleteClick = (cat: Category) => {
     if (countByCat(cat.id) === 0) {
@@ -400,6 +417,20 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
             title={categoryBatchMode ? '退出批量选择' : '批量选择分类'}
           >
             <CheckSquare size={13} strokeWidth={2.4} />
+          </button>
+          <button
+            type="button"
+            className="sidebar-category-batch-btn"
+            disabled={emptyCategoryIds.length === 0 || categoryBatchMode}
+            onClick={() => setConfirmDeleteEmptyCats(true)}
+            aria-label="删除空分类"
+            title={
+              emptyCategoryIds.length > 0
+                ? `删除 ${emptyCategoryIds.length} 个空分类`
+                : '没有空分类'
+            }
+          >
+            <Trash2 size={13} strokeWidth={2.4} />
           </button>
         </div>
       </div>
@@ -531,6 +562,22 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         onConfirm={onConfirmBatchDeleteCat}
         title="批量删除分类"
         message={`确定删除选中的 ${selectedCategoryIds.size} 个分类吗？其下书签将变为未分类。`}
+        confirmText="确认删除"
+        danger
+      />
+
+      {/* 删除空分类确认 */}
+      <ConfirmDialog
+        open={confirmDeleteEmptyCats}
+        onClose={() => setConfirmDeleteEmptyCats(false)}
+        onConfirm={onConfirmDeleteEmptyCats}
+        title="删除空分类"
+        message={
+          <>
+            确定删除全部 <strong className="font-semibold text-(--accent)">{emptyCategoryIds.length}</strong> 个空分类吗？
+            <span className="text-(--text-muted)">这些分类没有书签，不会影响任何书签。</span>
+          </>
+        }
         confirmText="确认删除"
         danger
       />

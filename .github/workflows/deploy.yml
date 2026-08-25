@@ -11,6 +11,13 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/deploy.yml'
+    # 防御性排除：paths 白名单之外的文档/许可/商标改动本就不该触发；
+    # paths-ignore 作为双重保险，兜住 paths 评估的边缘情况（例如 README commit 居然触发了 Deploy #47）
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'TRADEMARKS.md'
   workflow_dispatch:
 
 permissions:
