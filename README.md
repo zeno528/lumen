@@ -111,6 +111,8 @@ systemctl enable --now lumen
 | `TRUSTED_PROXY_CIDR` | 空 | 可信反向代理 CIDR（逗号分隔）；空 = 不信任 `X-Forwarded-For` |
 | `CORS_ORIGINS` | 空 | 允许的跨域来源（空格分隔）；空 = 仅同源 |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_ALLOWED_USER` | 空 | 可选的 GitHub OAuth 登录（`GITHUB_ALLOWED_USER` 为用户名白名单） |
+| `OAUTH_REDIRECT_BASE` | 空 | GitHub OAuth 回调基址（如 `https://your.domain`）；空则从请求推断，生产建议显式设置防开放重定向 |
+| `LOGO_DEV_TOKEN` | 内置默认值 | favicon 兜底（Logo.dev）的 publishable key；可 env 覆盖 |
 | `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` | 空 | 环境变量形式的 AI 配置兜底；设置界面保存的配置优先 |
 | `SERPER_API_KEY` | 空 | 可选的 Serper 搜索密钥（AI 补全抓取失败时的搜索兜底） |
 
