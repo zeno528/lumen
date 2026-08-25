@@ -65,7 +65,7 @@ function AuthedLayout() {
   }, [settingsOpen])
   useWebSocketSync(qc) // WebSocket 实时同步：服务端 invalidate 广播 → 自动 refetch
 
-  // ID 搜索模式跨设备同步（数据库为真相源）：挂载后空闲时查一次服务端状态写 store
+  // ID 搜索模式跨设备同步：本地持久化值先用于首帧，挂载后空闲时查服务端并覆盖校准
   useEffect(() => {
     const check = () => {
       getIdSearchMode()

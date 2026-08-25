@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Search, CheckCheck, X } from 'lucide-react'
 import { useRouterState } from '@tanstack/react-router'
 import { DragDropProvider } from '@dnd-kit/react'
@@ -149,22 +149,6 @@ function handleDragEnd({ operation, canceled }: Parameters<NonNullable<React.Com
 }
 
 /**
- * 首帧 inset 估算：mount 后 rAF / ResizeObserver 真实计算前（约 1 帧），用视口宽度粗估一个
- * 接近最终值的 inset 占位，避免顶栏从「贴边」跳到「对齐」的可见跳变。精度无所谓——rAF 回调
- * 用真实 clientWidth 修正。SIDEBAR_WIDTH 与 layout.css 的 --sidebar-width:260px 同步。
- */
-function estimateInitialInset(): number {
-  if (typeof window === 'undefined') return 0
-  const SIDEBAR_WIDTH = 260
-  const gridWidth = Math.min(
-    MAX_CONTAINER_WIDTH,
-    Math.max(0, window.innerWidth - SIDEBAR_WIDTH - MAIN_CONTENT_HORIZONTAL_PADDING),
-  )
-  const contentWidth = computeGridContentWidth(gridWidth)
-  return Math.max(0, (gridWidth - contentWidth) / 2)
-}
-
-/**
  * 计算书签卡片网格当前列布局的左右内缩量，让顶栏搜索框左缘对齐第一列卡片左缘、
  * 右侧按钮组右缘对齐最后一列卡片右缘，并随窗口自适应。
  *
@@ -172,56 +156,28 @@ function estimateInitialInset(): number {
  * 左右会出现对称空白。监听 .main-content 尺寸变化，实时算出该空白宽度。
  * 无真实网格时（设置页/帮助页），按 .main-content 宽度用同一公式回算，保持跨页对齐。
  *
- * 性能（避免 forced reflow，实测首屏曾因本 hook 累计 985ms reflow 拖慢 LCP）：
- * - inset 只依赖 .main-content 宽度（列数由宽度决定）。首屏 100+ 卡片批量挂载只改高度不改宽度，
- *   但旧实现监听 .main-content 会被高度变化频繁触发，每次 compute 读几何 + setInset 写都 forced reflow。
- * - 现在回调里比较宽度，宽度不变直接 return，跳过所有由高度变化触发的无效 compute。
- * - mount 时 compute 进 rAF，避免 useEffect 同步读几何引发 layout thrash
- *   （webperf.tips：useEffect 里测量 DOM 是 thrash 典型场景）。
- * - compute 内批量读几何后再 setInset 写，避免读写交错（web.dev avoid-large-complex-layouts）。
- * 依据：web.dev ResizeObserver / avoid-large-complex-layouts；Tiger Oakes「ResizeObserver is a
- * safe place to read clientWidth」（回调内读本身安全，关键是别在 mount 同步读 + 写 thrash）。
+ * 性能：inset 只依赖 .main-content 宽度，首帧在绘制前测量，后续只响应宽度变化。
  */
 function useGridInset() {
-  const [inset, setInset] = useState(estimateInitialInset)
+  const [inset, setInset] = useState(0)
   const rafRef = useRef<number | null>(null)
   // 上次触发 compute 的 .main-content 宽度：宽度不变（如首屏卡片挂载只改高度）时跳过
   const lastWidthRef = useRef<number | null>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const mainContent = document.querySelector('.main-content') as HTMLElement | null
     if (!mainContent) return
 
     const compute = () => {
-      const grid = Array.from(mainContent.querySelectorAll<HTMLElement>('.bookmarks-grid'))
-        .find((candidate) => candidate.querySelector('.bookmark-card')) ?? null
-      const card = grid?.querySelector('.bookmark-card') as HTMLElement | null
       const searchWrap = document.querySelector('.main-top-inner .search-wrap') as HTMLElement | null
       const actions = document.querySelector('.main-top-inner .main-top-actions') as HTMLElement | null
-      if (!searchWrap || !actions) {
-        setInset(0)
-        return
-      }
+      if (!searchWrap || !actions) return
 
-      // 批量读：几何属性一次性读完，再 setInset 写，避免读写交错引发 layout thrash
-      let gridWidth: number
-      let contentWidth: number
-      if (grid && card) {
-        // 书签页：直接测量真实网格
-        gridWidth = grid.clientWidth
-        const cardWidth = card.offsetWidth
-        const style = window.getComputedStyle(grid)
-        const gap = parseFloat(style.columnGap) || parseFloat(style.gap) || 16
-        const columns = Math.max(1, Math.floor((gridWidth + gap) / (cardWidth + gap)))
-        contentWidth = columns * cardWidth + (columns - 1) * gap
-      } else {
-        // 设置页/帮助页：没有真实网格，按同一公式回算
-        gridWidth = Math.min(
-          MAX_CONTAINER_WIDTH,
-          mainContent.clientWidth - MAIN_CONTENT_HORIZONTAL_PADDING,
-        )
-        contentWidth = computeGridContentWidth(gridWidth)
-      }
+      const gridWidth = Math.min(
+        MAX_CONTAINER_WIDTH,
+        Math.max(0, mainContent.clientWidth - MAIN_CONTENT_HORIZONTAL_PADDING),
+      )
+      const contentWidth = computeGridContentWidth(gridWidth)
 
       const insetX = Math.max(0, (gridWidth - contentWidth) / 2)
       // 避免列数过少时搜索框与按钮组重叠：左右内缩量不能超过可用空间的一半
@@ -245,8 +201,8 @@ function useGridInset() {
       rafRef.current = requestAnimationFrame(compute)
     })
     ro.observe(mainContent)
-    // mount 进 rAF，避免 useEffect 同步读几何引发 layout thrash
-    rafRef.current = requestAnimationFrame(compute)
+    // 在浏览器绘制首帧前完成测量，避免 0 → 实际 inset 的可见跳变。
+    compute()
 
     return () => {
       ro.disconnect()

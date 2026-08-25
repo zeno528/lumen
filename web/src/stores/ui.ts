@@ -14,7 +14,7 @@ interface UIState {
   searchQuery: string
   setSearchQuery: (q: string) => void
 
-  /** ID 搜索模式开关：激活时输入数字直接匹配书签 id，免输 # 号前缀 */
+  /** ID 搜索模式开关：激活时输入数字直接匹配书签 id，免输 # 号前缀；本地值用于刷新首帧，服务端随后校准 */
   idSearchMode: boolean
   toggleIdSearchMode: () => void
   /** 强制设为 false：搜索栏关闭时由调用方 effect 触发，保证"默认打开是普通模式" */
@@ -265,7 +265,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'lumen-ui',
-      partialize: (s) => ({ currentCategory: s.currentCategory }),
+      partialize: (s) => ({ currentCategory: s.currentCategory, idSearchMode: s.idSearchMode }),
     },
   ),
 )

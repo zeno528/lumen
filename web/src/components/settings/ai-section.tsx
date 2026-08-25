@@ -22,6 +22,7 @@ import { SecretInput } from '@/components/shared/secret-input'
 import { Combobox } from '@/components/ui/combobox'
 import {
   AI_PRESETS,
+  AI_APPLY_URLS,
   AI_PROVIDER_ORDER,
   ANTHROPIC_FORMAT_PRESET,
   CUSTOM_API_FORMATS,
@@ -424,9 +425,10 @@ export function AiSection({
     ? '留空保留，输入新值覆盖'
     : '请输入 API Key'
   const customAnthropic = provider === 'custom' && apiFormat === 'anthropic'
+  const applyURL = customAnthropic ? ANTHROPIC_FORMAT_PRESET.keyURL : AI_APPLY_URLS[provider]
   const formatOptions = preset?.formats ?? (provider === 'custom' ? CUSTOM_API_FORMATS : [])
   const apiFormatLabel = formatOptions.find((option) => option.value === apiFormat)?.label ?? apiFormat
-  const modelPlaceholder = '输入模型 ID'
+  const modelPlaceholder = '输入或选择模型 ID'
   const baseURLPlaceholder = apiFormat === 'anthropic' ? '例如：https://api.anthropic.com' : '例如：https://api.openai.com/v1'
   const baseURLProtocol = apiFormat === 'anthropic' ? 'Anthropic Messages API' : 'OpenAI API'
   const baseURLPath = apiFormat === 'anthropic' ? '/v1/messages' : '/chat/completions'
@@ -518,6 +520,17 @@ export function AiSection({
           placeholder={apiKeyPlaceholder}
         />
       </div>
+
+      {applyURL && (
+        <a
+          href={applyURL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-(--accent) inline-flex items-center gap-1 hover:underline w-fit"
+        >
+          <ExternalLink size={12} /> 获取密钥
+        </a>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         <Button type="submit" disabled={aiSaving}>保存</Button>

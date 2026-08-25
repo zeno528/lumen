@@ -25,7 +25,7 @@ export function TopbarAIButton({
   scaleContainerWhenOpen?: boolean
 } = {}) {
   const qc = useQueryClient()
-  const { data: aiData } = useQuery({ queryKey: ['ai-settings'], queryFn: getAISettings })
+  const { data: aiData, isLoading: aiSettingsLoading } = useQuery({ queryKey: ['ai-settings'], queryFn: getAISettings })
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
   const setSettingsTab = useUIStore((s) => s.setSettingsTab)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -110,6 +110,11 @@ export function TopbarAIButton({
       img.decode?.().catch(() => {})
     }
   }, [])
+
+  // 查询完成前保留按钮尺寸，避免配置返回后把右侧工具栏整体推移。
+  if (aiSettingsLoading) {
+    return <span className={cn('flex w-9 h-9 shrink-0 invisible', className)} aria-hidden="true" />
+  }
 
   // 没配置任何配置不渲染（无可切换项）。hooks 全在上方，return 顺序合法。
   if (savedConfigs.length === 0) return null
