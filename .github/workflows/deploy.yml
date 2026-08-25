@@ -11,13 +11,6 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/deploy.yml'
-    # 防御性排除：paths 白名单之外的文档/许可/商标改动本就不该触发；
-    # paths-ignore 作为双重保险，兜住 paths 评估的边缘情况（例如 README commit 居然触发了 Deploy #47）
-    paths-ignore:
-      - 'README.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'TRADEMARKS.md'
   workflow_dispatch:
 
 permissions:
@@ -183,6 +176,6 @@ jobs:
             -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
             "https://$SERVER_DOMAIN/api/ws")
           case "$WS_CODE" in
-            401|101) echo "✅ ${{ matrix.server.name }} /api/ws upgrade 正常 ($WS_CODE)";;
-            *) echo "⚠️ ${{ matrix.server.name }} /api/ws 异常 ($WS_CODE) — nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;
+            401|101) echo "✅ ${{ matrix.server }} /api/ws upgrade 正常 ($WS_CODE)";;
+            *) echo "⚠️ ${{ matrix.server }} /api/ws 异常 ($WS_CODE) — nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;
           esac

@@ -141,13 +141,13 @@ jobs:
 
   # ─────────── 部署：PR 打开时「构建 + 部署」jp-2 验证（独立于 deploy.yml）───────────
   deploy:
-    name: Deploy to ${{ matrix.server.name }}
+    name: Deploy to ${{ matrix.server }}
     needs: [pr-checks]
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # 同服务器串行（跨 PR），避免并发部署覆盖；不同服务器并行
     concurrency:
-      group: pr-deploy-${{ matrix.server.name }}
+      group: pr-deploy-${{ matrix.server }}
       cancel-in-progress: false
     strategy:
       fail-fast: false
@@ -235,6 +235,6 @@ jobs:
             -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
             "https://$SERVER_DOMAIN/api/ws")
           case "$WS_CODE" in
-            401|101) echo "✅ ${{ matrix.server.name }} /api/ws upgrade 正常 ($WS_CODE)";;
-            *) echo "⚠️ ${{ matrix.server.name }} /api/ws 异常 ($WS_CODE) - nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;
+            401|101) echo "✅ ${{ matrix.server }} /api/ws upgrade 正常 ($WS_CODE)";;
+            *) echo "⚠️ ${{ matrix.server }} /api/ws 异常 ($WS_CODE) - nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;
           esac
