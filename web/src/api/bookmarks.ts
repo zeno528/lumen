@@ -23,7 +23,7 @@ export function createBookmark(input: BookmarkInput): Promise<{ bookmark: Bookma
 export function updateBookmark(
   id: number,
   input: Partial<BookmarkInput>,
-): Promise<{ ok: boolean; updated_at: string }> {
+): Promise<{ ok: boolean; updated_at: string; favicon_version: string }> {
   return api(`/bookmarks/${id}`, { method: 'PUT', body: JSON.stringify(input) })
 }
 
@@ -37,14 +37,14 @@ export async function refreshBookmarkFavicon(
   id: number,
   url: string,
   signal?: AbortSignal,
-): Promise<{ dataUri: string; updatedAt: string }> {
+): Promise<{ dataUri: string; faviconVersion: string }> {
   const dataUri = await fetchFaviconDataUri(url, signal)
   if (!dataUri) throw new Error('该网站图标为空白或未找到')
-  const res = await api<{ ok: boolean; updated_at: string }>(`/bookmarks/${id}`, {
+  const res = await api<{ ok: boolean; updated_at: string; favicon_version: string }>(`/bookmarks/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ favicon: dataUri }),
   })
-  return { dataUri, updatedAt: res.updated_at }
+  return { dataUri, faviconVersion: res.favicon_version }
 }
 
 export function deleteBookmark(id: number): Promise<{ ok: boolean }> {
@@ -57,8 +57,8 @@ export function toggleFavorite(id: number): Promise<{ is_favorite: boolean }> {
 }
 
 /** favicon 公开端点（无需鉴权），用 updatedAt 作版本号避免缓存旧图标 */
-export function faviconUrl(id: number, updatedAt?: string): string {
-  const v = updatedAt ? `?v=${encodeURIComponent(updatedAt)}` : ''
+export function faviconUrl(id: number, version?: string): string {
+  const v = version ? `?v=${encodeURIComponent(version)}` : ''
   return `/api/bookmarks/${id}/favicon${v}`
 }
 

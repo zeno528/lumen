@@ -8,6 +8,7 @@ export interface Bookmark {
   category_id: number | null
   tags: string[]
   favicon: string // list 接口返回空串，实际走 /api/bookmarks/{id}/favicon img
+  favicon_version?: string // 只随图标内容变化；没有该字段时回退 updated_at（兼容旧接口）
   sort_order: number
   is_favorite: boolean
   created_at: string

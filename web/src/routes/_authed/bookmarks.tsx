@@ -99,10 +99,11 @@ function BookmarksPage() {
 
     // 预热 favicon：fetch 端点拿 dataURI 写 localStorage 缓存（渲染时 getFavicon 秒显不走网络），
     // 同时预热 HTTP 缓存（缓存未命中时端点秒显）。跳过已缓存命中的，减少不必要 fetch。
-    const toWarm: { id: number; updatedAt: string; url: string }[] = []
+    const toWarm: { id: number; version: string; url: string }[] = []
     const pushIfMiss = (b: Bookmark) => {
-      if (getFavicon(b.id, b.updated_at)) return // 已缓存命中，跳过
-      toWarm.push({ id: b.id, updatedAt: b.updated_at, url: faviconUrl(b.id, b.updated_at) })
+      const version = b.favicon_version || b.updated_at
+      if (getFavicon(b.id, version)) return // 已缓存命中，跳过
+      toWarm.push({ id: b.id, version, url: faviconUrl(b.id, version) })
     }
     if (!prev) {
       for (const b of next) pushIfMiss(b)
@@ -121,7 +122,7 @@ function BookmarksPage() {
           .then((r) => (r.ok ? r.blob() : null))
           .then((blob) => (blob ? blobToDataUri(blob) : null))
           .then((dataUri) => {
-            if (dataUri) setFavicon(item.id, item.updatedAt, dataUri)
+            if (dataUri) setFavicon(item.id, item.version, dataUri)
           })
           .catch(() => {})
       }
@@ -438,7 +439,7 @@ function BookmarksPage() {
     setRefreshingFavId(id)
     const tid = toast.loading('正在获取图标…', undefined, { onDismiss: () => ac.abort() })
     try {
-      const { dataUri, updatedAt } = await refreshBookmarkFavicon(id, url, ac.signal)
+      const { dataUri, faviconVersion } = await refreshBookmarkFavicon(id, url, ac.signal)
       // 直接用 dataUri 写入 cache 显示（立即可见、不依赖 /api/bookmarks/{id}/favicon 端点重新拉取，成功率高）。
       // 同时写 localStorage（setFavicon）用后端返回的 updated_at：WS invalidate refetch 会把 favicon 覆盖成 ''，
       // 但 updated_at 一致 -> getFavicon(id, updatedAt) 命中 localStorage 同步返回 dataUri，不走端点，无 0.5s 延迟。
@@ -447,11 +448,11 @@ function BookmarksPage() {
         return {
           ...old,
           bookmarks: old.bookmarks.map((b) =>
-            b.id === id ? { ...b, favicon: dataUri, updated_at: updatedAt } : b,
+            b.id === id ? { ...b, favicon: dataUri, favicon_version: faviconVersion } : b,
           ),
         }
       })
-      setFavicon(id, updatedAt, dataUri)
+      setFavicon(id, faviconVersion, dataUri)
       toast.resolve(tid, '图标刷新成功', 'success')
     } catch (e) {
       const err = e as Error
@@ -473,16 +474,16 @@ function BookmarksPage() {
     // - optimisticUpdatedAt 让 faviconUrl 生成新 URL，绕开 HTTP 缓存里的旧图标；
     // - markNoFavicon(id, optimisticUpdatedAt) 让 BookmarkCard 的 faviconError=true 直接 Globe 不走端点；
     // - deleteFavicon 清 localStorage 缓存，避免 getFavicon 命中旧 dataURI。
-    const optimisticUpdatedAt = new Date().toISOString()
+    const optimisticVersion = `clear-${Date.now()}`
     const prev = qc.getQueryData<{ bookmarks: Bookmark[] }>(['bookmarks'])
-    markNoFavicon(id, optimisticUpdatedAt)
+    markNoFavicon(id, optimisticVersion)
     deleteFavicon(id)
     qc.setQueryData<{ bookmarks: Bookmark[] }>(['bookmarks'], (old) => {
       if (!old) return old
       return {
         ...old,
         bookmarks: old.bookmarks.map((b) =>
-          b.id === id ? { ...b, favicon: '', updated_at: optimisticUpdatedAt } : b,
+          b.id === id ? { ...b, favicon: '', favicon_version: optimisticVersion } : b,
         ),
       }
     })
@@ -490,15 +491,17 @@ function BookmarksPage() {
     try {
       // 后端只更新传入字段，{ favicon: '' } 不动 url/title（bookmarks.go handleUpdateBookmark）
       const res = await updateBookmark(id, { favicon: '' })
-      // 用后端真值对账：updated_at 换后端值，noFavicon 标记同步（WS 推送的 refetch 会把
-      // updated_at 覆盖成后端值，hasNoFavicon 仍要命中保持 Globe，不闪）。
-      markNoFavicon(id, res.updated_at)
+      // 用后端真值对账：图标版本清空后，noFavicon 标记同步（WS 推送的 refetch 也返回空版本，
+      // hasNoFavicon 仍要命中保持 Globe，不闪）。
+      markNoFavicon(id, res.favicon_version)
       qc.setQueryData<{ bookmarks: Bookmark[] }>(['bookmarks'], (old) => {
         if (!old) return old
         return {
           ...old,
           bookmarks: old.bookmarks.map((b) =>
-            b.id === id ? { ...b, favicon: '', updated_at: res.updated_at } : b,
+            b.id === id
+              ? { ...b, favicon: '', favicon_version: res.favicon_version }
+              : b,
           ),
         }
       })

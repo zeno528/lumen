@@ -57,10 +57,12 @@ export function BookmarkCard({
   index?: number
   group?: string
 }) {
+  // 图标缓存用独立版本：普通编辑不改它，跨设备换图标才会改。
+  const faviconVersion = bookmark.favicon_version || bookmark.updated_at
   // 初始值读无图标记忆（favicon-cache）：路由切换重挂时若已知该书签无 favicon（updated_at 匹配），
   // 直接显示 Globe 不发请求，避免"空白->Globe"闪烁。首次或书签更新后走 false 重新尝试 <img>。
   const [faviconError, setFaviconError] = useState(
-    () => hasNoFavicon(bookmark.id, bookmark.updated_at),
+    () => hasNoFavicon(bookmark.id, faviconVersion),
   )
   // pop-in 动画结束后移除 class（恢复 pointer-events，.pop-in 有 pointer-events: none）
   const [showPopIn, setShowPopIn] = useState(isNew)
@@ -73,7 +75,7 @@ export function BookmarkCard({
   // updated_at 没变（仅重挂）-> effect 不跑，保持初始值（记忆命中即直接 Globe）。
   useEffect(() => {
     setFaviconError(hasNoFavicon(bookmark.id, bookmark.updated_at))
-  }, [bookmark.favicon, bookmark.updated_at, bookmark.id])
+  }, [bookmark.favicon, faviconVersion, bookmark.id])
   const [copiedId, setCopiedId] = useState(false)
   const toggleFav = useToggleFavorite()
   const { batchMode, selectedIds, toggleSelection } = useUIStore()
@@ -198,11 +200,11 @@ export function BookmarkCard({
           {!faviconError ? (
             <img
               loading="lazy"
-              src={bookmark.favicon || getFavicon(bookmark.id, bookmark.updated_at) || faviconUrl(bookmark.id, bookmark.updated_at)}
+              src={bookmark.favicon || getFavicon(bookmark.id, faviconVersion) || faviconUrl(bookmark.id, faviconVersion)}
               alt=""
               onError={() => {
                 setFaviconError(true)
-                markNoFavicon(bookmark.id, bookmark.updated_at)
+                markNoFavicon(bookmark.id, faviconVersion)
               }}
             />
           ) : (

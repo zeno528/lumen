@@ -285,8 +285,9 @@ export function BookmarkDialog({
       category_id: categoryId,
       favicon: favicon || undefined,
     })
-    if (favicon && result.bookmark.updated_at) {
-      setFavicon(result.bookmark.id, result.bookmark.updated_at, favicon)
+    const version = result.bookmark.favicon_version || result.bookmark.updated_at
+    if (favicon && version) {
+      setFavicon(result.bookmark.id, version, favicon)
     }
 
     const feedback = getSavedFeedback(result.bookmark, category)
@@ -524,8 +525,8 @@ export function BookmarkDialog({
       } else {
         const res = await createMut.mutateAsync(input)
         // 新书签预抓的图标写入缓存，列表卡片渲染时 getFavicon 秒显（updated_at 来自后端，与 refetch 一致）
-        if (preFetchedFaviconRef.current && res.bookmark.updated_at) {
-          setFavicon(res.bookmark.id, res.bookmark.updated_at, preFetchedFaviconRef.current)
+        if (preFetchedFaviconRef.current) {
+          setFavicon(res.bookmark.id, res.bookmark.favicon_version || res.bookmark.updated_at, preFetchedFaviconRef.current)
         }
         const feedback = getSavedFeedback(res.bookmark, trimmedCat)
         onCreated?.(res.bookmark.id)

@@ -18,18 +18,19 @@ type CategoryInput struct {
 
 // Bookmark 书签
 type Bookmark struct {
-	ID          int64    `json:"id"`
-	URL         string   `json:"url"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	CategoryID  *int64   `json:"category_id"`
-	Tags        []string `json:"tags"`
-	Favicon     string   `json:"favicon"`
-	HasFavicon  bool     `json:"has_favicon"` // 列表 API 不返回 dataURI（防膨胀），用此布尔值表明图标是否存在
-	SortOrder   int      `json:"sort_order"`
-	IsFavorite  bool     `json:"is_favorite"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	ID             int64    `json:"id"`
+	URL            string   `json:"url"`
+	Title          string   `json:"title"`
+	Description    string   `json:"description"`
+	CategoryID     *int64   `json:"category_id"`
+	Tags           []string `json:"tags"`
+	Favicon        string   `json:"favicon"`
+	HasFavicon     bool     `json:"has_favicon"`               // 列表 API 不返回 dataURI（防膨胀），用此布尔值表明图标是否存在
+	FaviconVersion string   `json:"favicon_version,omitempty"` // 仅图标内容变化时变化；标题/收藏等更新不触发图标缓存失效
+	SortOrder      int      `json:"sort_order"`
+	IsFavorite     bool     `json:"is_favorite"`
+	CreatedAt      string   `json:"created_at"`
+	UpdatedAt      string   `json:"updated_at"`
 }
 
 // BookmarkInput 书签输入

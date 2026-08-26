@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -75,7 +76,7 @@ func (s *Server) handleGetBookmarks(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * limit
 
-	query := "SELECT b.id, b.url, b.title, COALESCE(b.description, ''), b.category_id, COALESCE(b.tags, '[]'), '' AS favicon, CASE WHEN b.favicon != '' THEN 1 ELSE 0 END AS has_favicon, b.sort_order, COALESCE(b.is_favorite, 0), COALESCE(b.created_at, ''), COALESCE(b.updated_at, '') FROM bookmarks b LEFT JOIN categories c ON c.id = b.category_id"
+	query := "SELECT b.id, b.url, b.title, COALESCE(b.description, ''), b.category_id, COALESCE(b.tags, '[]'), '' AS favicon, CASE WHEN b.favicon != '' THEN 1 ELSE 0 END AS has_favicon, CASE WHEN b.favicon != '' THEN COALESCE(NULLIF(b.favicon_version, ''), b.updated_at) ELSE '' END AS favicon_version, b.sort_order, COALESCE(b.is_favorite, 0), COALESCE(b.created_at, ''), COALESCE(b.updated_at, '') FROM bookmarks b LEFT JOIN categories c ON c.id = b.category_id"
 	countQuery := "SELECT COUNT(*) FROM bookmarks b LEFT JOIN categories c ON c.id = b.category_id"
 	var args []any
 	var conditions []string
@@ -124,7 +125,7 @@ func (s *Server) handleGetBookmarks(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var b Bookmark
 		var tagsStr string
-		if err := rows.Scan(&b.ID, &b.URL, &b.Title, &b.Description, &b.CategoryID, &tagsStr, &b.Favicon, &b.HasFavicon, &b.SortOrder, &b.IsFavorite, &b.CreatedAt, &b.UpdatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.URL, &b.Title, &b.Description, &b.CategoryID, &tagsStr, &b.Favicon, &b.HasFavicon, &b.FaviconVersion, &b.SortOrder, &b.IsFavorite, &b.CreatedAt, &b.UpdatedAt); err != nil {
 			log.Printf("扫描书签行失败: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "数据读取失败"})
 			return
@@ -149,6 +150,13 @@ func (s *Server) handleGetBookmarks(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateBookmark POST /api/bookmarks
 func (s *Server) handleCreateBookmark(w http.ResponseWriter, r *http.Request) {
+	newFaviconVersion := func(value string) string {
+		if value == "" {
+			return ""
+		}
+		return strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+	}
+
 	var input BookmarkInput
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB 限制
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -200,9 +208,10 @@ func (s *Server) handleCreateBookmark(w http.ResponseWriter, r *http.Request) {
 		newOrder = int(maxOrder.Int64) + 1
 	}
 
+	faviconVersion := newFaviconVersion(input.Favicon)
 	result, err := s.db.Exec(
-		"INSERT INTO bookmarks (url, title, description, category_id, tags, favicon, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		input.URL, input.Title, input.Description, input.CategoryID, string(tagsJSON), input.Favicon, newOrder,
+		"INSERT INTO bookmarks (url, title, description, category_id, tags, favicon, favicon_version, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		input.URL, input.Title, input.Description, input.CategoryID, string(tagsJSON), input.Favicon, faviconVersion, newOrder,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -223,25 +232,26 @@ func (s *Server) handleCreateBookmark(w http.ResponseWriter, r *http.Request) {
 	//   updated_at=undefined 与 noFaviconMemo 的 undefined 误判相等而显示 Globe（地球→真实图标闪烁根因）。
 	var createdAt, updatedAt string
 	if err := s.db.QueryRow(
-		"SELECT COALESCE(created_at, ''), COALESCE(updated_at, '') FROM bookmarks WHERE id = ?",
+		"SELECT COALESCE(created_at, ''), COALESCE(updated_at, ''), COALESCE(favicon_version, '') FROM bookmarks WHERE id = ?",
 		id,
-	).Scan(&createdAt, &updatedAt); err != nil {
+	).Scan(&createdAt, &updatedAt, &faviconVersion); err != nil {
 		log.Printf("查询新书签时间戳失败 id=%d: %v", id, err)
 	}
 	s.broadcastInvalidated("bookmarks")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"bookmark": map[string]any{
-			"id":          id,
-			"url":         input.URL,
-			"title":       input.Title,
-			"description": input.Description,
-			"category_id": input.CategoryID,
-			"tags":        input.Tags,
-			"favicon":     input.Favicon,
-			"sort_order":  newOrder,
-			"is_favorite": false,
-			"created_at":  createdAt,
-			"updated_at":  updatedAt,
+			"id":              id,
+			"url":             input.URL,
+			"title":           input.Title,
+			"description":     input.Description,
+			"category_id":     input.CategoryID,
+			"tags":            input.Tags,
+			"favicon":         input.Favicon,
+			"favicon_version": faviconVersion,
+			"sort_order":      newOrder,
+			"is_favorite":     false,
+			"created_at":      createdAt,
+			"updated_at":      updatedAt,
 		},
 	})
 }
@@ -268,6 +278,10 @@ func (s *Server) handleUpdateBookmark(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 		return
 	}
+	faviconProvided := false
+	if _, ok := raw["favicon"]; ok {
+		faviconProvided = true
+	}
 
 	var input BookmarkInput
 	if err := json.Unmarshal(bodyBytes, &input); err != nil {
@@ -279,9 +293,9 @@ func (s *Server) handleUpdateBookmark(w http.ResponseWriter, r *http.Request) {
 	var existing Bookmark
 	var tagsStr string
 	err = s.db.QueryRow(
-		"SELECT id, url, title, COALESCE(description, ''), category_id, COALESCE(tags, '[]'), COALESCE(favicon, ''), sort_order, COALESCE(is_favorite, 0), COALESCE(created_at, ''), COALESCE(updated_at, '') FROM bookmarks WHERE id = ?",
+		"SELECT id, url, title, COALESCE(description, ''), category_id, COALESCE(tags, '[]'), COALESCE(favicon, ''), COALESCE(favicon_version, ''), sort_order, COALESCE(is_favorite, 0), COALESCE(created_at, ''), COALESCE(updated_at, '') FROM bookmarks WHERE id = ?",
 		id,
-	).Scan(&existing.ID, &existing.URL, &existing.Title, &existing.Description, &existing.CategoryID, &tagsStr, &existing.Favicon, &existing.SortOrder, &existing.IsFavorite, &existing.CreatedAt, &existing.UpdatedAt)
+	).Scan(&existing.ID, &existing.URL, &existing.Title, &existing.Description, &existing.CategoryID, &tagsStr, &existing.Favicon, &existing.FaviconVersion, &existing.SortOrder, &existing.IsFavorite, &existing.CreatedAt, &existing.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "书签不存在"})
@@ -342,6 +356,14 @@ func (s *Server) handleUpdateBookmark(w http.ResponseWriter, r *http.Request) {
 		(existing.CategoryID == nil) != (input.CategoryID == nil) ||
 			(existing.CategoryID != nil && input.CategoryID != nil && *existing.CategoryID != *input.CategoryID)
 	sortOrder := existing.SortOrder
+	faviconVersion := existing.FaviconVersion
+	if faviconProvided {
+		if input.Favicon == "" {
+			faviconVersion = ""
+		} else {
+			faviconVersion = strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+		}
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		log.Printf("操作失败: %v", err)
@@ -359,8 +381,8 @@ func (s *Server) handleUpdateBookmark(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := tx.Exec(
-		"UPDATE bookmarks SET url = ?, title = ?, description = ?, category_id = ?, tags = ?, favicon = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-		input.URL, input.Title, input.Description, input.CategoryID, string(tagsJSON), input.Favicon, sortOrder, id,
+		"UPDATE bookmarks SET url = ?, title = ?, description = ?, category_id = ?, tags = ?, favicon = ?, favicon_version = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		input.URL, input.Title, input.Description, input.CategoryID, string(tagsJSON), input.Favicon, faviconVersion, sortOrder, id,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -384,11 +406,11 @@ func (s *Server) handleUpdateBookmark(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var newUpdatedAt string
-	if err := s.db.QueryRow("SELECT updated_at FROM bookmarks WHERE id = ?", id).Scan(&newUpdatedAt); err != nil {
+	if err := s.db.QueryRow("SELECT updated_at, COALESCE(favicon_version, '') FROM bookmarks WHERE id = ?", id).Scan(&newUpdatedAt, &faviconVersion); err != nil {
 		newUpdatedAt = ""
 	}
 	s.broadcastInvalidated("bookmarks")
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updated_at": newUpdatedAt})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updated_at": newUpdatedAt, "favicon_version": faviconVersion})
 }
 
 // handleDeleteBookmark DELETE /api/bookmarks/{id}
@@ -837,6 +859,7 @@ func (s *Server) handleBatchUpdateBookmarks(w http.ResponseWriter, r *http.Reque
 	defer tx.Rollback()
 
 	updated := 0
+	faviconVersion := strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 	for _, u := range input.Updates {
 		if u.ID <= 0 {
 			continue
@@ -859,6 +882,8 @@ func (s *Server) handleBatchUpdateBookmarks(w http.ResponseWriter, r *http.Reque
 			}
 			sets = append(sets, "favicon = ?")
 			args = append(args, resolved)
+			sets = append(sets, "favicon_version = CASE WHEN ? != '' THEN ? ELSE '' END")
+			args = append(args, resolved, faviconVersion)
 		}
 		if len(sets) == 0 {
 			continue
