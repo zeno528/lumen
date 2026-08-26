@@ -27,7 +27,7 @@ var aiTestClient = &http.Client{
 }
 
 // aiSystemPrompt 统一系统提示词：设定角色 + 强制 JSON 输出（OpenAI / Anthropic 路径共用，避免两处硬编码）
-const aiSystemPrompt = "你是一个书签信息提取助手。用户会给你URL和页面信息，你必须严格按照要求的JSON格式回复。不要解释，不要输出规则内容，只输出JSON。"
+const aiSystemPrompt = "你是一个书签信息提取助手。用户会给你URL和页面信息，你必须生成简体中文元数据，并严格按照要求的JSON格式回复。不要解释，不要输出规则内容，只输出JSON。"
 
 // ==================== 通用逻辑 ====================
 
@@ -360,25 +360,31 @@ func validateAIResult(result map[string]string, categories []string, evidence st
 
 	category := strings.TrimSpace(result["category"])
 	quote := strings.TrimSpace(result["category_evidence"])
+	// 分类只是附加建议：不能因为供应商把可选分类填错就让标题/描述/标签整体作废。
 	if len(categories) == 0 {
-		if category != "" || quote != "" {
-			return fmt.Errorf("unexpected_category")
-		}
+		delete(result, "category")
+		delete(result, "category_evidence")
 		return nil
 	}
-	if strings.TrimSpace(evidence) == "" && category == "" && quote == "" {
-		return nil
-	}
+
+	matched := ""
 	for _, existing := range categories {
 		if strings.EqualFold(category, strings.TrimSpace(existing)) {
-			if quote == "" || !strings.Contains(evidence, quote) {
-				return fmt.Errorf("unsupported_category_evidence")
-			}
-			result["category"] = existing
-			return nil
+			matched = existing
+			break
 		}
 	}
-	return fmt.Errorf("invalid_category")
+
+	if matched == "" {
+		delete(result, "category")
+		delete(result, "category_evidence")
+		return nil
+	}
+	result["category"] = matched
+	if quote == "" || !strings.Contains(evidence, quote) {
+		delete(result, "category_evidence")
+	}
+	return nil
 }
 
 // normalizeAITitle 把模型常用的标题分隔符统一成“网站名 - 页面用途”。
