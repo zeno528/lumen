@@ -85,7 +85,6 @@ jobs:
           #    DEPLOY_SERVERS secret（JSON，name -> {host, domain}），部署公钥加到
           #    该服务器 ~/.ssh/authorized_keys 即可。IP/域名只存 secret，不进仓库 ──
           - jp-1
-          - jp-2
           - sj
           - sg
     steps:
