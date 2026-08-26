@@ -376,7 +376,8 @@ function MobileSidebarHost({ open, onClose }: { open: boolean; onClose: () => vo
 /**
  * 移动端顶栏分类快捷选择。
  * - 徽章：当前分类图标 + 名 + 计数 + 箭头，点击 toggle 下拉
- * - 下拉：全部 / 收藏(>0) / 未分类(>0) / 各分类，active 高亮，点选切换 + 关闭
+ * - 下拉项与侧边栏保持一致：全部 / 收藏(>0) / 未分类(>0) / 各分类，
+ *   active 高亮，点选切换 + 关闭
  * - 遮罩：点击关闭
  * 架构升级：React state 驱动显隐（不用 classList），数据复用 useCategories/useBookmarks/useUIStore，
  * counts 逻辑与 desktop/sidebar 一致。
@@ -440,7 +441,6 @@ function MobileCategorySelect() {
     }
   })()
 
-  const canExpand = categories.length > 0
   const items: MenuItem[] = categories.map((category) => {
     const Icon = resolveCategoryIcon(category.icon)
     return {
@@ -450,6 +450,33 @@ function MobileCategorySelect() {
       onClick: () => selectCategory(category.id),
     }
   })
+  // 侧边栏只在计数 > 0 时显示这两个虚拟分类；顶部下拉保持同一可见规则。
+  const virtualItems: MenuItem[] = [
+    {
+      label: `全部（${counts.all}）`,
+      icon: <Layers size={13} style={{ color: 'var(--icon-all)' }} />,
+      active: currentCategory === 'all',
+      onClick: () => selectCategory('all'),
+    },
+    ...(counts.favorites > 0
+      ? [{
+          label: `收藏（${counts.favorites}）`,
+          icon: <Star size={13} style={{ color: 'var(--favorite-star)', fill: 'var(--favorite-star)' }} />,
+          active: currentCategory === '__favorites__',
+          onClick: () => selectCategory('__favorites__'),
+        }]
+      : []),
+    ...(counts.uncategorized > 0
+      ? [{
+          label: `未分类（${counts.uncategorized}）`,
+          icon: <Folder size={13} style={{ color: 'var(--icon-uncategorized)', fill: 'var(--icon-uncategorized)' }} />,
+          active: currentCategory === '__uncategorized__',
+          onClick: () => selectCategory('__uncategorized__'),
+        }]
+      : []),
+  ]
+  const allItems = [...virtualItems, ...items]
+  const canExpand = allItems.length > 0
 
   return (
     <>
@@ -483,7 +510,7 @@ function MobileCategorySelect() {
         onClose={() => setMenu(null)}
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
-        items={items}
+        items={allItems}
         anchor="right"
         alignY="top"
         minWidth={200}
