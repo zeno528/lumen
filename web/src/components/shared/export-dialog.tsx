@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { api } from '@/api/client'
 import { toast } from '@/components/ui/toast'
+import { formatBytes } from '@/lib/format'
 import type { Bookmark as BookmarkData, Category } from '@/types'
 
 type ExportFormat = 'json' | 'html'
@@ -158,11 +159,7 @@ export function ExportDialog({
     return new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   }, [data, exportedAt, format])
 
-  const size = file
-    ? file.size >= 1024 * 1024
-      ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
-      : `${(file.size / 1024).toFixed(1)} KB`
-    : ''
+  const size = file ? formatBytes(file.size) : ''
 
   const handleDownload = () => {
     if (!file) return

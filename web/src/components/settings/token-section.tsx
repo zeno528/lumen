@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/stores/auth'
+import { formatDateTime } from '@/lib/format'
 import { SECTION_CLASS } from './section-styles'
 import { cn } from '@/lib/utils'
 import type { ApiToken } from '@/types'
@@ -129,20 +130,7 @@ export function TokenSection() {
     }
   }
 
-  const fmtDate = (s?: string) => {
-    if (!s) return ''
-    try {
-      const d = new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
-      return d.toLocaleString('zh-CN', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return s
-    }
-  }
+  const fmtDate = (s?: string) => formatDateTime(s, '')
 
   return (
     <section className="flex flex-col gap-2">

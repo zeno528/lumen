@@ -22,7 +22,7 @@ type endpointMeta struct {
 	Method  string // GET/POST/PUT/PATCH/DELETE
 	Path    string // 含 /api 前缀
 	Summary string
-	Tag     string // 分组：auth/bookmarks/categories/ai/serper/tokens/system/ws
+	Tag     string // 分组：auth/bookmarks/categories/ai/serper/tokens/backups/system/ws
 	Auth    string // public | api-token-or-jwt | jwt-only
 }
 
@@ -94,6 +94,16 @@ var apiEndpoints = []endpointMeta{
 	// 用户偏好设置（跨设备同步）
 	{"GET", "/api/settings/id-search-mode", "读 ID 搜索模式开关", "settings", "api-token-or-jwt"},
 	{"PUT", "/api/settings/id-search-mode", "写 ID 搜索模式开关", "settings", "api-token-or-jwt"},
+
+	// 备份与恢复（破坏性强，仅账号 JWT）
+	{"GET", "/api/backups/settings", "读自动备份设置和状态", "backups", "jwt-only"},
+	{"PUT", "/api/backups/settings", "更新备份频率和保留数量", "backups", "jwt-only"},
+	{"GET", "/api/backups", "备份文件列表（元数据，不含绝对路径）", "backups", "jwt-only"},
+	{"POST", "/api/backups/run", "立即创建当前数据库一致性快照", "backups", "jwt-only"},
+	{"PATCH", "/api/backups/{id}", "修改备份显示名", "backups", "jwt-only"},
+	{"DELETE", "/api/backups/{id}", "删除备份快照", "backups", "jwt-only"},
+	{"GET", "/api/backups/{id}/preview", "预览备份内的书签/分类数量", "backups", "jwt-only"},
+	{"POST", "/api/backups/{id}/restore", "恢复选中的书签/分类数据（破坏性）", "backups", "jwt-only"},
 
 	// 工具
 	{"GET", "/api/fetch-title", "抓取 URL 标题", "system", "api-token-or-jwt"},

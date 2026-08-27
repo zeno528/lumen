@@ -29,6 +29,7 @@ type Server struct {
 	tokenVersion        int                       // 内存缓存，改密码时更新，避免每次请求查 DB
 	tokenMu             sync.RWMutex              // 保护 tokenVersion 并发读写（validateJWT 高频读 + 改密码写）
 	configMu            sync.RWMutex              // 保护 config.AI / config.SerperAPIKey 热更新读写（设置页改配置 vs AI 分析并发读，避免读到半更新 struct）
+	backupMu            sync.Mutex                // 序列化快照、恢复、删除和保留策略清理
 	trustedProxies      []*net.IPNet              // 可信反代 CIDR（getClientIP 防伪 XFF 用）
 	usedTickets         map[string]time.Time      // WS ticket jti 一次性去重（5s 内重用拒绝）
 	usedTicketsMu       sync.Mutex                // 保护 usedTickets
@@ -122,6 +123,8 @@ func main() {
 	srv.ReloadAIConfig()
 	// 从数据库加载 Serper key（覆盖环境变量）
 	srv.loadSerperKeyFromDB()
+	// 单节点 SQLite 自动备份调度器：随 root ctx 停止，不阻塞启动
+	go srv.RunBackupScheduler(ctx)
 
 	// 路由设置
 	r := chi.NewRouter()
@@ -190,6 +193,19 @@ func main() {
 		// 用户偏好设置（跨设备同步）
 		r.Get("/api/settings/id-search-mode", srv.handleGetIdSearchMode)
 		r.Put("/api/settings/id-search-mode", srv.handleSetIdSearchMode)
+
+		// 备份与恢复：涉及磁盘快照和破坏性回滚，仅账号 JWT（而非 msk_ API Token）可操作。
+		r.Group(func(r chi.Router) {
+			r.Use(RequireJWT)
+			r.Get("/api/backups/settings", srv.handleGetBackupSettings)
+			r.Put("/api/backups/settings", srv.handleUpdateBackupSettings)
+			r.Get("/api/backups", srv.handleListBackups)
+			r.With(srv.rateLimit(6, time.Hour)).Post("/api/backups/run", srv.handleRunBackup)
+			r.Patch("/api/backups/{id}", srv.handleRenameBackup)
+			r.Delete("/api/backups/{id}", srv.handleDeleteBackup)
+			r.Get("/api/backups/{id}/preview", srv.handleBackupPreview)
+			r.With(srv.rateLimit(3, time.Hour)).Post("/api/backups/{id}/restore", srv.handleRestoreBackup)
+		})
 
 		// 分类 CRUD
 		r.Get("/api/categories", srv.handleGetCategories)

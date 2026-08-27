@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 // AIConfig AI 提供商配置
@@ -31,6 +32,7 @@ type Config struct {
 	Password          string
 	StaticDir         string
 	AppEnv            string // 应用环境（"production" 触发严格安全校验，如强制要求 JWT_SECRET）
+	BackupDir         string // SQLite 一致性快照目录；服务端部署配置，不通过网页开放任意路径
 	TrustedProxies    string // 可信反代 CIDR 列表（逗号分隔），空=不信任 X-Forwarded-For（防 XFF 伪造绕过限速）
 	LogoDevToken      string // Logo.dev publishable key（favicon 第三方兜底用），默认内置，可 env 覆盖
 	OAuthRedirectBase string // GitHub OAuth 回调基址（https://your.domain），空=从请求推断（生产建议显式设置防开放重定向）
@@ -86,6 +88,14 @@ func LoadConfig() *Config {
 	}
 	oauthRedirectBase := os.Getenv("OAUTH_REDIRECT_BASE")
 	staticDir := os.Getenv("STATIC_DIR")
+	backupDir := os.Getenv("LUMEN_BACKUP_DIR")
+	if backupDir == "" {
+		if appEnv == "development" {
+			backupDir = filepath.Join(filepath.Dir(dbPath), "backups")
+		} else {
+			backupDir = "/var/backups/lumen"
+		}
+	}
 	if staticDir == "" {
 		staticDir = "./static"
 	}
@@ -123,6 +133,7 @@ func LoadConfig() *Config {
 		Password:          password,
 		StaticDir:         staticDir,
 		AppEnv:            appEnv,
+		BackupDir:         backupDir,
 		TrustedProxies:    trustedProxies,
 		LogoDevToken:      logoDevToken,
 		OAuthRedirectBase: oauthRedirectBase,

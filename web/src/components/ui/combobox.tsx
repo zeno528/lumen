@@ -38,6 +38,8 @@ export interface ComboboxProps {
   onEnter?: () => void
   /** 下拉列表最大高度（px），超出滚动。默认 240，分类框传较小值收窄只露几项 */
   listMaxHeight?: number
+  /** 禁用（readOnly 触发器置灰不可点） */
+  disabled?: boolean
 }
 
 export function Combobox({
@@ -52,6 +54,7 @@ export function Combobox({
   readOnly = false,
   onEnter,
   listMaxHeight = 240,
+  disabled = false,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLDivElement>(null)
@@ -176,8 +179,15 @@ export function Combobox({
           <button
             id={id}
             type="button"
-            className={cn('dropdown-trigger', open && 'open', !value && 'placeholder', inputClassName)}
-            onClick={() => setOpen((o) => !o)}
+            className={cn(
+              'dropdown-trigger',
+              open && 'open',
+              !value && 'placeholder',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              inputClassName,
+            )}
+            disabled={disabled}
+            onClick={() => !disabled && setOpen((o) => !o)}
             aria-haspopup="listbox"
             aria-expanded={open}
           >

@@ -63,8 +63,8 @@ interface UIState {
   closeBookmarkDialog: () => void
 
   /** 设置模态框当前标签（设置页改为模态框后，由 SettingsDialog 标签栏共享）*/
-  settingsTab: 'account' | 'token' | 'ai' | 'appearance'
-  setSettingsTab: (tab: 'account' | 'token' | 'ai' | 'appearance') => void
+  settingsTab: 'account' | 'token' | 'ai' | 'appearance' | 'backup'
+  setSettingsTab: (tab: 'account' | 'token' | 'ai' | 'appearance' | 'backup') => void
 
   /** 设置模态框开关（由顶栏头像菜单触发，React.lazy 懒加载，不进首屏）*/
   settingsOpen: boolean
