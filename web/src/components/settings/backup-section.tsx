@@ -50,7 +50,7 @@ export function BackupSection() {
   const backups = filesQuery.data?.backups ?? []
 
   const [intervalHours, setIntervalHours] = useState(24)
-  const [maxCount, setMaxCount] = useState(7)
+  const [maxCount, setMaxCount] = useState(3)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
