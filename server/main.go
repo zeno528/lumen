@@ -200,7 +200,7 @@ func main() {
 			r.Get("/api/backups/settings", srv.handleGetBackupSettings)
 			r.Put("/api/backups/settings", srv.handleUpdateBackupSettings)
 			r.Get("/api/backups", srv.handleListBackups)
-			r.With(srv.rateLimit(6, time.Hour)).Post("/api/backups/run", srv.handleRunBackup)
+			r.With(srv.rateLimit(20, time.Hour)).Post("/api/backups/run", srv.handleRunBackup)
 			r.Patch("/api/backups/{id}", srv.handleRenameBackup)
 			r.Delete("/api/backups/{id}", srv.handleDeleteBackup)
 			r.Get("/api/backups/{id}/preview", srv.handleBackupPreview)
