@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, User, KeyRound, Bot, Palette, Trash2, X, ImageUp, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, User, KeyRound, Bot, Palette, Database, Trash2, X, ImageUp, type LucideIcon } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { SidebarItem } from '@/components/desktop/sidebar-item'
@@ -9,6 +9,7 @@ import { AccountSection } from '@/components/settings/account-section'
 import { AiSection } from '@/components/settings/ai-section'
 import { TokenSection } from '@/components/settings/token-section'
 import { AppearanceSection } from '@/components/settings/appearance-section'
+import { BackupSection } from '@/components/settings/backup-section'
 import { useUIStore } from '@/stores/ui'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useBatchDelete } from '@/hooks/useBookmarks'
@@ -18,7 +19,7 @@ import { cn } from '@/lib/utils'
 import type { Bookmark, Category } from '@/types'
 
 interface TabDef {
-  id: 'account' | 'ai' | 'token' | 'appearance'
+  id: 'account' | 'ai' | 'token' | 'appearance' | 'backup'
   title: string
   icon: LucideIcon
   Component: React.ComponentType<{ subView: string | null; onSubView: (v: string | null) => void }>
@@ -30,6 +31,7 @@ const TABS: TabDef[] = [
   { id: 'appearance', title: '外观', icon: Palette, Component: AppearanceSection },
   { id: 'ai', title: 'AI 设置', icon: Bot, Component: AiSection },
   { id: 'token', title: 'API Token', icon: KeyRound, Component: TokenSection },
+  { id: 'backup', title: '备份', icon: Database, Component: BackupSection },
 ]
 
 /** 子操作视图标题 + 图标（Master-Detail 头部显示）*/
@@ -105,7 +107,7 @@ export function SettingsDialog() {
     return () => document.removeEventListener('keydown', onKey)
   }, [isMobile])
 
-  const handleTabChange = (tab: 'account' | 'ai' | 'token' | 'appearance') => {
+  const handleTabChange = (tab: 'account' | 'ai' | 'token' | 'appearance' | 'backup') => {
     setActiveTab(tab)
     setSubView(null)
   }

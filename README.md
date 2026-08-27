@@ -94,6 +94,7 @@ systemctl enable --now lumen
 - **整理**：多级分类、标签、收藏；拖拽排序；批量模式（`Ctrl/Cmd + B`）批量移动、加标签、删除、导出
 - **找回**：顶栏搜索支持标题、网址与 ID；「全部 / 收藏 / 未分类」视图切换
 - **备份**：侧边栏「导出」生成 JSON 备份或 HTML 只读书签页；「导入」自动合并，不会覆盖现有内容
+- **自动备份**：设置中心可定时生成 SQLite 一致性快照，并从备份列表恢复书签与分类
 - **多端同步**：多开标签页或在手机打开同一地址，改动实时互相同步
 
 应用内置完整图文帮助：右上角头像菜单 → **帮助**。
@@ -115,6 +116,7 @@ systemctl enable --now lumen
 | `LOGO_DEV_TOKEN` | 内置默认值 | favicon 兜底（Logo.dev）的 publishable key；可 env 覆盖 |
 | `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` | 空 | 环境变量形式的 AI 配置兜底；设置界面保存的配置优先 |
 | `SERPER_API_KEY` | 空 | 可选的 Serper 搜索密钥（AI 补全抓取失败时的搜索兜底） |
+| `LUMEN_BACKUP_DIR` | 生产 `/var/backups/lumen`；开发 `data/backups` | 可选的 SQLite 自动备份目录 |
 
 > 请勿提交 `.env.dev`、数据库、日志或 API 密钥；它们已被 `.gitignore` 排除，提交前仍应检查差异。
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -19,11 +20,14 @@ import (
 )
 
 type testAPI struct {
-	handler http.Handler
+	handler   http.Handler
+	db        *sql.DB
+	backupDir string
 }
 
 func newTestAPI(t *testing.T) *testAPI {
 	t.Helper()
+	backupDir := filepath.Join(t.TempDir(), "backups")
 	database, err := db.Connect(filepath.Join(t.TempDir(), "lumen-test.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +39,7 @@ func newTestAPI(t *testing.T) *testAPI {
 
 	srv := &Server{
 		db:                database,
-		config:            &Config{JWTSecret: "test-jwt-secret", Password: "test-password"},
+		config:            &Config{JWTSecret: "test-jwt-secret", Password: "test-password", BackupDir: backupDir},
 		usedTickets:       make(map[string]time.Time),
 		verifiedPasswords: make(map[string]time.Time),
 		rateLimiters:      make(map[string]*ipRateLimiter),
@@ -77,8 +81,19 @@ func newTestAPI(t *testing.T) *testAPI {
 			r.Get("/api/tokens", srv.handleListTokens)
 			r.Post("/api/tokens", srv.handleCreateToken)
 		})
+		r.Group(func(r chi.Router) {
+			r.Use(RequireJWT)
+			r.Get("/api/backups/settings", srv.handleGetBackupSettings)
+			r.Put("/api/backups/settings", srv.handleUpdateBackupSettings)
+			r.Get("/api/backups", srv.handleListBackups)
+			r.Post("/api/backups/run", srv.handleRunBackup)
+			r.Patch("/api/backups/{id}", srv.handleRenameBackup)
+			r.Delete("/api/backups/{id}", srv.handleDeleteBackup)
+			r.Get("/api/backups/{id}/preview", srv.handleBackupPreview)
+			r.Post("/api/backups/{id}/restore", srv.handleRestoreBackup)
+		})
 	})
-	return &testAPI{handler: r}
+	return &testAPI{handler: r, db: database, backupDir: backupDir}
 }
 
 func (api *testAPI) request(t *testing.T, method, path, token string, payload any) *httptest.ResponseRecorder {
