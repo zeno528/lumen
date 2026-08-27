@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	sqlite "modernc.org/sqlite"
 )
 
 const (
@@ -26,7 +25,7 @@ const (
 	backupMaxNameLength   = 120
 	backupMaxGzipBytes    = int64(512 << 20) // 解压防护：单库快照超过 512MB 视为异常
 	backupIntervalDefault = 24
-	backupCountDefault    = 7
+	backupCountDefault    = 3
 )
 
 type BackupFile struct {
@@ -51,10 +50,6 @@ type backupSettingsAPIResponse struct {
 	LastRunAt     string `json:"last_run_at,omitempty"`
 	NextRunAt     string `json:"next_run_at,omitempty"`
 	LastError     string `json:"last_error,omitempty"`
-}
-
-type sqliteBackuper interface {
-	NewBackup(destination string) (*sqlite.Backup, error)
 }
 
 func validBackupInterval(hours int) bool {
@@ -398,7 +393,9 @@ func (s *Server) CreateBackup(ctx context.Context, source string) (BackupFile, e
 		_ = os.Remove(finalTemp)
 	}()
 
-	if err := copySQLiteOnline(ctx, s.db, rawTemp); err != nil {
+	// VACUUM INTO：官方推荐的一致性备份方式，顺带压实空闲页
+	// （历史删除留下的 freelist 会让整文件页拷贝虚胖数倍）。
+	if _, err := s.db.ExecContext(ctx, "VACUUM INTO ?", rawTemp); err != nil {
 		return zero, fmt.Errorf("生成数据库快照失败: %w", err)
 	}
 	info, err := os.Stat(rawTemp)
@@ -480,36 +477,6 @@ func (s *Server) pruneOldBackups(maxCount int) error {
 		}
 	}
 	return nil
-}
-
-func copySQLiteOnline(ctx context.Context, db *sql.DB, destination string) error {
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	return conn.Raw(func(driverConn any) error {
-		backuper, ok := driverConn.(sqliteBackuper)
-		if !ok {
-			return fmt.Errorf("SQLite 驱动不支持在线备份")
-		}
-		destination, err := backuper.NewBackup(destination)
-		if err != nil {
-			return err
-		}
-		for more := true; more; {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				_ = destination.Finish()
-				return ctxErr
-			}
-			more, err = destination.Step(128)
-			if err != nil {
-				_ = destination.Finish()
-				return err
-			}
-		}
-		return destination.Finish()
-	})
 }
 
 func compressSQLiteSnapshot(source, destination string) error {
