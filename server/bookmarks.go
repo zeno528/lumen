@@ -709,11 +709,19 @@ func (s *Server) handleBatchMoveBookmarks(w http.ResponseWriter, r *http.Request
 		}
 	}
 	ordered := append(append(remaining[:insertAt:insertAt], moving...), remaining[insertAt:]...)
+	// 只对真正被移动的书签 bump updated_at；目标分类其余书签只重写 sort_order。
+	// 列表 API 的 favicon_version 兜底取 updated_at，无差别刷新会把整个分类的图标缓存全部打失效（切过去图标全闪）。
 	for i, id := range ordered {
-		if _, err := tx.Exec(
-			"UPDATE bookmarks SET category_id = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-			input.CategoryID, i, id,
-		); err != nil {
+		var err error
+		if _, isMoving := selected[id]; isMoving {
+			_, err = tx.Exec(
+				"UPDATE bookmarks SET category_id = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+				input.CategoryID, i, id,
+			)
+		} else {
+			_, err = tx.Exec("UPDATE bookmarks SET sort_order = ? WHERE id = ?", i, id)
+		}
+		if err != nil {
 			log.Printf("操作失败: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
 			return
