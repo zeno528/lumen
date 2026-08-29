@@ -63,14 +63,14 @@ var apiEndpoints = []endpointMeta{
 	{"PUT", "/api/bookmarks/batch-update", "批量更新书签字段", "bookmarks", "api-token-or-jwt"},
 	{"PUT", "/api/bookmarks/batch-tags", "批量加标签", "bookmarks", "api-token-or-jwt"},
 
-	// 分类 CRUD
-	{"GET", "/api/categories", "分类列表", "categories", "api-token-or-jwt"},
-	{"POST", "/api/categories", "新建分类", "categories", "api-token-or-jwt"},
-	{"PUT", "/api/categories/{id}", "更新分类（改 name/icon/color 等）", "categories", "api-token-or-jwt"},
-	{"DELETE", "/api/categories/{id}", "删除分类", "categories", "api-token-or-jwt"},
+	// 分类 CRUD（固定两级：parent_id 指向顶级分类）
+	{"GET", "/api/categories", "分类列表（含 parent_id）", "categories", "api-token-or-jwt"},
+	{"POST", "/api/categories", "新建分类（可指定 parent_id，父必须是顶级）", "categories", "api-token-or-jwt"},
+	{"PUT", "/api/categories/{id}", "更新分类（name/icon/color/parent_id）", "categories", "api-token-or-jwt"},
+	{"DELETE", "/api/categories/{id}", "删除分类（父分类的子分类自动升级为顶级）", "categories", "api-token-or-jwt"},
 	{"POST", "/api/categories/merge", "合并分类", "categories", "api-token-or-jwt"},
-	{"DELETE", "/api/categories/batch", "批量删除分类", "categories", "api-token-or-jwt"},
-	{"PUT", "/api/categories/reorder", "分类排序", "categories", "api-token-or-jwt"},
+	{"DELETE", "/api/categories/batch", "批量删除分类（其子分类自动升级为顶级）", "categories", "api-token-or-jwt"},
+	{"PUT", "/api/categories/reorder", "分类排序（{parent_id, order}，仅同级兄弟内）", "categories", "api-token-or-jwt"},
 
 	// 导入导出
 	{"GET", "/api/export", "全量导出书签（含 favicon 内联）", "bookmarks", "api-token-or-jwt"},

@@ -304,9 +304,14 @@ func (s *Server) categoryProfiles(categories []string) []categoryProfile {
 		if category == "" {
 			continue
 		}
+		// 前端传的分类可能是层级路径"父/子"（子分类按路径区分重名），先解析成 id 再取样
+		catID, ok := s.categoryIDByPath(category)
+		if !ok {
+			continue
+		}
 		rows, err := s.db.Query(`SELECT b.title, COALESCE(b.description, '')
-			FROM bookmarks b JOIN categories c ON c.id = b.category_id
-			WHERE c.name = ? ORDER BY b.updated_at DESC, b.id DESC LIMIT 3`, category)
+			FROM bookmarks b
+			WHERE b.category_id = ? ORDER BY b.updated_at DESC, b.id DESC LIMIT 3`, catID)
 		if err != nil {
 			log.Printf("读取分类档案失败: %v", err)
 			continue
@@ -322,6 +327,33 @@ func (s *Server) categoryProfiles(categories []string) []categoryProfile {
 		profiles = append(profiles, profile)
 	}
 	return profiles
+}
+
+// categoryIDByPath 把分类名或层级路径解析成分类 id。"父/子" 按父名限定子分类；
+// 顶层名重名时取第一个。解析不到返回 false。
+func (s *Server) categoryIDByPath(path string) (int64, bool) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return 0, false
+	}
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		parentName, childName := strings.TrimSpace(path[:i]), strings.TrimSpace(path[i+1:])
+		if parentName == "" || childName == "" {
+			return 0, false
+		}
+		var id int64
+		err := s.db.QueryRow(
+			`SELECT c.id FROM categories c JOIN categories p ON c.parent_id = p.id
+			 WHERE c.name = ? AND p.name = ? ORDER BY c.sort_order, c.id LIMIT 1`,
+			childName, parentName,
+		).Scan(&id)
+		return id, err == nil
+	}
+	var id int64
+	err := s.db.QueryRow(
+		"SELECT id FROM categories WHERE name = ? ORDER BY sort_order, id LIMIT 1", path,
+	).Scan(&id)
+	return id, err == nil
 }
 
 func formatCategoryProfiles(profiles []categoryProfile) string {

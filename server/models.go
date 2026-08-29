@@ -7,13 +7,15 @@ type Category struct {
 	Icon      string `json:"icon"`
 	Color     string `json:"color"`
 	SortOrder int    `json:"sort_order"`
+	ParentID  *int64 `json:"parent_id"` // null = 顶级；固定两级，父分类必须是顶级
 }
 
 // CategoryInput 分类输入
 type CategoryInput struct {
-	Name  string `json:"name"`
-	Icon  string `json:"icon,omitempty"`
-	Color string `json:"color,omitempty"`
+	Name     string `json:"name"`
+	Icon     string `json:"icon,omitempty"`
+	Color    string `json:"color,omitempty"`
+	ParentID *int64 `json:"parent_id,omitempty"` // null/缺省 = 顶级
 }
 
 // Bookmark 书签
@@ -43,9 +45,11 @@ type BookmarkInput struct {
 	Favicon     string   `json:"favicon,omitempty"`
 }
 
-// ReorderInput 排序输入
+// ReorderInput 排序输入。
+// 分类重排：parent_id 圈定兄弟组（null = 顶层），order 为该组内的新顺序。
 type ReorderInput struct {
-	Order []int64 `json:"order"`
+	ParentID *int64  `json:"parent_id"`
+	Order    []int64 `json:"order"`
 }
 
 // BatchDeleteInput 批量删除输入

@@ -53,45 +53,8 @@ func newTestAPI(t *testing.T) *testAPI {
 	r.Post("/api/auth/login", srv.handleLogin)
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(srv.config.JWTSecret, srv))
-		r.Get("/api/auth/verify", srv.handleVerify)
-		r.Get("/api/auth/password-verified", srv.handlePasswordVerifiedStatus)
-		r.Post("/api/auth/verify-password", srv.handleVerifyPassword)
-		r.Put("/api/auth/password", srv.handleChangePassword)
-		r.Get("/api/auth/avatar", srv.handleGetAvatar)
-		r.Put("/api/auth/avatar", srv.handleUpdateAvatar)
-
-		r.Get("/api/categories", srv.handleGetCategories)
-		r.Post("/api/categories", srv.handleCreateCategory)
-		r.Put("/api/categories/{id}", srv.handleUpdateCategory)
-		r.Delete("/api/categories/{id}", srv.handleDeleteCategory)
-		r.Post("/api/categories/merge", srv.handleMergeCategories)
-
-		r.Get("/api/bookmarks", srv.handleGetBookmarks)
-		r.Post("/api/bookmarks", srv.handleCreateBookmark)
-		r.Put("/api/bookmarks/reorder", srv.handleReorderBookmarks)
-		r.Delete("/api/bookmarks/batch", srv.handleBatchDeleteBookmarks)
-		r.Put("/api/bookmarks/batch-move", srv.handleBatchMoveBookmarks)
-		r.Put("/api/bookmarks/batch-tags", srv.handleBatchAddTags)
-		r.Put("/api/bookmarks/{id}", srv.handleUpdateBookmark)
-		r.Delete("/api/bookmarks/{id}", srv.handleDeleteBookmark)
-		r.Patch("/api/bookmarks/{id}/favorite", srv.handleToggleFavorite)
-
-		r.Group(func(r chi.Router) {
-			r.Use(RequireJWT)
-			r.Get("/api/tokens", srv.handleListTokens)
-			r.Post("/api/tokens", srv.handleCreateToken)
-		})
-		r.Group(func(r chi.Router) {
-			r.Use(RequireJWT)
-			r.Get("/api/backups/settings", srv.handleGetBackupSettings)
-			r.Put("/api/backups/settings", srv.handleUpdateBackupSettings)
-			r.Get("/api/backups", srv.handleListBackups)
-			r.Post("/api/backups/run", srv.handleRunBackup)
-			r.Patch("/api/backups/{id}", srv.handleRenameBackup)
-			r.Delete("/api/backups/{id}", srv.handleDeleteBackup)
-			r.Get("/api/backups/{id}/preview", srv.handleBackupPreview)
-			r.Post("/api/backups/{id}/restore", srv.handleRestoreBackup)
-		})
+		// 与 main.go 共用同一份路由表（routes.go），杜绝测试/生产路由漂移
+		srv.registerAuthedRoutes(r)
 	})
 	return &testAPI{handler: r, db: database, backupDir: backupDir}
 }
@@ -359,10 +322,8 @@ func TestBookmarkAndCategoryLifecycle(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)
 	categoryID := createCategory(t, api, jwt, "Work")
-	secondCategoryID := createCategory(t, api, jwt, "Work")
-	if secondCategoryID == categoryID {
-		t.Fatal("same-name categories must receive distinct IDs")
-	}
+	// 两级层级引入同级同名约束：同父下不允许重名（不同父可重名）
+	requireStatus(t, api.request(t, http.MethodPost, "/api/categories", jwt, map[string]string{"name": "Work"}), http.StatusConflict)
 
 	bookmarkID := createBookmark(t, api, jwt, "HTTPS://Example.COM/docs//", "Docs", &categoryID)
 	requireStatus(t, api.request(t, http.MethodPost, "/api/bookmarks", jwt, BookmarkInput{URL: "example.com/docs/", Title: "Duplicate"}), http.StatusConflict)
@@ -384,6 +345,55 @@ func TestBookmarkAndCategoryLifecycle(t *testing.T) {
 	}
 	requireStatus(t, api.request(t, http.MethodDelete, "/api/bookmarks/"+strconv.FormatInt(bookmarkID, 10), jwt, nil), http.StatusOK)
 	requireStatus(t, api.request(t, http.MethodDelete, "/api/bookmarks/"+strconv.FormatInt(bookmarkID, 10), jwt, nil), http.StatusNotFound)
+}
+
+func TestCategoryHierarchy(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+
+	// 父分类 + 子分类：创建成功且带 parent_id
+	parentID := createCategory(t, api, jwt, "Parent")
+	res := api.request(t, http.MethodPost, "/api/categories", jwt, map[string]any{"name": "Child", "parent_id": parentID})
+	requireStatus(t, res, http.StatusCreated)
+	child := decodeJSON[struct {
+		Category Category `json:"category"`
+	}](t, res).Category
+	if child.ParentID == nil || *child.ParentID != parentID {
+		t.Fatal("child category must carry parent_id")
+	}
+
+	// 两级封顶：给子分类再挂子分类 → 409
+	requireStatus(t, api.request(t, http.MethodPost, "/api/categories", jwt, map[string]any{"name": "Grandchild", "parent_id": child.ID}), http.StatusConflict)
+
+	// 同父下重名 → 409；不同父下重名 → 201
+	requireStatus(t, api.request(t, http.MethodPost, "/api/categories", jwt, map[string]any{"name": "Child", "parent_id": parentID}), http.StatusConflict)
+	otherID := createCategory(t, api, jwt, "Other")
+	requireStatus(t, api.request(t, http.MethodPost, "/api/categories", jwt, map[string]any{"name": "Child", "parent_id": otherID}), http.StatusCreated)
+
+	// 把有子分类的父分类降级为子分类 → 409
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/"+strconv.FormatInt(parentID, 10), jwt,
+		map[string]any{"name": "Parent", "parent_id": otherID}), http.StatusConflict)
+
+	// 排序只在同级兄弟内：跨级 → 409，同级 → 200
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/reorder", jwt, ReorderInput{Order: []int64{parentID, child.ID}}), http.StatusConflict)
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/reorder", jwt, ReorderInput{ParentID: &parentID, Order: []int64{child.ID}}), http.StatusOK)
+	requireStatus(t, api.request(t, http.MethodPut, "/api/categories/reorder", jwt, ReorderInput{Order: []int64{otherID, parentID}}), http.StatusOK)
+
+	// 删除父分类（keep 模式）：子分类升级为顶级
+	requireStatus(t, api.request(t, http.MethodDelete, "/api/categories/"+strconv.FormatInt(parentID, 10), jwt, nil), http.StatusOK)
+	categories := decodeJSON[struct {
+		Categories []Category `json:"categories"`
+	}](t, api.request(t, http.MethodGet, "/api/categories", jwt, nil)).Categories
+	for _, c := range categories {
+		if c.ID != child.ID {
+			continue
+		}
+		if c.ParentID != nil {
+			t.Fatalf("child category must be promoted to top-level after parent deletion, got parent_id=%d", *c.ParentID)
+		}
+		return
+	}
+	t.Fatal("child category missing after parent deletion")
 }
 
 func TestBookmarkBatchOperations(t *testing.T) {
