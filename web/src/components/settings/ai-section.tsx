@@ -577,8 +577,12 @@ export function AiSection({
                   <Bot size={20} className="shrink-0 text-(--text-muted)" />
                 )}
                 <span className="flex flex-col min-w-0">
-                  <span className={cn('text-sm font-medium truncate', isSelected ? 'text-(--accent)' : 'text-(--text-primary)')}>
-                    {pPreset.label}
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className={cn('text-sm font-medium truncate', isSelected ? 'text-(--accent)' : 'text-(--text-primary)')}>
+                      {pPreset.label}
+                    </span>
+                    {/* DeepSeek 中文指令遵循最稳、AI 填充成功率最高（生产 30 天零失败），标推荐 */}
+                    {p === 'deepseek' && <span className={cn(statusBadgeClass, 'shrink-0')}>推荐</span>}
                   </span>
                   <span className="text-[10px] text-(--text-muted) truncate">{pPreset.format}</span>
                 </span>

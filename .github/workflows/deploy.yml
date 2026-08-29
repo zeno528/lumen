@@ -86,7 +86,6 @@ jobs:
           #    该服务器 ~/.ssh/authorized_keys 即可。IP/域名只存 secret，不进仓库 ──
           - jp-1
           - sj
-          - sg
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
