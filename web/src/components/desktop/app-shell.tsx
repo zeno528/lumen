@@ -37,9 +37,15 @@ type SortableSource = {
 
 function getProjectedSort(source: DragSource, operation: DragOperation) {
   const sortableSource = operation.source as SortableSource | null
+  // 分类排序组按层级拆分（categories:root / categories:child:{parentId}），统一 categories 前缀匹配
   const group = source.kind === 'bookmark' ? `bookmarks:category:${source.categoryId}` : 'categories'
-  if (sortableSource?.group !== group) return undefined
-  if (typeof sortableSource.index !== 'number' || typeof sortableSource.initialIndex !== 'number') return undefined
+  if (
+    typeof sortableSource?.group !== 'string' ||
+    !sortableSource.group.startsWith(group) ||
+    typeof sortableSource.index !== 'number' ||
+    typeof sortableSource.initialIndex !== 'number'
+  )
+    return undefined
   return { index: sortableSource.index, initialIndex: sortableSource.initialIndex }
 }
 

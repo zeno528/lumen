@@ -14,7 +14,7 @@ import {
 } from '@/hooks/useBookmarks'
 import { useUIStore } from '@/stores/ui'
 import { parseTags } from '@/lib/bookmark-utils'
-import { getCategoryCount } from '@/lib/category-tree'
+import { buildCategoryTree, getAggregatedCount, getCategoryCount } from '@/lib/category-tree'
 
 /**
  * 批量操作对话框 —— 移动分类 / 加标签 / 移除已有标签。
@@ -138,14 +138,21 @@ export function BatchDialog({
     submitRef.current()
   }, [open, batchDialogSubmitToken])
 
-  // 与侧边栏同一计数语义：按当前分类直接计数
-    const countByCat = (id: number) => getCategoryCount(bmData?.bookmarks ?? [], id)
+  // 树形选项：子分类缩进挂在父分类下（前缀标层级），父分类计数聚合（自身 + 子分类）
+  const bookmarks = bmData?.bookmarks ?? []
+  const tree = buildCategoryTree(categories)
   const moveOptions = [
     { value: '', label: '移除分类（不归类）' },
-    ...categories.map((c) => ({
-      value: String(c.id),
-        label: `${c.name}（${countByCat(c.id)}）`,
-    })),
+    ...tree.roots.flatMap((parent) => [
+      {
+        value: String(parent.id),
+        label: `${parent.name}（${getAggregatedCount(bookmarks, parent.id, tree.childIds(parent.id))}）`,
+      },
+      ...tree.childrenOf(parent.id).map((child) => ({
+        value: String(child.id),
+        label: `　└ ${child.name}（${getCategoryCount(bookmarks, child.id)}）`,
+      })),
+    ]),
   ]
 
   return (

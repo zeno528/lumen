@@ -4,7 +4,9 @@ import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCreateCategory, useUpdateCategory } from '@/hooks/useCategories'
+import { Select } from '@/components/ui/select'
+import { useCategories, useCreateCategory, useUpdateCategory } from '@/hooks/useCategories'
+import { buildCategoryTree } from '@/lib/category-tree'
 import { ICON_GROUPS, PRESET_COLORS, resolveCategoryIcon } from '@/lib/icon-map'
 import { toast } from '@/components/ui/toast'
 import { useUIStore } from '@/stores/ui'
@@ -33,11 +35,25 @@ export function CategoryDialog({
 }) {
   const createMut = useCreateCategory()
   const updateMut = useUpdateCategory()
+  const { data: catData } = useCategories()
+  const categories = catData?.categories ?? []
+  const tree = buildCategoryTree(categories)
+  // 右键「新建子分类」带来的预设父分类（仅 create 分支消费）
+  const presetParentId = useUIStore((s) => s.categoryDialogParentId)
 
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('fa-folder')
   const [color, setColor] = useState(DEFAULT_COLOR)
+  // 父分类（'' = 顶级）。编辑含子分类的父分类时锁死为顶级（保持两级约束）
+  const [parentId, setParentId] = useState('')
   const [idCopied, setIdCopied] = useState(false)
+
+  const editingChildIds = editingCategory ? tree.childIds(editingCategory.id) : []
+  const editingHasChildren = editingChildIds.length > 0
+  // 父分类候选：全部顶级分类；编辑时排除自己
+  const parentOptions = tree.roots
+    .filter((c) => c.id !== editingCategory?.id)
+    .map((c) => ({ value: String(c.id), label: c.name }))
 
   useEffect(() => {
     if (!open) return
@@ -45,13 +61,15 @@ export function CategoryDialog({
       setName(editingCategory.name)
       setIcon(editingCategory.icon || 'fa-folder')
       setColor(editingCategory.color || DEFAULT_COLOR)
+      setParentId(editingCategory.parent_id != null ? String(editingCategory.parent_id) : '')
     } else {
       setName('')
       setIcon('fa-folder')
       setColor(localStorage.getItem(LAST_COLOR_KEY) || DEFAULT_COLOR)
+      setParentId(presetParentId != null ? String(presetParentId) : '')
     }
     setIdCopied(false)
-  }, [open, editingCategory])
+  }, [open, editingCategory, presetParentId])
 
   // 打开时自动 focus 名称输入框
   useEffect(() => {
@@ -104,16 +122,24 @@ export function CategoryDialog({
       toast.warning('请输入分类名称')
       return
     }
+    // 父分类约束：编辑含子分类的父分类时不允许选父级（两级封顶，后端同样校验）
+    if (editingCategory && editingHasChildren && parentId !== '') {
+      toast.warning('该分类包含子分类，不能移到子级')
+      return
+    }
+    const input = {
+      name: trimmed,
+      icon,
+      color,
+      parent_id: parentId === '' ? null : Number(parentId),
+    }
     // 分类编辑：乐观更新（useUpdateCategory 已在 onMutate 同步改缓存，UI 秒变）。
     // 立即关弹窗 + 立即弹通知，后台 PUT；失败由 hook onError 回滚缓存 + 这里补错误通知。
     if (editingCategory) {
       onClose()
       toast.success('分类已更新')
       try {
-        await updateMut.mutateAsync({
-          id: editingCategory.id,
-          input: { name: trimmed, icon, color },
-        })
+        await updateMut.mutateAsync({ id: editingCategory.id, input })
       } catch (e) {
         toast.error('保存失败: ' + (e as Error).message)
       }
@@ -124,7 +150,7 @@ export function CategoryDialog({
     onClose()
     toast.success('分类已添加')
     try {
-      const cat = await createMut.mutateAsync({ name: trimmed, icon, color })
+      const cat = await createMut.mutateAsync(input)
       onCreated?.(cat.id)
     } catch (e) {
       const msg = (e as Error).message
@@ -202,6 +228,21 @@ export function CategoryDialog({
               submitRef.current()
             }
           }}
+        />
+      </div>
+
+      {/* 父分类（固定两级）：留空 = 顶级；编辑含子分类的父分类时锁死 */}
+      <div className="mb-5">
+        <Label htmlFor="category-parent">父分类（可选，最多两级）</Label>
+        <Select
+          id="category-parent"
+          value={parentId}
+          onChange={(e) => setParentId(e.target.value)}
+          disabled={editingHasChildren}
+          options={[
+            { value: '', label: editingHasChildren ? '顶级（含子分类，不可改）' : '无（作为顶级分类）' },
+            ...parentOptions,
+          ]}
         />
       </div>
 
