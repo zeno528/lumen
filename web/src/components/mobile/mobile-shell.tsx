@@ -480,6 +480,7 @@ function MobileCategorySelect() {
         anchor="right"
         alignY="top"
         minWidth={200}
+        menuClassName="scrollbar-none"
         ignoreOutsideClickSelector=".mobile-category-badge"
       />
     </>
