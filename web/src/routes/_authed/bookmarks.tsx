@@ -17,6 +17,7 @@ import {
   Plus,
   Layers,
   Folder,
+  ChevronRight,
 } from 'lucide-react'
 import {
   useBookmarks,
@@ -266,8 +267,44 @@ function BookmarksPage() {
     return groups
   }, [filtered, categories, q])
 
-  const cardGroups = q ? searchGroups : null
-  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number'
+  // 父分类聚合视图的分组：父分类自身的书签打头且不显示分组标题（页面标题已表达），
+  // 子分类按侧栏顺序带标题分组（空子分类也显示，结构与侧栏一致）。
+  // 组内书签保持 allBookmarks 顺序（与子分类单独视图的排序一致）。
+  const aggregatedGroups = useMemo(() => {
+    if (q || typeof currentCategory !== 'number') return null
+    const childIds = tree.childIds(currentCategory)
+    if (childIds.length === 0) return null
+    const catById = new Map(categories.map((c) => [c.id, c]))
+    const parent = catById.get(currentCategory)
+    if (!parent) return null
+    return [
+      { category: parent, bookmarks: allBookmarks.filter((b) => b.category_id === currentCategory), showTitle: false, collapsible: false as const },
+      ...childIds.map((id) => {
+        const child = catById.get(id)
+        return child
+          ? { category: child, bookmarks: allBookmarks.filter((b) => b.category_id === id), showTitle: true, collapsible: true as const }
+          : null
+      }).filter((g) => g !== null),
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allBookmarks, categories, tree, q, currentCategory])
+
+  // 聚合视图里被收起的子分类标题（本地态：切走视图后无需保留）
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(() => new Set())
+  const toggleGroupCollapsed = (id: number) =>
+    setCollapsedGroupIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const cardGroups: { category?: Category; bookmarks: Bookmark[]; showTitle: boolean; collapsible?: boolean }[] | null = q
+    ? searchGroups
+    : aggregatedGroups
+  // 聚合视图跨子分类混排，网格内拖拽排序语义不明（改在子分类自身视图或侧栏拖拽移动）
+  const isAggregatedView = cardGroups != null && !q
+  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number' && !isAggregatedView
   const lastDrop = useDragStore((state) => state.lastDrop)
   const handledDropToken = useRef<number | null>(null)
 
@@ -760,12 +797,19 @@ function BookmarksPage() {
                 const Icon = resolveCategoryIcon(group.category?.icon)
                 const name = group.category?.name ?? '未分类'
                 const groupKey = group.category?.id ?? '__uncategorized__'
+                // 聚合视图的子分类标题可点击收起/展开（收起后只留标题行 + 计数）
+                const collapsed = group.collapsible && typeof groupKey === 'number' && collapsedGroupIds.has(groupKey)
                 return [
                   ...(group.showTitle ? [
                     <h2
                       key={`group-${groupKey}`}
-                      className="search-group-title"
+                      className={cn('search-group-title', group.collapsible && 'search-group-title-toggle')}
+                      onClick={group.collapsible && typeof groupKey === 'number' ? () => toggleGroupCollapsed(groupKey) : undefined}
+                      aria-expanded={group.collapsible ? !collapsed : undefined}
                     >
+                      {group.collapsible && (
+                        <ChevronRight size={12} strokeWidth={2.5} className={cn('search-group-chevron', !collapsed && 'rotate-90')} />
+                      )}
                       <Icon
                         size={14}
                         style={{ color: group.category?.color || 'var(--text-muted)' }}
@@ -775,7 +819,7 @@ function BookmarksPage() {
                       <span className="search-group-count">{group.bookmarks.length}</span>
                     </h2>,
                   ] : []),
-                  ...group.bookmarks.map((b, index) => (
+                  ...(collapsed ? [] : group.bookmarks.map((b, index) => (
                     <BookmarkCard
                       key={b.id}
                       bookmark={b}
@@ -787,11 +831,11 @@ function BookmarksPage() {
                       highlighted={b.id === recentlyMovedId}
                       refreshing={refreshingFavId === b.id}
                       exiting={isBookmarkExiting(b.id)}
-                      dragEnabled={!q && !batchMode}
+                      dragEnabled={!q && !batchMode && !isAggregatedView}
                       index={index}
                       group={`bookmarks:category:${groupKey}`}
                     />
-                  )),
+                  ))),
                 ]
               })
               : filtered.map((b, index) => (
@@ -806,7 +850,7 @@ function BookmarksPage() {
                   highlighted={b.id === recentlyMovedId}
                   refreshing={refreshingFavId === b.id}
                   exiting={isBookmarkExiting(b.id)}
-                  dragEnabled={!q && !batchMode}
+                  dragEnabled={!q && !batchMode && !isAggregatedView}
                   index={index}
                   group={`bookmarks:category:${currentCategory}`}
                 />

@@ -1077,6 +1077,21 @@ select,
   font-weight: 400;
   color: var(--text-muted);
 }
+/* 聚合视图的子分类分组标题：可点击收起/展开该组（父分类自身的组不带此能力也无标题） */
+.search-group-title-toggle {
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+.search-group-title-toggle:hover {
+  color: var(--text-primary);
+}
+.search-group-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
 /* ===== 书签卡片 =====
    覆盖 bookmark-card.tsx 里的内联 Tailwind 样式，让描述/URL 显示更宽。
    关键约束：hover 视觉必须**完全等价** scale(1.03)（用户定的 3% 微微放大），
