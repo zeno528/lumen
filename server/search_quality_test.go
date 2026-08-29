@@ -103,6 +103,8 @@ func TestDefaultBaseURLFollowsAPIFormat(t *testing.T) {
 		{"deepseek", "anthropic", "https://api.deepseek.com/anthropic"},
 		{"zhipu", "openai", "https://open.bigmodel.cn/api/coding/paas/v4"},
 		{"zhipu", "anthropic", "https://open.bigmodel.cn/api/anthropic"},
+		{"mimo", "openai", "https://api.xiaomimimo.com/v1"},
+		{"mimo", "anthropic", "https://api.xiaomimimo.com/anthropic"},
 	}
 	for _, tt := range tests {
 		if got := defaultBaseURL(tt.provider, tt.apiFormat); got != tt.want {

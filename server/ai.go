@@ -508,11 +508,12 @@ func openAIRequestBody(cfg AIConfig, prompt string) map[string]any {
 		"max_tokens":  1024,
 	}
 	// 关闭思考模式，避免 thinking 挤占输出致 JSON 解析失败、回退本地英文兜底：
-	// - deepseek / zhipu: DeepSeek 官方 / 智谱 GLM 默认开 thinking，用 thinking.type=disabled 关闭
+	// - deepseek / zhipu / mimo: DeepSeek 官方 / 智谱 GLM / 小米 MiMo 默认开 thinking，用 thinking.type=disabled 关闭
+	//   （MiMo 官方文档示例同款参数，见 mimo.mi.com/docs OpenAI Chat Completions 兼容）
 	// - siliconflow: Qwen3.x 默认开 thinking，用 chat_template_kwargs.enable_thinking=false（vLLM 标准）
 	//   + 顶层 enable_thinking=false（硅基流动适配）双保险关闭
 	switch cfg.Provider {
-	case "deepseek", "zhipu":
+	case "deepseek", "zhipu", "mimo":
 		reqBody["thinking"] = map[string]string{"type": "disabled"}
 	case "custom":
 		// 自定义直连 DeepSeek 时复用其预设分支；否则不能向通用 OpenAI 兼容端点注入私有参数。

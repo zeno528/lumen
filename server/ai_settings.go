@@ -16,6 +16,7 @@ var allowedProviders = map[string]bool{
 	"zhipu":       true,
 	"minimax":     true,
 	"siliconflow": true,
+	"mimo":        true,
 	"custom":      true,
 }
 
@@ -29,6 +30,7 @@ var providerDefaults = map[string]struct {
 	"zhipu":       {"glm-5-turbo", "https://open.bigmodel.cn/api/coding/paas/v4", "https://open.bigmodel.cn/api/anthropic"},
 	"minimax":     {"MiniMax-M3", "https://api.minimaxi.com/anthropic", ""},
 	"siliconflow": {"Qwen/Qwen3.5-122B-A10B", "https://api.siliconflow.cn/v1", ""},
+	"mimo":        {"mimo-v2.5", "https://api.xiaomimimo.com/v1", "https://api.xiaomimimo.com/anthropic"},
 }
 
 func defaultBaseURL(provider, apiFormat string) string {
