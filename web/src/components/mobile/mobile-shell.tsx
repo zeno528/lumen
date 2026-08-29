@@ -54,6 +54,15 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
 
   const [input, setInput] = useState(searchQuery)
+  // Dock 点按弹跳（借鉴 theSVG dock）：:active 只在按住时生效，快捷点按看不到反馈；
+  // WAAPI 在合成器线程播完整 scale 曲线，零布局开销；reduced-motion 用户跳过。
+  const dockBounce = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    e.currentTarget.animate(
+      [{ transform: 'scale(1)' }, { transform: 'scale(0.94)' }, { transform: 'scale(1)' }],
+      { duration: 140, easing: 'ease-out' },
+    )
+  }
   const debounced = useDebouncedValue(input, 150)
   const { data: bmData } = useBookmarks()
   const { data: catData } = useCategories()
@@ -321,7 +330,8 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
           // 书签页 Dock：搜索 / 批量 / 添加 / 主侧栏
           <>
             <button
-              onClick={() => {
+              onClick={(e) => {
+                dockBounce(e)
                 // Dock "搜索"图标 toggle：取消选中 = 一次性清空搜索 query + 收起搜索栏，
                 // 等同于搜索框内 × 关闭按钮功能；视图恢复与键盘收起同步生效。
                 if (searchOpen) {
@@ -340,12 +350,12 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
               <Search size={22} />
               <span className="dock-label">搜索</span>
             </button>
-            <button onClick={toggleBatchMode} aria-label="批量">
+            <button onClick={(e) => { dockBounce(e); toggleBatchMode() }} aria-label="批量">
               <CheckCheck size={22} />
               <span className="dock-label">批量</span>
             </button>
             <button
-              onClick={openCreateBookmark}
+              onClick={(e) => { dockBounce(e); openCreateBookmark() }}
               className={cn(bookmarkDialog === 'create' && 'search-active')}
               aria-label="添加"
             >
@@ -353,7 +363,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
               <span className="dock-label">添加</span>
             </button>
             <button
-              onClick={() => setSidebarOpen(true)}
+              onClick={(e) => { dockBounce(e); setSidebarOpen(true) }}
               className={cn(sidebarOpen && 'search-active')}
               aria-label="主侧栏"
             >

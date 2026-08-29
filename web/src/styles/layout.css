@@ -1342,9 +1342,8 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     width: 32px;
     height: 32px;
   }
-  .logo h3 {
-    display: none;
-  }
+  /* .logo h3 不再隐藏：移动端顶栏 logo 无 h3，这条实际只影响抽屉侧边栏，
+     删除后侧栏恢复显示「Lumen」项目名（h3 样式复用桌面 .logo h3） */
   .search-box {
     display: none;
   }
@@ -1377,59 +1376,81 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     display: inline-flex !important;
   }
   /* 底部 Dock：iOS 风格浮动胶囊 + 图标 + 标签（按钮数和顺序保留，
-     宽度占屏幕 ~84%：4 列 grid 等宽分配，左右各留约 30px 边距对齐图示视觉节奏。
-     形状语言：容器是大 pill，按钮 height:100% 撑满 grid cell + 999px 圆角 =
+     宽度 = 书签卡片宽（100vw - 32px：.main 左右 padding 8px + .bookmarks-grid 左右 padding 8px），
+     与卡片左右缘对齐。形状语言：容器是大 pill，按钮 height:100% 撑满 grid cell + 999px 圆角 =
      「胶囊里嵌胶囊」，按钮圆角 = 容器圆角 - padding = 同心缩比 ~6px，
      容器 padding 提供四周间距让两者不贴合内壁。*/
-  /* iOS 26 Liquid Glass：渐变 + 220% saturate blur + 5 层阴影 + bottom 14px 紧凑悬浮。
-     no border：液态玻璃边缘靠 inset 0 0 0 0.5px 描边代替。*/
+  /* iOS 26 Liquid Glass：渐变 + 220% saturate blur + 5 层阴影 + 紧凑悬浮。
+     no border：液态玻璃边缘靠 inset 0 0 0 0.5px 描边代替。
+     借鉴 theSVG dock 的渐进增强（三档）：
+     1) 基座不透明底 —— 不支持 backdrop-filter 的环境直接可读；
+     2) @supports (backdrop-filter) 才上玻璃（只写标准属性，lightningcss 构建自动补 -webkit-）；
+     3) prefers-reduced-transparency 用户回退不透明，玻璃仅供参考。
+     safe-area：env() 常规浏览器为 0（= 原 14px），PWA standalone 抬离 home indicator。*/
+  :root {
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
   .mobile-fab-menu {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     position: fixed;
-    bottom: 14px;
+    bottom: calc(14px + var(--safe-bottom));
     left: 50%;
     transform: translateX(-50%);
     z-index: 150;
-    width: 84%;
-    max-width: calc(100vw - 32px);
+    width: calc(100vw - 32px);
     padding: 6px 6px;
     align-items: stretch;
     border-radius: 999px;
     border: none;
-    background:
-      linear-gradient(
-        155deg,
-        rgba(255, 255, 255, 0.55) 0%,
-        rgba(255, 255, 255, 0.15) 60%,
-        rgba(255, 255, 255, 0.05) 100%
-      );
-    backdrop-filter: blur(32px) saturate(220%);
-    box-shadow:
-      0 16px 48px rgba(0, 0, 0, 0.18),
-      0 4px 12px rgba(0, 0, 0, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.7),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.45),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+    background: var(--bg-secondary);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
     touch-action: manipulation;
     transition: transform 0.3s ease, opacity 0.3s ease;
   }
-  /* 深色主题：玻璃黑底代替白底，反向高光 */
-  [data-theme='notion-dark'] .mobile-fab-menu {
-    background:
-      linear-gradient(
-        155deg,
-        rgba(255, 255, 255, 0.12) 0%,
-        rgba(255, 255, 255, 0.04) 60%,
-        rgba(0, 0, 0, 0.10) 100%
-      );
-    backdrop-filter: blur(32px) saturate(220%);
-    box-shadow:
-      0 16px 48px rgba(0, 0, 0, 0.55),
-      0 4px 12px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+  @supports (backdrop-filter: blur(1px)) {
+    .mobile-fab-menu {
+      background:
+        linear-gradient(
+          155deg,
+          rgba(255, 255, 255, 0.55) 0%,
+          rgba(255, 255, 255, 0.15) 60%,
+          rgba(255, 255, 255, 0.05) 100%
+        );
+      backdrop-filter: blur(32px) saturate(220%);
+      box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.18),
+        0 4px 12px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        inset 0 0 0 0.5px rgba(255, 255, 255, 0.45),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .mobile-fab-menu {
+      background: var(--bg-secondary);
+      backdrop-filter: none;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+  }
+  /* 深色主题：玻璃黑底代替白底，反向高光（同样只在支持 backdrop-filter 时生效）*/
+  @supports (backdrop-filter: blur(1px)) {
+    [data-theme='notion-dark'] .mobile-fab-menu {
+      background:
+        linear-gradient(
+          155deg,
+          rgba(255, 255, 255, 0.12) 0%,
+          rgba(255, 255, 255, 0.04) 60%,
+          rgba(0, 0, 0, 0.10) 100%
+        );
+      backdrop-filter: blur(32px) saturate(220%);
+      box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.55),
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+    }
   }
   .mobile-fab-menu.dock-hide {
     transform: translateX(-50%) translateY(calc(100% + 24px));
