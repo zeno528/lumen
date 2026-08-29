@@ -54,8 +54,10 @@ func TestValidateAIResultRequiresEvidenceAndExistingCategory(t *testing.T) {
 	}
 
 	valid["tags"] = "个人助手,智能代理"
-	if err := validateAIResult(valid, []string{"分类甲", "分类乙"}, evidence); err == nil {
-		t.Fatal("expected fewer than three tags to be rejected")
+	// Qwen/MiniMax 常给 1-2 个标签，强卡"恰好3"会整体作废可用结果（生产 30 天 6 次误伤），
+	// 已放宽为至少 1 个；0 个仍拒绝
+	if err := validateAIResult(valid, []string{"分类甲", "分类乙"}, evidence); err != nil {
+		t.Fatalf("two usable tags must pass, got %v", err)
 	}
 
 	invalid := map[string]string{

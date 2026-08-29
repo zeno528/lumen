@@ -348,12 +348,11 @@ func validateAIResult(result map[string]string, categories []string, evidence st
 	if len([]rune(description)) < 12 || !containsHan(description) {
 		return fmt.Errorf("non_chinese_description")
 	}
+	// 至少 1 个中文标签即通过：DeepSeek 能稳定给满 3 个，Qwen/MiniMax 常只给 1-2 个
+	// （生产 30 天 6 次 invalid_tags 全是数量差一两个被硬拒，进而整体 422 弹"返回内容不完整"）。
+	// prompt 仍引导给 3 个；normalizeAITags 已去重、滤英文、剥 AI 前缀、截断到 3。
 	tags := normalizeAITags(result["tags"])
-	count := 0
-	if tags != "" {
-		count = len(strings.Split(tags, ","))
-	}
-	if count != 3 {
+	if tags == "" {
 		return fmt.Errorf("invalid_tags")
 	}
 	result["tags"] = tags
