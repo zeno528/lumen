@@ -30,6 +30,7 @@ import {
 import { refreshBookmarkFavicon, faviconUrl, updateBookmark } from '@/api/bookmarks'
 import { blobToDataUri } from '@/lib/favicon'
 import { getScrollEl } from '@/lib/scroll-container'
+import { buildCategoryTree, categoryPathName, findCategoryByPath } from '@/lib/category-tree'
 import { setFavicon, getFavicon, deleteFavicon, markNoFavicon, unmarkNoFavicon } from '@/lib/favicon-cache'
 import type { Bookmark } from '@/types'
 import { useCategories } from '@/hooks/useCategories'
@@ -193,6 +194,8 @@ function BookmarksPage() {
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
   )
+  // 两级分类树：父分类聚合过滤用
+  const tree = useMemo(() => buildCategoryTree(categories), [categories])
 
   const q = searchQuery.toLowerCase().trim()
   const activeCategory = typeof currentCategory === 'number'
@@ -230,7 +233,11 @@ function BookmarksPage() {
         (b) => b.category_id == null || !catIds.has(b.category_id),
       )
     } else if (currentCategory !== 'all') {
-      bookmarks = bookmarks.filter((bookmark) => bookmark.category_id === currentCategory)
+      // 两级层级：选父分类时聚合显示自身 + 子分类的书签
+      const filterIds = new Set(tree.filterIdsFor(currentCategory))
+      bookmarks = bookmarks.filter(
+        (bookmark) => bookmark.category_id != null && filterIds.has(bookmark.category_id),
+      )
     }
     // 全部 / 收藏视图（非搜索）按 id DESC（创建顺序，最新在前），不按 sort_order：移动书签到新分类时
     // 后端会改 sort_order（目标分类末尾），若这两个视图也按 sort_order 排会导致书签在当前视图换位。
@@ -240,7 +247,7 @@ function BookmarksPage() {
     }
     return bookmarks
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allBookmarks, categories, catMap, q, currentCategory, idSearchMode])
+  }, [allBookmarks, categories, catMap, tree, q, currentCategory, idSearchMode])
 
   // 搜索结果按分类分组：filtered 已按分类排好（同分类必相邻），只需切连续段；未分类最后
   const searchGroups = useMemo(() => {
@@ -550,7 +557,8 @@ function BookmarksPage() {
     try {
       const meta = await fetchAIMeta(
         bookmark.url,
-        categories.map((c) => c.name),
+        // 子分类传「父/子」路径名区分重名（后端 categoryProfiles 按同规则解析取样）
+        categories.map((c) => categoryPathName(c, categories)),
         ac.signal,
         {
           title: bookmark.title,
@@ -559,7 +567,7 @@ function BookmarksPage() {
         },
       )
       const suggestedCategory = bookmark.category_id == null && meta.category
-        ? categories.find((c) => c.name.trim().toLowerCase() === meta.category?.trim().toLowerCase())
+        ? findCategoryByPath(meta.category, categories)
         : undefined
       const categoryNames = new Set(categories.map((c) => c.name.trim().toLowerCase()))
       await updateMut.mutateAsync({

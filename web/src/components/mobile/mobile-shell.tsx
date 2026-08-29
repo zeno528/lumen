@@ -14,7 +14,7 @@ import { useDebouncedValue } from '@/hooks/use-debounce'
 import { SearchCount, SearchEnterHint } from '@/components/shared/search-count'
 import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
-import { getCategoryCount } from '@/lib/category-tree'
+import { buildCategoryTree, getAggregatedCount, getCategoryCount } from '@/lib/category-tree'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
 import { getScrollEl } from '@/lib/scroll-container'
 import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
@@ -356,6 +356,8 @@ function MobileCategorySelect() {
 
   const categories = catData?.categories ?? []
   const bookmarks = bmData?.bookmarks ?? []
+  // 两级分类树：子分类缩进挂在父分类下，父分类计数聚合
+  const tree = useMemo(() => buildCategoryTree(categories), [categories])
 
   const catIds = new Set(categories.map((c) => c.id))
   const counts = {
@@ -367,6 +369,8 @@ function MobileCategorySelect() {
   }
   const countByCat = (id: number) =>
     getCategoryCount(bookmarks, id)
+  // 展示计数：父分类聚合（自身 + 子分类）
+  const displayCount = (id: number) => getAggregatedCount(bookmarks, id, tree.childIds(id))
   const selectCategory = (category: typeof currentCategory) => {
     setCurrentCategory(category)
   }
@@ -397,7 +401,7 @@ function MobileCategorySelect() {
       return {
         name: cat.name,
         icon: <Icon size={13} style={{ color: cat.color || 'var(--default-category-color)' }} />,
-        count: countByCat(cat.id),
+        count: displayCount(cat.id),
       }
     }
     return {
@@ -407,14 +411,26 @@ function MobileCategorySelect() {
     }
   })()
 
-  const items: MenuItem[] = categories.map((category) => {
-    const Icon = resolveCategoryIcon(category.icon)
-    return {
-      label: `${category.name}（${countByCat(category.id)}）`,
-      icon: <Icon size={13} style={{ color: category.color || 'var(--default-category-color)' }} />,
-      active: currentCategory === category.id,
-      onClick: () => selectCategory(category.id),
-    }
+  // 树形菜单项：父分类下缩进挂子分类（└ 前缀），父分类计数聚合
+  const items: MenuItem[] = tree.roots.flatMap((parent) => {
+    const Icon = resolveCategoryIcon(parent.icon)
+    return [
+      {
+        label: `${parent.name}（${displayCount(parent.id)}）`,
+        icon: <Icon size={13} style={{ color: parent.color || 'var(--default-category-color)' }} />,
+        active: currentCategory === parent.id,
+        onClick: () => selectCategory(parent.id),
+      },
+      ...tree.childrenOf(parent.id).map((child) => {
+        const ChildIcon = resolveCategoryIcon(child.icon)
+        return {
+          label: `└ ${child.name}（${countByCat(child.id)}）`,
+          icon: <ChildIcon size={13} style={{ color: child.color || 'var(--default-category-color)' }} />,
+          active: currentCategory === child.id,
+          onClick: () => selectCategory(child.id),
+        }
+      }),
+    ]
   })
   // 侧边栏只在计数 > 0 时显示这两个虚拟分类；顶部下拉保持同一可见规则。
   const virtualItems: MenuItem[] = [
