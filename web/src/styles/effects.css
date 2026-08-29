@@ -218,6 +218,14 @@ body:hover,
 .context-menu::-webkit-scrollbar {
   width: 6px;
 }
+/* 顶栏快捷分类下拉（MobileCategorySelect 经 menuClassName 挂入）：滚动保留、滚动条不显示
+   （用户契约 2026-08-29）。双类选择器压过 .scrollbar-hover 的 hover 显条，只影响挂类方 */
+.context-menu.scrollbar-none {
+  scrollbar-width: none;
+}
+.context-menu.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
 .context-menu.show {
   display: block;
   /* 参考 .batch-action-bar 的玻璃语言（effects.css:289 同款 glass 范式）：

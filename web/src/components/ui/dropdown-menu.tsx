@@ -53,6 +53,7 @@ export function ContextMenu({
   minWidth,
   preserveOnMenuClick = false,
   ignoreOutsideClickSelector,
+  menuClassName,
 }: {
   open: boolean
   onClose: () => void
@@ -73,6 +74,8 @@ export function ContextMenu({
   preserveOnMenuClick?: boolean
   /** 交给外部控制器自行处理的点击目标，例如可开关菜单的箭头。 */
   ignoreOutsideClickSelector?: string
+  /** 附加到菜单卡片的类（如 scrollbar-none 隐藏滚动条），opt-in 不影响其他菜单 */
+  menuClassName?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -143,7 +146,7 @@ export function ContextMenu({
   const node = (
     <div
       ref={ref}
-      className={cn('context-menu', 'show', 'liquid-glass', 'scrollbar-hover')}
+      className={cn('context-menu', 'show', 'liquid-glass', 'scrollbar-hover', menuClassName)}
       style={{
         left: x,
         top: y,
