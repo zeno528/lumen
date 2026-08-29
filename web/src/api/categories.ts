@@ -38,7 +38,14 @@ export function batchDeleteCategories(ids: number[]): Promise<{ ok: boolean; del
   return api('/categories/batch', { method: 'DELETE', body: JSON.stringify({ ids }) })
 }
 
-/** 重排分类顺序（PUT /api/categories/reorder，body {order:[ids]}，categories.go:250）*/
-export function reorderCategories(order: number[]): Promise<{ ok: boolean }> {
-  return api('/categories/reorder', { method: 'PUT', body: JSON.stringify({ order }) })
+/** 重排分类顺序（PUT /api/categories/reorder）。
+ *  两级层级下排序只在同级兄弟内：parentId 圈定兄弟组（null = 顶层），order 为该组新顺序 */
+export function reorderCategories(
+  parentId: number | null,
+  order: number[],
+): Promise<{ ok: boolean }> {
+  return api('/categories/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ parent_id: parentId, order }),
+  })
 }

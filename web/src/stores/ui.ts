@@ -81,9 +81,15 @@ interface UIState {
 
   /** 分类 CRUD dialog：null 关闭 / 'create' 新增 / number 编辑 */
   categoryDialog: number | 'create' | null
-  openCreateCategory: () => void
+  /** 新建分类预设的父分类 id（右键「新建子分类」），null = 顶级；仅 create 分支消费 */
+  categoryDialogParentId: number | null
+  openCreateCategory: (parentId?: number) => void
   openEditCategory: (id: number) => void
   closeCategoryDialog: () => void
+
+  /** 侧边栏折叠的父分类 id（持久化；数组便于 JSON 序列化）*/
+  collapsedCategoryIds: number[]
+  toggleCategoryCollapsed: (id: number) => void
 
   /** 快捷键 Ctrl+Enter 触发 dialog 保存的信号（token 自增，消费端 effect 监听）*/
   bookmarkDialogSubmitToken: number
@@ -216,9 +222,20 @@ export const useUIStore = create<UIState>()(
 
       /** 分类 CRUD dialog（null=关闭，'create'=新增，number=编辑）*/
       categoryDialog: null as number | 'create' | null,
-      openCreateCategory: () => set({ categoryDialog: 'create' }),
-      openEditCategory: (id: number) => set({ categoryDialog: id }),
-      closeCategoryDialog: () => set({ categoryDialog: null }),
+      categoryDialogParentId: null as number | null,
+      openCreateCategory: (parentId?: number) =>
+        set({ categoryDialog: 'create', categoryDialogParentId: parentId ?? null }),
+      openEditCategory: (id: number) => set({ categoryDialog: id, categoryDialogParentId: null }),
+      closeCategoryDialog: () => set({ categoryDialog: null, categoryDialogParentId: null }),
+
+      /** 侧边栏折叠的父分类 id（持久化）*/
+      collapsedCategoryIds: [] as number[],
+      toggleCategoryCollapsed: (id) =>
+        set((s) => ({
+          collapsedCategoryIds: s.collapsedCategoryIds.includes(id)
+            ? s.collapsedCategoryIds.filter((x) => x !== id)
+            : [...s.collapsedCategoryIds, id],
+        })),
 
       bookmarkDialogSubmitToken: 0,
       submitBookmarkDialog: () =>
@@ -265,7 +282,11 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'lumen-ui',
-      partialize: (s) => ({ currentCategory: s.currentCategory, idSearchMode: s.idSearchMode }),
+      partialize: (s) => ({
+        currentCategory: s.currentCategory,
+        idSearchMode: s.idSearchMode,
+        collapsedCategoryIds: s.collapsedCategoryIds,
+      }),
     },
   ),
 )

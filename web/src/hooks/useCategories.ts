@@ -94,7 +94,10 @@ export function useDeleteCategory() {
             if (!old) return old
             return {
               ...old,
-              categories: old.categories.filter((c: Category) => c.id !== id),
+              // 子分类升级为顶级（对齐后端删除父分类前先解除 parent_id 引用）
+              categories: old.categories
+                .filter((c: Category) => c.id !== id)
+                .map((c: Category) => (c.parent_id === id ? { ...c, parent_id: null } : c)),
             }
           },
         },
@@ -135,7 +138,12 @@ export function useBatchDeleteCategories() {
             const idSet = new Set(ids)
             return {
               ...old,
-              categories: old.categories.filter((c: Category) => !idSet.has(c.id)),
+              // 被删分类的子分类升级为顶级（对齐后端先解除 parent_id 引用再删）
+              categories: old.categories
+                .filter((c: Category) => !idSet.has(c.id))
+                .map((c: Category) =>
+                  c.parent_id != null && idSet.has(c.parent_id) ? { ...c, parent_id: null } : c,
+                ),
             }
           },
         },
@@ -161,17 +169,16 @@ export function useBatchDeleteCategories() {
 }
 
 /**
- * 分类顺序重排。
+ * 分类顺序重排（同级兄弟内）。
  * 乐观更新：立即按新顺序重排 qc 缓存，再异步 PUT /api/categories/reorder。
  * 失败只 console.error 不回滚（排序错位非致命）。
  *
- * 排序语义：由调用方传入 `position: 'before' | 'after'`，决定被拖项插到目标项的前面还是后面。
- * 调用方按目标位置传入 `before` 或 `after`，服务端只负责保存最终顺序。
- * 修复：drop 时按鼠标在 target 内的 offsetY 决定 before/after（中线为界）。
+ * 两级层级语义：排序只在同一父分类的兄弟组内进行（parent_id=null 为顶层组）。
+ * fromId / toId 必须同组（调用方 sidebar 的 drop 消费负责校验），本 hook 按 fromId 的
+ * parent_id 圈定组。sortIndex 是组内目标下标（非全量扁平下标）。
  *
- * 关键点：先移除 from，再用 findIndex 在移除后的数组里重新定位 to 并按 position 插入。
- * 不能直接用原 toIdx —— 若 from 原本在 to 前面，移除 from 后 to 实际索引 = toIdx - 1，
- * 此时 splice(toIdx, ...) 会落到错误位置，造成"排到选中分类下面"的 bug。
+ * 位置语义：调用方传入 `position: 'before' | 'after'`，决定被拖项插到目标项的前面还是后面。
+ * 关键点：先移除 from，再在移除后的数组里重新定位 to（from 在 to 前面时 to 前移一位）。
  */
 export function useReorderCategories() {
   const qc = useQueryClient()
@@ -188,13 +195,14 @@ export function useReorderCategories() {
       sortIndex?: number
     }) => {
       const data = qc.getQueryData<{ categories: Category[] }>(CATEGORIES_KEY)
+      const flat = data?.categories ?? []
+      const group = siblingGroup(flat, fromId)
       const order = (sortIndex == null
-        ? reorderCategory(data?.categories ?? [], fromId, toId, position)
-        : moveCategoryToIndex(data?.categories ?? [], fromId, sortIndex)
-      ).map(
-        (c) => c.id,
-      )
-      return reorderCategories(order)
+        ? reorderCategory(group, fromId, toId, position)
+        : moveCategoryToIndex(group, fromId, sortIndex)
+      ).map((c) => c.id)
+      const parentId = flat.find((c) => c.id === fromId)?.parent_id ?? null
+      return reorderCategories(parentId, order)
     },
     onMutate: async ({ fromId, toId, position, sortIndex }) => {
       await qc.cancelQueries({ queryKey: CATEGORIES_KEY })
@@ -203,9 +211,7 @@ export function useReorderCategories() {
         if (!old) return old
         return {
           ...old,
-          categories: sortIndex == null
-            ? reorderCategory(old.categories, fromId, toId, position)
-            : moveCategoryToIndex(old.categories, fromId, sortIndex),
+          categories: reorderSiblingGroupFlat(old.categories, fromId, toId, position, sortIndex),
         }
       })
       return { prev }
@@ -218,6 +224,37 @@ export function useReorderCategories() {
       qc.invalidateQueries({ queryKey: CATEGORIES_KEY })
     },
   })
+}
+
+/** 取 fromId 所属的兄弟组（同 parent_id 的分类，按 flat 现有顺序）。 */
+function siblingGroup(flat: Category[], fromId: number): Category[] {
+  const from = flat.find((c) => c.id === fromId)
+  if (!from) return []
+  return flat.filter((c) =>
+    from.parent_id == null ? c.parent_id == null : c.parent_id === from.parent_id,
+  )
+}
+
+/**
+ * 在扁平缓存里做兄弟组内重排：组外元素原位不动，组成员按组内新顺序填回原槽位。
+ * 侧边栏渲染只依赖「兄弟间相对顺序」（树构建时按数组序取子），槽位保持即视觉正确。
+ */
+function reorderSiblingGroupFlat(
+  flat: Category[],
+  fromId: number,
+  toId: number,
+  position: 'before' | 'after',
+  sortIndex?: number,
+): Category[] {
+  const group = siblingGroup(flat, fromId)
+  if (group.length === 0) return flat
+  const reordered =
+    sortIndex == null
+      ? reorderCategory(group, fromId, toId, position)
+      : moveCategoryToIndex(group, fromId, sortIndex)
+  let i = 0
+  const groupIds = new Set(group.map((c) => c.id))
+  return flat.map((c) => (groupIds.has(c.id) ? reordered[i++] : c))
 }
 
 /**
