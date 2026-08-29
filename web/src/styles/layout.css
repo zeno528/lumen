@@ -1219,12 +1219,39 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
   .bookmarks-view-header {
     display: none;
   }
+  /* ===== 滚动还给根滚动器（iOS 只认 document 滚动才收起底部地址栏全屏化）=====
+     壳 100dvh + overflow:hidden 锁死 + .main 内层滚动的结构永不触发地址栏收缩，
+     移动端解开壳限制让 body 成为唯一滚动容器。帮助页等独立页有自己的内部滚动
+     容器 + IntersectionObserver（root=内部 main），依赖壳的确定高度，
+     用 .app-shell-locked 维持原锁壳结构。 */
+  html,
+  body {
+    /* 根滚动器到边界不链给浏览器（Chrome Android 下拉刷新 / 橡皮筋透传） */
+    overscroll-behavior-y: contain;
+  }
+  .app-shell {
+    height: auto;
+    overflow: visible;
+  }
+  .app-shell.app-shell-locked {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  /* 顶栏固定不透明：内容从顶栏下方滚过时不透出。bg 用与 html 同源的
+     --sidebar-panel，视觉与改造前完全一致，不加描边/阴影（用户定的契约）。 */
+  .header {
+    position: sticky;
+    top: 0;
+    background: var(--sidebar-panel);
+  }
   .layout {
     display: flex;
     flex-direction: column;
     padding: 0;
     gap: 0;
     background: transparent;
+    overflow: visible;
   }
 
   /* 侧边栏抽屉：贴边左 0，默认 -100% 隐藏，open 时滑入*/
@@ -1274,10 +1301,10 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     pointer-events: auto;
   }
 
-  /* 顶栏压缩：隐藏 logo 文字/搜索框/版本徽章*/
+  /* 顶栏压缩：隐藏 logo 文字/搜索框/版本徽章。
+     不写 background —— 实底由上方 sticky 规则提供（这里再写 transparent 会把它覆盖） */
   .header {
     padding: 0 12px;
-    background: transparent;
   }
   .header-top {
     background: transparent;
@@ -1359,7 +1386,8 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
   .main,
   [data-theme='notion-dark'] .main {
     display: block;
-    overflow-y: auto;
+    /* 滚动还给根滚动器（见媒体查询顶部注释），.main 自身不再滚动 */
+    overflow-y: visible;
     border-radius: 0;
     box-shadow: none;
     background: transparent;
@@ -1380,12 +1408,9 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
      与卡片左右缘对齐。形状语言：容器是大 pill，按钮 height:100% 撑满 grid cell + 999px 圆角 =
      「胶囊里嵌胶囊」，按钮圆角 = 容器圆角 - padding = 同心缩比 ~6px，
      容器 padding 提供四周间距让两者不贴合内壁。*/
-  /* iOS 26 Liquid Glass：渐变 + 220% saturate blur + 5 层阴影 + 紧凑悬浮。
-     no border：液态玻璃边缘靠 inset 0 0 0 0.5px 描边代替。
-     借鉴 theSVG dock 的渐进增强（三档）：
-     1) 基座不透明底 —— 不支持 backdrop-filter 的环境直接可读；
-     2) @supports (backdrop-filter) 才上玻璃（只写标准属性，lightningcss 构建自动补 -webkit-）；
-     3) prefers-reduced-transparency 用户回退不透明，玻璃仅供参考。
+  /* 用户契约（2026-08-29）：Dock 常驻后卡片持续从底下穿过，要求**不透明、无阴影**；
+     1px var(--border) 描边勾出容器形状（纯色底与页面底色太近，无描边看不出轮廓）。
+     旧毛玻璃（渐变 + blur + 5 层阴影，theSVG 复刻）已删，反悔从 git 历史（141efed）捞。
      safe-area：env() 常规浏览器为 0（= 原 14px），PWA standalone 抬离 home indicator。*/
   :root {
     --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -1402,60 +1427,14 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     padding: 6px 6px;
     align-items: stretch;
     border-radius: 999px;
+    /* 样式契约（用户 2026-08-29）：不透明实底、无描边、无内高光、无外投影
+       （深色 inset 高光曾只在顶部画 1px 亮线被当成上边框；外投影光晕在全屏化后
+       会被当成低透明度容器，用户多次点名） */
     border: none;
     background: var(--bg-secondary);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: none;
     touch-action: manipulation;
     transition: transform 0.3s ease, opacity 0.3s ease;
-  }
-  @supports (backdrop-filter: blur(1px)) {
-    .mobile-fab-menu {
-      background:
-        linear-gradient(
-          155deg,
-          rgba(255, 255, 255, 0.55) 0%,
-          rgba(255, 255, 255, 0.15) 60%,
-          rgba(255, 255, 255, 0.05) 100%
-        );
-      backdrop-filter: blur(32px) saturate(220%);
-      box-shadow:
-        0 16px 48px rgba(0, 0, 0, 0.18),
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.7),
-        inset 0 0 0 0.5px rgba(255, 255, 255, 0.45),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.04);
-    }
-  }
-  @media (prefers-reduced-transparency: reduce) {
-    .mobile-fab-menu {
-      background: var(--bg-secondary);
-      backdrop-filter: none;
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-  }
-  /* 深色主题：玻璃黑底代替白底，反向高光（同样只在支持 backdrop-filter 时生效）*/
-  @supports (backdrop-filter: blur(1px)) {
-    [data-theme='notion-dark'] .mobile-fab-menu {
-      background:
-        linear-gradient(
-          155deg,
-          rgba(255, 255, 255, 0.12) 0%,
-          rgba(255, 255, 255, 0.04) 60%,
-          rgba(0, 0, 0, 0.10) 100%
-        );
-      backdrop-filter: blur(32px) saturate(220%);
-      box-shadow:
-        0 16px 48px rgba(0, 0, 0, 0.55),
-        0 4px 12px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15),
-        inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-    }
-  }
-  .mobile-fab-menu.dock-hide {
-    transform: translateX(-50%) translateY(calc(100% + 24px));
-    opacity: 0;
-    pointer-events: none;
   }
   /* 按钮：垂直堆叠（图标 + 标签）+ height:100% 撑满 cell 让胶囊形状跟容器同心缩比。
      容器 padding 6px 让按钮四周保留 ~6px 间隙，避免和大胶囊内壁重合。*/

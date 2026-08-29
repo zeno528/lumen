@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 
 /**
  * 模态框 -- Tailwind 实现 .modal-overlay/.modal 视觉。
@@ -30,6 +31,8 @@ export function Dialog({
   const [mounted, setMounted] = useState(false)
   const [exiting, setExiting] = useState(false)
   const exitTimer = useRef<number | null>(null)
+  // 打开期间锁 body 滚动：移动端滚动器是根滚动器，不锁则滑动遮罩会滚到背后页面
+  useBodyScrollLock(open)
 
   const cleanupExitTimer = useCallback(() => {
     if (exitTimer.current != null) {
