@@ -441,6 +441,33 @@ func TestBatchMoveBookmarksInsertsBeforeTargetAndKeepsSelectionOrder(t *testing.
 	}
 }
 
+// 移动只 bump 被移动书签的 updated_at；目标分类原住民不刷新（favicon_version 兜底取 updated_at，
+// 无差别刷新会让整个分类的图标缓存失效，切过去图标全闪）
+func TestBatchMoveBookmarksKeepsResidentUpdatedAt(t *testing.T) {
+	api := newTestAPI(t)
+	jwt := login(t, api)
+	sourceID := createCategory(t, api, jwt, "Source")
+	targetID := createCategory(t, api, jwt, "Target")
+	movedID := createBookmark(t, api, jwt, "https://example.com/moved", "Moved", &sourceID)
+	residentID := createBookmark(t, api, jwt, "https://example.com/resident", "Resident", &targetID)
+
+	before := listBookmarks(t, api, jwt, "/api/bookmarks?category="+strconv.FormatInt(targetID, 10))
+	requireStatus(t, api.request(t, http.MethodPut, "/api/bookmarks/batch-move", jwt, BatchMoveInput{IDs: []int64{movedID}, CategoryID: &targetID}), http.StatusOK)
+
+	var beforeUpdatedAt string
+	for _, b := range before {
+		if b.ID == residentID {
+			beforeUpdatedAt = b.UpdatedAt
+		}
+	}
+	after := listBookmarks(t, api, jwt, "/api/bookmarks?category="+strconv.FormatInt(targetID, 10))
+	for _, b := range after {
+		if b.ID == residentID && b.UpdatedAt != beforeUpdatedAt {
+			t.Fatalf("resident updated_at changed: %q -> %q", beforeUpdatedAt, b.UpdatedAt)
+		}
+	}
+}
+
 func TestBookmarkCategoryUpdateAppendsToTarget(t *testing.T) {
 	api := newTestAPI(t)
 	jwt := login(t, api)

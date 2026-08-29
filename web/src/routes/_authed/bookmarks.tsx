@@ -413,6 +413,18 @@ function BookmarksPage() {
     })
   }, [recentlyAddedId])
 
+  // 通知条「查看」跳转后滚动定位到被移动的卡片（常在目标分类末尾，必须滚过去）。
+  // rAF 晚于切分类的 scrollTo(top) effect 执行，最终停在新位置；书签量大时卡片已在本轮渲染挂载。
+  useEffect(() => {
+    if (recentlyMovedId == null) return
+    requestAnimationFrame(() => {
+      const el = document.querySelector(
+        `.bookmark-card[data-bookmark-id="${recentlyMovedId}"]`,
+      )
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [recentlyMovedId])
+
   // 卡片菜单
   const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null)
   const menuBookmark = menu ? allBookmarks.find((b) => b.id === menu.id) : null
