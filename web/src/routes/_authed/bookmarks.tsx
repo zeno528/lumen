@@ -29,6 +29,7 @@ import {
 } from '@/hooks/useBookmarks'
 import { refreshBookmarkFavicon, faviconUrl, updateBookmark } from '@/api/bookmarks'
 import { blobToDataUri } from '@/lib/favicon'
+import { getScrollEl } from '@/lib/scroll-container'
 import { setFavicon, getFavicon, deleteFavicon, markNoFavicon, unmarkNoFavicon } from '@/lib/favicon-cache'
 import type { Bookmark } from '@/types'
 import { useCategories } from '@/hooks/useCategories'
@@ -337,7 +338,7 @@ function BookmarksPage() {
     const saved = Number(localStorage.getItem('bookmarks-scroll') ?? 0)
     if (saved > 0) {
       requestAnimationFrame(() => {
-        document.querySelector('.main')?.scrollTo({ top: saved })
+        getScrollEl()?.scrollTo({ top: saved })
       })
     }
   }, [allBookmarks.length])
@@ -352,7 +353,7 @@ function BookmarksPage() {
       isFirstRender.current = false
       return
     }
-    const main = document.querySelector('.main')
+    const main = getScrollEl()
     const searching = !!q
     if (searching && !wasSearching.current) {
       // 搜索开始：记录当前位置，供关闭搜索时恢复
@@ -371,21 +372,25 @@ function BookmarksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, currentCategory])
 
-  // 持久化滚动位置（debounce 200ms，刷新后恢复用）
+  // 持久化滚动位置（debounce 200ms，刷新后恢复用）。
+  // 双挂监听：移动端滚动容器是根滚动器，其 scroll 事件只派发到 document/window
+  // （scrollingElement 元素收不到）；桌面是 .main。两个来源互斥，每次滚动只触发一份。
   useEffect(() => {
-    const main = document.querySelector('.main')
-    if (!main) return
+    const el = getScrollEl()
+    if (!el) return
     let t: number
     const onScroll = () => {
       window.clearTimeout(t)
       t = window.setTimeout(() => {
-        localStorage.setItem('bookmarks-scroll', String(main.scrollTop))
+        localStorage.setItem('bookmarks-scroll', String(el.scrollTop))
       }, 200)
     }
-    main.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       window.clearTimeout(t)
-      main.removeEventListener('scroll', onScroll)
+      el.removeEventListener('scroll', onScroll)
+      window.removeEventListener('scroll', onScroll)
     }
   }, [])
 

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SINGLE_PAGE_MAX_WIDTH } from '@/hooks/use-grid-metrics'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { useUIStore } from '@/stores/ui'
 
 export const Route = createLazyFileRoute('/_authed/help')({
@@ -73,13 +74,8 @@ function HelpPage() {
     [closeHelpToc],
   )
 
-  // body 滚动锁：与首页侧边栏抽屉行为对齐（mobile-shell.tsx:66）
-  useEffect(() => {
-    document.body.style.overflow = helpTocOpen ? 'hidden' : ''
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [helpTocOpen])
+  // body 滚动锁：与首页侧边栏抽屉行为对齐
+  useBodyScrollLock(helpTocOpen)
 
   // main 滚动容器 ref（IO root + 底部兜底用）
   const mainRef = useRef<HTMLElement>(null)

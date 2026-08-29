@@ -12,6 +12,7 @@ import { AppearanceSection } from '@/components/settings/appearance-section'
 import { BackupSection } from '@/components/settings/backup-section'
 import { useUIStore } from '@/stores/ui'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 import { useBatchDelete } from '@/hooks/useBookmarks'
 import { useDeleteCategory } from '@/hooks/useCategories'
 import { toast } from '@/components/ui/toast'
@@ -60,6 +61,8 @@ export function SettingsDialog() {
   const [subView, setSubView] = useState<string | null>(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [confirmingClear, setConfirmingClear] = useState(false)
+  // 移动端全屏设置锁 body 滚动（桌面走 Dialog 组件自带锁，isMobile 分支外置 hook 必须顶层调用）
+  useBodyScrollLock(settingsOpen && isMobile)
 
   const qc = useQueryClient()
   const batchDelete = useBatchDelete()

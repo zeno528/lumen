@@ -16,6 +16,8 @@ import { getSingleSearchMatch } from '@/lib/bookmark-search'
 import { cn, openInNewTab } from '@/lib/utils'
 import { getCategoryCount } from '@/lib/category-tree'
 import { useRouterState, useNavigate } from '@tanstack/react-router'
+import { getScrollEl } from '@/lib/scroll-container'
+import { useBodyScrollLock } from '@/hooks/use-body-scroll-lock'
 
 /**
  * 移动端 Shell。
@@ -29,9 +31,7 @@ import { useRouterState, useNavigate } from '@tanstack/react-router'
 export function MobileShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  // Dock 滚动隐藏
   const mainRef = useRef<HTMLElement>(null)
-  const [dockHide, setDockHide] = useState(false)
   // 返回书签过渡：flushSync 同步隐藏 main，避免 BookmarksPage concurrent 渲染期间帮助页 UI 残影
   const [switching, setSwitching] = useState(false)
 
@@ -101,12 +101,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
   })
 
   // 抽屉打开/关闭时锁滚动
-  useEffect(() => {
-    document.body.style.overflow = sidebarOpen ? 'hidden' : ''
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [sidebarOpen])
+  useBodyScrollLock(sidebarOpen)
 
   // 路由变化时自动关闭侧边栏（帮助页/设置页不需要侧边栏）
   useEffect(() => {
@@ -146,53 +141,14 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
     }
   }, [isHelpPage, switching])
 
-  // Dock 滚动自动隐藏：向下滚隐藏、停止 300ms 显示、顶部立即显示
-  useEffect(() => {
-    const el = mainRef.current
-    if (!el) return
-    let scrollTimer: number | null = null
-    let ticking = false
-    let firstScroll = true // 首次 scroll 跳过：恢复 scroll position 会触发 scroll 事件，
-    // 不跳过会 setDockHide(true→false) 播 transition → dock 首次刷新动画（期望首次不动）
-    const onScroll = () => {
-      if (ticking) return
-      ticking = true
-      requestAnimationFrame(() => {
-        if (batchMode) {
-          ticking = false
-          return
-        }
-        if (firstScroll) {
-          firstScroll = false
-          ticking = false
-          return
-        }
-        if (el.scrollTop === 0) {
-          setDockHide(false)
-          if (scrollTimer) window.clearTimeout(scrollTimer)
-        } else {
-          setDockHide(true)
-          if (scrollTimer) window.clearTimeout(scrollTimer)
-          scrollTimer = window.setTimeout(() => setDockHide(false), 300)
-        }
-        ticking = false
-      })
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      el.removeEventListener('scroll', onScroll)
-      if (scrollTimer) window.clearTimeout(scrollTimer)
-    }
-  }, [batchMode])
-
   return (
-    <div className="app-shell">
+    <div className={cn('app-shell', isHelpPage && 'app-shell-locked')}>
       {!isHelpPage && (
         <header className="header">
           <div className="header-top">
             <div
               className="logo"
-              onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              onClick={() => getScrollEl().scrollTo({ top: 0, behavior: 'smooth' })}
             >
               <img src="/logo_color.svg" alt="Lumen" />
             </div>
@@ -278,7 +234,7 @@ export function MobileShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* 底部 Dock：根据当前页面动态切换按钮 */}
-      <div className={cn('mobile-fab-menu', batchMode && 'dock-hidden', dockHide && 'dock-hide')}>
+      <div className={cn('mobile-fab-menu', batchMode && 'dock-hidden')}>
         {isHelpPage ? (
           // 帮助页 Dock：目录 / 快速开始 / 快捷键 / 返回书签
           <>
