@@ -284,19 +284,21 @@ export function SettingsDialog() {
       <div className="flex-1 flex flex-col overflow-hidden p-4 pr-0">
         <div className="flex flex-col gap-4 flex-1 min-h-0">{content}</div>
       </div>
-      {/* 底部 tab bar：贴底毛玻璃操作栏（absolute 浮在内容上，内容滚到 bar 下毛玻璃模糊，iOS 风格）*/}
-      <div className="settings-tabbar md:hidden flex gap-1 px-4 py-2 absolute bottom-0 left-0 right-0 rounded-t-2xl">
+      {/* 底部 tab bar：贴底毛玻璃操作栏（absolute 浮在内容上，内容滚到 bar 下毛玻璃模糊，iOS 风格）。
+          5 个 tab 横排 icon+文字宽度不够会换行，改 iOS tab bar 式纵向排列（icon 上 / label 下）：
+          按钮宽度只由最长 label「API Token」@10px ≈45px 决定，320px 最窄屏 5 等分（64px/格）也放得下。 */}
+      <div className="settings-tabbar md:hidden flex gap-1 px-3 py-1.5 absolute bottom-0 left-0 right-0 rounded-t-2xl">
         {TABS.map(({ id, title, icon: Icon }) => (
           <button
             key={id}
             onClick={() => handleTabChange(id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm transition-colors ${
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] leading-tight whitespace-nowrap transition-colors ${
               activeTab === id
                 ? 'bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-(--accent) font-medium'
                 : 'text-(--text-secondary) hover:text-(--text-primary)'
             }`}
           >
-            <Icon size={14} />
+            <Icon size={16} />
             {title}
           </button>
         ))}

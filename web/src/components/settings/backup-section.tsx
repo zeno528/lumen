@@ -347,7 +347,7 @@ export function BackupSection() {
                                 : `备份内容读取失败：${previewQuery.error instanceof Error ? previewQuery.error.message : '未知错误'}`}
                           </p>
                           <p className="mt-2 text-xs leading-5 text-(--text-secondary)">
-                            当前书签和分类会被选中的备份替换，备份之后的新数据会消失。账号与其他设置不会被修改。此操作不可撤销。
+                            恢复将覆盖当前的书签和分类，且不可撤销（账号与设置不受影响）。
                           </p>
                           <div className="mt-3 flex justify-end gap-2">
                             <Button size="sm" variant="soft" onClick={() => setRestoringId(null)}>
