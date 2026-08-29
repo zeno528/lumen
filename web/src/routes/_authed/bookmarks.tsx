@@ -17,7 +17,6 @@ import {
   Plus,
   Layers,
   Folder,
-  ChevronRight,
 } from 'lucide-react'
 import {
   useBookmarks,
@@ -278,28 +277,18 @@ function BookmarksPage() {
     const parent = catById.get(currentCategory)
     if (!parent) return null
     return [
-      { category: parent, bookmarks: allBookmarks.filter((b) => b.category_id === currentCategory), showTitle: false, collapsible: false as const },
+      { category: parent, bookmarks: allBookmarks.filter((b) => b.category_id === currentCategory), showTitle: false as const },
       ...childIds.map((id) => {
         const child = catById.get(id)
         return child
-          ? { category: child, bookmarks: allBookmarks.filter((b) => b.category_id === id), showTitle: true, collapsible: true as const }
+          ? { category: child, bookmarks: allBookmarks.filter((b) => b.category_id === id), showTitle: true as const }
           : null
       }).filter((g) => g !== null),
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allBookmarks, categories, tree, q, currentCategory])
 
-  // 聚合视图里被收起的子分类标题（本地态：切走视图后无需保留）
-  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(() => new Set())
-  const toggleGroupCollapsed = (id: number) =>
-    setCollapsedGroupIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-
-  const cardGroups: { category?: Category; bookmarks: Bookmark[]; showTitle: boolean; collapsible?: boolean }[] | null = q
+  const cardGroups: { category?: Category; bookmarks: Bookmark[]; showTitle: boolean }[] | null = q
     ? searchGroups
     : aggregatedGroups
   // 聚合视图跨子分类混排，网格内拖拽排序语义不明（改在子分类自身视图或侧栏拖拽移动）
@@ -797,19 +786,12 @@ function BookmarksPage() {
                 const Icon = resolveCategoryIcon(group.category?.icon)
                 const name = group.category?.name ?? '未分类'
                 const groupKey = group.category?.id ?? '__uncategorized__'
-                // 聚合视图的子分类标题可点击收起/展开（收起后只留标题行 + 计数）
-                const collapsed = group.collapsible && typeof groupKey === 'number' && collapsedGroupIds.has(groupKey)
                 return [
                   ...(group.showTitle ? [
                     <h2
                       key={`group-${groupKey}`}
-                      className={cn('search-group-title', group.collapsible && 'search-group-title-toggle')}
-                      onClick={group.collapsible && typeof groupKey === 'number' ? () => toggleGroupCollapsed(groupKey) : undefined}
-                      aria-expanded={group.collapsible ? !collapsed : undefined}
+                      className="search-group-title"
                     >
-                      {group.collapsible && (
-                        <ChevronRight size={12} strokeWidth={2.5} className={cn('search-group-chevron', !collapsed && 'rotate-90')} />
-                      )}
                       <Icon
                         size={14}
                         style={{ color: group.category?.color || 'var(--text-muted)' }}
@@ -819,7 +801,7 @@ function BookmarksPage() {
                       <span className="search-group-count">{group.bookmarks.length}</span>
                     </h2>,
                   ] : []),
-                  ...(collapsed ? [] : group.bookmarks.map((b, index) => (
+                  ...group.bookmarks.map((b, index) => (
                     <BookmarkCard
                       key={b.id}
                       bookmark={b}
@@ -835,7 +817,7 @@ function BookmarksPage() {
                       index={index}
                       group={`bookmarks:category:${groupKey}`}
                     />
-                  ))),
+                  )),
                 ]
               })
               : filtered.map((b, index) => (

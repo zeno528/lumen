@@ -162,6 +162,9 @@ export function SidebarItem({
           className="sidebar-expand-btn"
           aria-expanded={expanded}
           aria-label={expanded ? '折叠子分类' : '展开子分类'}
+          // 隔离 pointerdown：行的 dnd-kit 拖拽监听会捕获按压启动拖拽手势，吞掉后续 click，
+          // 表现为"要点好几次才展开"。只在箭头上断开，行的其余区域拖拽/点击不受影响。
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             onToggleExpand?.()
