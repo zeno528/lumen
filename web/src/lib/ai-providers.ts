@@ -68,6 +68,18 @@ export const AI_PRESETS: Record<string, AIProviderPreset> = {
     logo: '/providers/siliconcloud-siliconflow.svg',
     format: 'OpenAI 格式',
   },
+  mimo: {
+    model: 'mimo-v2.5',
+    modelOptions: ['mimo-v2.5', 'mimo-v2.5-pro'],
+    baseUrl: 'https://api.xiaomimimo.com/v1',
+    label: '小米 MiMo',
+    logo: '/providers/mimo.svg',
+    format: 'OpenAI / Anthropic 格式',
+    formats: [
+      { value: 'openai', label: 'OpenAI Chat Completions 格式', baseUrl: 'https://api.xiaomimimo.com/v1' },
+      { value: 'anthropic', label: 'Anthropic Messages 格式', baseUrl: 'https://api.xiaomimimo.com/anthropic' },
+    ],
+  },
 }
 
 /** 自定义厂商（可显式选择 OpenAI / Anthropic 协议）-- 复用同一渲染逻辑 */
@@ -85,6 +97,7 @@ export const AI_APPLY_URLS: Record<string, string> = {
   zhipu: 'https://open.bigmodel.cn',
   minimax: 'https://platform.minimaxi.com',
   siliconflow: 'https://cloud.siliconflow.cn/i/3SOwJUoq',
+  mimo: 'https://platform.xiaomimimo.com',
 }
 
 /** 下拉顺序（custom 在最后）*/
@@ -93,6 +106,7 @@ export const AI_PROVIDER_ORDER = [
   'zhipu',
   'minimax',
   'siliconflow',
+  'mimo',
   'custom',
 ]
 
