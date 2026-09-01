@@ -43,14 +43,43 @@ export function getFavicon(id: number, updatedAt: string | undefined): string | 
   return v.d
 }
 
-/** 写缓存：内存 Map + localStorage（满 / 不可用静默失败，内存缓存仍让本次会话生效）*/
+/** 写缓存：内存 Map + localStorage。
+ *  配额满时按 FIFO 淘汰最早的 favicon 键腾位重试（localStorage 键序 = 写入序），
+ *  否则新设备首次全量灌入 315+ 图标就把 5MB 配额吃光，后续所有小写入全部 QuotaExceeded。
+ *  淘汰只删 localStorage，内存缓存保留（本会话秒显不受影响，被淘汰项下次刷新走端点）。
+ *  没有可腾空间（隐私模式/仅剩当前键）放弃，静默。 */
 export function setFavicon(id: number, updatedAt: string, dataUri: string): void {
   if (!updatedAt) return
   cache.set(id, { d: dataUri, u: updatedAt })
+  const payload = JSON.stringify({ d: dataUri, u: updatedAt })
   try {
-    localStorage.setItem(PREFIX + id, JSON.stringify({ d: dataUri, u: updatedAt }))
+    localStorage.setItem(PREFIX + id, payload)
+    return
   } catch {
-    /* 配额满 / 隐私模式：静默，内存缓存仍生效 */
+    /* 配额满，走淘汰重试；再抛则最终静默 */
+  }
+  try {
+    const ownKey = PREFIX + id
+    for (;;) {
+      let victim: string | null = null
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith(PREFIX) && k !== ownKey) {
+          victim = k
+          break
+        }
+      }
+      if (!victim) return
+      localStorage.removeItem(victim)
+      try {
+        localStorage.setItem(ownKey, payload)
+        return
+      } catch {
+        /* 一次淘汰不够，继续腾 */
+      }
+    }
+  } catch {
+    /* 隐私模式 / storage 不可用：静默，内存缓存仍生效 */
   }
 }
 

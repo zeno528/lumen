@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { setIdSearchMode as apiSetIdSearchMode } from '@/api/settings'
+import { safeLocalStorage } from '@/lib/safe-storage'
 
 /**
  * 分类筛选标识 -- 虚拟分类约定。
@@ -90,6 +91,8 @@ interface UIState {
   /** 侧边栏折叠的父分类 id（持久化；数组便于 JSON 序列化）*/
   collapsedCategoryIds: number[]
   toggleCategoryCollapsed: (id: number) => void
+  /** 一键收起/展开：整体替换折叠集合 */
+  setCollapsedCategoryIds: (ids: number[]) => void
 
   /** 快捷键 Ctrl+Enter 触发 dialog 保存的信号（token 自增，消费端 effect 监听）*/
   bookmarkDialogSubmitToken: number
@@ -236,6 +239,7 @@ export const useUIStore = create<UIState>()(
             ? s.collapsedCategoryIds.filter((x) => x !== id)
             : [...s.collapsedCategoryIds, id],
         })),
+      setCollapsedCategoryIds: (ids) => set({ collapsedCategoryIds: ids }),
 
       bookmarkDialogSubmitToken: 0,
       submitBookmarkDialog: () =>
@@ -287,6 +291,7 @@ export const useUIStore = create<UIState>()(
         idSearchMode: s.idSearchMode,
         collapsedCategoryIds: s.collapsedCategoryIds,
       }),
+      storage: createJSONStorage(() => safeLocalStorage),
     },
   ),
 )

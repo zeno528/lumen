@@ -418,7 +418,11 @@ function BookmarksPage() {
     const onScroll = () => {
       window.clearTimeout(t)
       t = window.setTimeout(() => {
-        localStorage.setItem('bookmarks-scroll', String(el.scrollTop))
+        try {
+          localStorage.setItem('bookmarks-scroll', String(el.scrollTop))
+        } catch {
+          /* 配额满 / 隐私模式：静默 */
+        }
       }, 200)
     }
     el.addEventListener('scroll', onScroll, { passive: true })

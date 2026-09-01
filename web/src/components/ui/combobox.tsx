@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from './input'
 
@@ -137,7 +137,7 @@ export function Combobox({
       {filtered.map((o) => (
         <div
           key={o.value}
-          className="dropdown-option"
+          className={cn('dropdown-option', o.label === value && 'active')}
           onMouseDown={(e) => {
             // mousedown 比 click 早，且不会丢 input 焦点
             e.preventDefault()
@@ -146,11 +146,6 @@ export function Combobox({
           role="option"
           aria-selected={o.label === value}
         >
-          {o.label === value ? (
-            <Check size={16} className="text-(--accent) shrink-0" />
-          ) : (
-            <span className="w-4 h-4 shrink-0" aria-hidden />
-          )}
           {o.icon && (
             <span className="dropdown-option-prefix">
               <span className="w-5 h-5 inline-flex items-center justify-center shrink-0">

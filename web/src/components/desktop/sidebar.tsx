@@ -10,6 +10,8 @@ import {
   Trash2,
   CheckSquare,
   X,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from 'lucide-react'
 import {
   useCategories,
@@ -72,6 +74,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     clearCategorySelection,
     collapsedCategoryIds,
     toggleCategoryCollapsed,
+    setCollapsedCategoryIds,
   } = useUIStore()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -84,6 +87,13 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   // 两级分类树：roots + 每个分类的子分类（子分类顺序沿用后端 sort_order 序）
   const tree = useMemo(() => buildCategoryTree(categories), [categories])
   const collapsedSet = useMemo(() => new Set(collapsedCategoryIds), [collapsedCategoryIds])
+  // 一键收起/展开的目标：有子分类的父分类
+  const collapsibleParentIds = useMemo(
+    () => tree.roots.filter((c) => tree.childIds(c.id).length > 0).map((c) => c.id),
+    [tree],
+  )
+  const allCollapsed =
+    collapsibleParentIds.length > 0 && collapsibleParentIds.every((id) => collapsedSet.has(id))
   // 展开状态下的可见扁平顺序（Shift 范围批量选择用）
   const visibleCategoryIds = useMemo(
     () =>
@@ -456,6 +466,20 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
             title={categoryBatchMode ? '退出批量选择' : '批量选择分类'}
           >
             <CheckSquare size={13} strokeWidth={2.4} />
+          </button>
+          <button
+            type="button"
+            className="sidebar-category-batch-btn"
+            disabled={collapsibleParentIds.length === 0}
+            onClick={() => setCollapsedCategoryIds(allCollapsed ? [] : collapsibleParentIds)}
+            aria-label={allCollapsed ? '一键展开分类' : '一键收起分类'}
+            title={allCollapsed ? '一键展开分类' : '一键收起分类'}
+          >
+            {allCollapsed ? (
+              <ChevronsUpDown size={13} strokeWidth={2.4} />
+            ) : (
+              <ChevronsDownUp size={13} strokeWidth={2.4} />
+            )}
           </button>
           <button
             type="button"

@@ -1088,7 +1088,8 @@ select,
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-secondary);
+  /* 与父级视图标题 .bookmarks-view-title 同色（用户要求一致，不用次级灰） */
+  color: var(--text-primary);
 }
 .search-group-count {
   font-size: 12px;
