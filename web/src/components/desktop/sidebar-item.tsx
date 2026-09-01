@@ -82,7 +82,7 @@ export function SidebarItem({
   group?: string
   /** 子分类缩进行 */
   nested?: boolean
-  /** 父分类且有子分类：显示展开/折叠 chevron */
+  /** 父分类且有子分类：显示展开/折叠 chevron（在 sortable 元素子树内，随拖拽 transform 一起位移） */
   hasChildren?: boolean
   expanded?: boolean
   onToggleExpand?: () => void
@@ -162,15 +162,12 @@ export function SidebarItem({
           className="sidebar-expand-btn"
           aria-expanded={expanded}
           aria-label={expanded ? '折叠子分类' : '展开子分类'}
-          // 隔离 pointerdown：行的 dnd-kit 拖拽监听会捕获按压启动拖拽手势，吞掉后续 click，
-          // 表现为"要点好几次才展开"。只在箭头上断开，行的其余区域拖拽/点击不受影响。
-          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
             onToggleExpand?.()
           }}
         >
-          <ChevronRight size={12} strokeWidth={2.5} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
+          <ChevronRight size={13} strokeWidth={2.5} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
         </button>
       )}
       <div

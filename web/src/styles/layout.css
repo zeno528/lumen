@@ -490,8 +490,8 @@ select,
   padding: 0;
   gap: 0;
   background: transparent;
-  /* 供批量操作栏等 fixed 元素计算主内容区中心用 */
-  --sidebar-width: 260px;
+  /* 供批量操作栏等 fixed 元素计算主内容区中心用；.sidebar 宽度同源 */
+  --sidebar-width: 280px;
 }
 /* 设置页/帮助页（新窗口独立打开）：无侧边栏、无顶栏，main 全宽。
    顶栏（搜索/批量/头像）是主应用导航，独立帮助页不需要，CSS 隐藏。 */
@@ -520,11 +520,11 @@ select,
   border-top: 1px solid var(--border);
 }
 
-/* 侧边栏：260px 直角贴满，背景用 var(--sidebar-panel)（比 body 略深，
+/* 侧边栏：280px 直角贴满，背景用 var(--sidebar-panel)（比 body 略深，
    让 main 卡片化"亮起来"形成明显层次，配套见 .layout 跟 .main）。
    不再用 inline theme 规则（变量随主题自动切换，避免色板双写）。*/
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   padding: 8px;
   margin: 0;
@@ -654,29 +654,47 @@ select,
      修这一处 + name 那处 = 链路两端都能缩。 */
   min-width: 0;
 }
-/* 子分类行：整体缩进表达层级（缩进值 = 图标列宽对齐父分类文字，视觉上"挂在"父分类下） */
+/* 分类列表所有行统一 25px 起始（= 原 11 缩进 + 14 chevron 槽位）：无箭头的行留空槽，
+   父分类/叶子分类/全部/收藏的图标列才在同一竖线上（VSCode/Notion 同款树形 gutter）。
+   只作用于侧栏分类列表；设置页 pill 变体不在 .sidebar-categories 内，沿用基础 11px */
+.sidebar-categories .sidebar-item {
+  padding-left: 25px;
+}
+/* 子分类行：整体缩进表达层级
+   对齐算法：父文字起点 = padding 25 + icon 26 + gap 10 = 61；要让子文字起点 ≈ 父文字起点 + 19，
+   子 padding + icon 26 + gap 10 = 61 + 19 = 80 → 子 padding = 44。
+   子项字号小一号 + 缩进 = 双重层级信号 */
 .sidebar-item.sidebar-item-nested {
-  padding-left: 28px;
+  padding-left: 44px;
   font-size: 0.88rem;
 }
-/* 父分类展开/折叠 chevron：占据行首，无子分类时不渲染（布局由 hasChildren 条件保证） */
+/* 父分类展开/折叠 chevron：行内流式首列（在 sidebar-item 子树内，拖拽排序时随 dnd-kit transform
+   一起位移——wrapper + absolute 方案在拖拽时会脱钩错位）。18×18 盒 margin -22 + 右 4px：
+   占 3..21，与 25 起的图标列留 4px 间隙（20×20 margin -22 会 0px 贴死图标盒）。
+   position+z-index 必须保留：压到 .sidebar-item-inner::before 全行热区（absolute 覆盖 left0→right0）
+   之上，否则箭头的 click 全被热区截走变成选中分类（b3cc911 "要点多次才展开"的真因） */
 .sidebar-expand-btn {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
-  margin-left: -4px;
+  margin-left: -22px;
+  margin-right: 4px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .sidebar-expand-btn:hover {
+  /* 低对比薄层而非 --bg-card：active 行上白底药丸贴边贴图标显得"挤死"，主题自适应 overlay 才不突兀 */
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
   color: var(--text-primary);
 }
 /* 边界热区：覆盖分类项之间 .sidebar-categories 的 2px gap。

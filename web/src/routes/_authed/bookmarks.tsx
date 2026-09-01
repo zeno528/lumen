@@ -291,7 +291,10 @@ function BookmarksPage() {
   const cardGroups: { category?: Category; bookmarks: Bookmark[]; showTitle: boolean }[] | null = q
     ? searchGroups
     : aggregatedGroups
-  // 聚合视图跨子分类混排，网格内拖拽排序语义不明（改在子分类自身视图或侧栏拖拽移动）
+  // 聚合视图跨子分类混排，网格内重排语义不明 → canReorderBookmarks 关掉（组内视觉移位松手弹回）；
+  // 拖拽移动照常可用：拖到侧栏分类 = 移动；拖到别的子分类卡片上 = 移动到该卡片所属分类。
+  // group 前缀故意用 bookmarks:agg: 绕开 getProjectedSort 的 bookmarks:category: 匹配，
+  // 否则 projectedSort 有值会让跨组 card→card 落到 null 分支变成 no-op
   const isAggregatedView = cardGroups != null && !q
   const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number' && !isAggregatedView
   const lastDrop = useDragStore((state) => state.lastDrop)
@@ -813,9 +816,9 @@ function BookmarksPage() {
                       highlighted={b.id === recentlyMovedId}
                       refreshing={refreshingFavId === b.id}
                       exiting={isBookmarkExiting(b.id)}
-                      dragEnabled={!q && !batchMode && !isAggregatedView}
+                      dragEnabled={!q && !batchMode}
                       index={index}
-                      group={`bookmarks:category:${groupKey}`}
+                      group={`bookmarks:agg:${groupKey}`}
                     />
                   )),
                 ]
