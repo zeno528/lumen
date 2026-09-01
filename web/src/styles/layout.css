@@ -1298,15 +1298,16 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     overflow: visible;
   }
 
-  /* 侧边栏抽屉：贴边左 0，默认 -100% 隐藏，open 时滑入*/
+  /* 侧边栏抽屉：贴边左 0，默认 -100% 隐藏，open 时滑入。
+     宽度固定 280px（与 .layout 的 --sidebar-width 一致），不再 fit-content：
+     展开/收起子分类时内容行宽会变（嵌套 padding 44px vs 25px），fit-content 会让抽屉
+     跟着内容跳——固定宽度消除跳动。 */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
-    width: fit-content;
-    min-width: 255px;
-    max-width: 280px;
+    width: 280px;
     z-index: 300;
     border-radius: 0 16px 16px 0;
     margin: 0;
