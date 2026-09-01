@@ -562,13 +562,13 @@ export function BookmarkDialog({
     submitRef.current()
   }, [open, bookmarkDialogSubmitToken])
 
+  // 图标样式与 category-dialog 父分类下拉一致（lucide icon + 分类色），不再额外 color 点
   const categoryOptions = categories.map((c) => {
     const Icon = resolveCategoryIcon(c.icon)
     return {
       value: String(c.id),
       label: categoryPathName(c, categories),
-      icon: <Icon size={12} />,
-      color: c.color,
+      icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
     }
   })
 

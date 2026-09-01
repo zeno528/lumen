@@ -4,7 +4,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { useCategories, useCreateCategory, useUpdateCategory } from '@/hooks/useCategories'
 import { buildCategoryTree } from '@/lib/category-tree'
 import { ICON_GROUPS, PRESET_COLORS, resolveCategoryIcon } from '@/lib/icon-map'
@@ -50,10 +50,18 @@ export function CategoryDialog({
 
   const editingChildIds = editingCategory ? tree.childIds(editingCategory.id) : []
   const editingHasChildren = editingChildIds.length > 0
-  // 父分类候选：全部顶级分类；编辑时排除自己
+  // 父分类候选：全部顶级分类；编辑时排除自己。
+  // 图标 / 颜色与 mobile-category-select / sidebar 一致（lucide icon + 分类色）
   const parentOptions = tree.roots
     .filter((c) => c.id !== editingCategory?.id)
-    .map((c) => ({ value: String(c.id), label: c.name }))
+    .map((c) => {
+      const Icon = resolveCategoryIcon(c.icon)
+      return {
+        value: String(c.id),
+        label: c.name,
+        icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
+      }
+    })
 
   useEffect(() => {
     if (!open) return
@@ -231,18 +239,41 @@ export function CategoryDialog({
         />
       </div>
 
-      {/* 父分类（固定两级）：留空 = 顶级；编辑含子分类的父分类时锁死 */}
+      {/* 父分类（固定两级）：留空 = 顶级；编辑含子分类的父分类时锁死。
+         用全局 Combobox（readOnly）替代旧 Select，trigger 显示分类名，下拉
+         沿用 app 的下拉视觉（与书签分类/AI 模型/备份间隔统一）。值用 label
+         作 id（同 backup-section 惯例）；同名冲突概率低且显示上等价。 */}
       <div className="mb-5">
         <Label htmlFor="category-parent">父分类（可选，最多两级）</Label>
-        <Select
+        <Combobox
           id="category-parent"
-          value={parentId}
-          onChange={(e) => setParentId(e.target.value)}
+          readOnly
           disabled={editingHasChildren}
+          value={
+            parentId === ''
+              ? editingHasChildren
+                ? '顶级（含子分类，不可改）'
+                : '无（作为顶级分类）'
+              : categories.find((c) => String(c.id) === parentId)?.name ?? ''
+          }
+          onChange={(label) => {
+            if (
+              label === '无（作为顶级分类）' ||
+              label === '顶级（含子分类，不可改）'
+            ) {
+              setParentId('')
+            } else {
+              const cat = categories.find((c) => c.name === label)
+              setParentId(cat ? String(cat.id) : '')
+            }
+          }}
           options={[
             { value: '', label: editingHasChildren ? '顶级（含子分类，不可改）' : '无（作为顶级分类）' },
             ...parentOptions,
           ]}
+          inputClassName="h-11"
+          listMaxHeight={360}
+          onClear={() => setParentId('')}
         />
       </div>
 

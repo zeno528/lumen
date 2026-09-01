@@ -220,6 +220,12 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const menuCat = catMenu?.kind === 'cat' ? categories.find((c) => c.id === catMenu.id) : null
   const catMenuItems: MenuItem[] = menuCat
     ? [
+        {
+          label: '编辑',
+          icon: <Pencil size={14} />,
+          variant: 'edit',
+          onClick: () => openEditCategory(menuCat.id),
+        },
         ...(menuCat.parent_id == null
           ? [
               {
@@ -230,12 +236,6 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
               },
             ]
           : []),
-        {
-          label: '编辑',
-          icon: <Pencil size={14} />,
-          variant: 'edit',
-          onClick: () => openEditCategory(menuCat.id),
-        },
         {
           label: '删除',
           icon: <Trash2 size={14} />,
