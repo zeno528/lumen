@@ -3,6 +3,7 @@ import {
   Layers,
   Star,
   Folder,
+  FolderInput,
   Download,
   Upload,
   Plus,
@@ -18,6 +19,7 @@ import {
   useDeleteCategory,
   useBatchDeleteCategories,
   useReorderCategories,
+  useUpdateCategory,
 } from '@/hooks/useCategories'
 import {
   useBookmarks,
@@ -28,6 +30,10 @@ import { resolveCategoryIcon } from '@/lib/icon-map'
 import { useUIStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
+import { Dialog } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Combobox } from '@/components/ui/combobox'
 import { ContextMenu, type MenuItem } from '@/components/ui/dropdown-menu'
 import { CategoryDialog } from '@/components/shared/category-dialog'
 import { CategoryDeleteDialog } from '@/components/shared/category-delete-dialog'
@@ -55,6 +61,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const batchDelete = useBatchDelete()
   const batchDeleteCats = useBatchDeleteCategories()
   const reorderCategories = useReorderCategories()
+  const updateMut = useUpdateCategory()
   const clearFav = useClearAllFavorites()
   const {
     currentCategory,
@@ -130,6 +137,9 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const [confirmDeleteEmptyCats, setConfirmDeleteEmptyCats] = useState(false)
   const [confirmBatchDeleteCat, setConfirmBatchDeleteCat] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
+  // 批量移动分类：选目标父分类（含「无」=顶级），确认后批量 PUT parent_id
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false)
+  const [moveTargetParentId, setMoveTargetParentId] = useState<string>('')
   const catIds = new Set(categories.map((c) => c.id))
   const counts = {
     all: bookmarks.length,
@@ -335,6 +345,73 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       toast.error('删除空分类失败: ' + (e as Error).message)
     }
   }
+
+  // 批量移动分类 —— 目标父分类 = 顶级或另一个父分类。
+  // 排除项：选中的分类自身 + 它们子分类（避免循环 + 维持两级层级）；
+  // 若选中的是含子项的父分类，连带把子分类也移到同一父下，保子树形状不变形。
+  const moveTargetOptions = useMemo(() => {
+    const excluded = new Set<number>()
+    for (const id of selectedCategoryIds) {
+      excluded.add(id)
+      for (const childId of tree.childIds(id)) excluded.add(childId)
+    }
+    return tree.roots
+      .filter((c) => !excluded.has(c.id))
+      .map((c) => {
+        const Icon = resolveCategoryIcon(c.icon)
+        return {
+          value: String(c.id),
+          label: c.name,
+          icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
+        }
+      })
+  }, [selectedCategoryIds, tree])
+
+  // 收集「要写入新 parent_id 的分类 id 集合」：选中 + 它们子分类（连带移动，保两层约束）
+  const moveIds = useMemo(() => {
+    const ids = new Set<number>()
+    for (const id of selectedCategoryIds) {
+      ids.add(id)
+      for (const childId of tree.childIds(id)) ids.add(childId)
+    }
+    return ids
+  }, [selectedCategoryIds, tree])
+
+  const onConfirmMove = async () => {
+    const targetParentId = moveTargetParentId === '' ? null : Number(moveTargetParentId)
+    const ids = Array.from(moveIds)
+    setMoveDialogOpen(false)
+    if (ids.length === 0) return
+    toast.success(`已移动 ${ids.length} 个分类`)
+    // 乐观由 useUpdateCategory 同步改缓存；失败 hook onError 回滚 + 这里补错误通知
+    try {
+      await Promise.all(
+        ids.map((id) => {
+          const cat = categories.find((c) => c.id === id)
+          if (!cat) return Promise.resolve()
+          return updateMut.mutateAsync({
+            id,
+            input: {
+              name: cat.name,
+              icon: cat.icon || '',
+              color: cat.color || '',
+              parent_id: targetParentId,
+            },
+          })
+        }),
+      )
+      clearCategorySelection()
+      exitCategoryBatchMode()
+    } catch (e) {
+      toast.error('移动失败: ' + (e as Error).message)
+    }
+  }
+
+  // 打开时重置目标父分类（避免上次残留）
+  useEffect(() => {
+    if (!moveDialogOpen) return
+    setMoveTargetParentId('')
+  }, [moveDialogOpen])
 
   // 删除入口：无书签直接删，有书签弹确认（父分类按聚合计数——子分类里也没书签才算空）
   const handleDeleteClick = (cat: Category) => {
@@ -550,16 +627,23 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
       {/* 分类批量操作栏（批量模式时显示）*/}
       {categoryBatchMode && (
         <div className="category-batch-bar">
-          <span className="batch-count">
-            <CheckSquare size={14} /> {selectedCategoryIds.size}
-          </span>
+          {/* 数量胶囊：文案不变，点一下 = 取消选中（原「取消选中」按钮的功能搬过来） */}
           <button
-            className="batch-btn"
+            className="batch-count batch-count-clickable"
             disabled={selectedCategoryIds.size === 0}
             onClick={() => clearCategorySelection()}
             title="取消选中"
           >
-            取消选中
+            <CheckSquare size={14} /> {selectedCategoryIds.size}
+          </button>
+          {/* 原「取消选中」按钮位置改为「移动」（批量修改选中分类的父分类） */}
+          <button
+            className="batch-btn"
+            disabled={selectedCategoryIds.size === 0}
+            onClick={() => setMoveDialogOpen(true)}
+            title="移动选中分类到其他父分类"
+          >
+            <FolderInput size={14} /> 移动
           </button>
           <button
             className="batch-btn btn-batch-delete"
@@ -670,6 +754,48 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
         editingCategory={editingCategory}
         onCreated={(id) => setRecentlyAddedCatId(id)}
       />
+
+      {/* 分类批量移动：选目标父分类（含顶级），确认后批量 PUT parent_id。
+         含子分类的父分类会连带子分类一并迁移，保两级层级。*/}
+      <Dialog
+        open={moveDialogOpen}
+        onClose={() => setMoveDialogOpen(false)}
+        title={`移动 ${selectedCategoryIds.size} 个分类`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setMoveDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={onConfirmMove}>确认移动</Button>
+          </>
+        }
+      >
+        <div className="mb-5">
+          <Label>目标父分类</Label>
+          <Combobox
+            id="category-batch-move-parent"
+            readOnly
+            value={
+              moveTargetParentId === ''
+                ? '无（作为顶级分类）'
+                : categories.find((c) => String(c.id) === moveTargetParentId)?.name ?? ''
+            }
+            onChange={(label) => {
+              if (label === '无（作为顶级分类）') {
+                setMoveTargetParentId('')
+              } else {
+                const cat = categories.find((c) => c.name === label)
+                setMoveTargetParentId(cat ? String(cat.id) : '')
+              }
+            }}
+            options={[
+              { value: '', label: '无（作为顶级分类）' },
+              ...moveTargetOptions,
+            ]}
+            inputClassName="h-11"
+          />
+        </div>
+      </Dialog>
 
       {/* 分类删除确认（仅有书签时显示）*/}
       <CategoryDeleteDialog

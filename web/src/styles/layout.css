@@ -758,13 +758,34 @@ select,
 .category-batch-bar .batch-count {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  padding: 2px 8px;
+  /* 高度/padding 对齐 .batch-btn（h=26 + px-8）—— 数量胶囊与左右按钮同一高度 */
+  height: 26px;
+  padding: 0 8px;
+  /* 数字位数变（9→10→100）也不让外层宽度跳：
+     tabular-nums 0-9 等宽 + min-width 容纳 3 位数（"999"） */
+  min-width: 36px;
+  font-variant-numeric: tabular-nums;
   border-radius: 50px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
+}
+/* 数量胶囊变可点击：承担「取消选中」功能（视觉与文本与原 span 一致） */
+.category-batch-bar .batch-count-clickable {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.category-batch-bar .batch-count-clickable:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.category-batch-bar .batch-count-clickable:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .category-batch-bar .batch-btn {
   display: inline-flex;
