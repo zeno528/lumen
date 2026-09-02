@@ -200,14 +200,14 @@ export function TokenSection() {
           <div className="flex items-center gap-2 w-full">
             <code className="flex-1 min-w-0 h-8 text-[0.82rem] leading-8 text-(--text-primary) select-all bg-(--bg-secondary) px-2.5 rounded-lg border border-(--border) font-mono overflow-hidden text-ellipsis whitespace-nowrap">
               curl -H &quot;Authorization: Bearer {newToken}&quot;{' '}
-              {location.origin}/api/bookmarks
+              {location.origin}/openapi.json
             </code>
             <Button
               variant="outline"
               size="sm"
               onClick={() =>
                 copy(
-                  `curl -H "Authorization: Bearer ${newToken}" ${location.origin}/api/bookmarks`,
+                  `curl -H "Authorization: Bearer ${newToken}" ${location.origin}/openapi.json`,
                   'cURL 已复制',
                   setCopiedCurl,
                 )
