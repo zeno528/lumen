@@ -14,9 +14,10 @@ import (
 )
 
 // handleExport GET /api/export?format=json[&ids=1,2,3]
-// 不传 ids 导出全部；传 ids 只导出选中的书签（批量导出选中）。
+// 不传 ids 导出全部；传 ids 只导出选中的书签（批量导出选中），
+// 同时只返回这些书签实际引用的分类（含其父分类），而非全部分类。
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
-	cats, err := s.getAllCategories()
+	allCats, err := s.getAllCategories()
 	if err != nil {
 		log.Printf("操作失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
@@ -24,6 +25,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var bookmarks []Bookmark
+	var cats []Category
 	idsParam := r.URL.Query().Get("ids")
 	if idsParam != "" {
 		ids, parseErr := parseIDList(idsParam)
@@ -36,7 +38,37 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		} else {
 			bookmarks = []Bookmark{}
 		}
+		// 选中书签导出的分类 = 这些书签引用的分类 + 它们的父分类（保树形）
+		parentByID := make(map[int64]*int64, len(allCats))
+		for i := range allCats {
+			parentByID[allCats[i].ID] = allCats[i].ParentID
+		}
+		referenced := make(map[int64]struct{})
+		for _, b := range bookmarks {
+			if b.CategoryID == nil {
+				continue
+			}
+			id := *b.CategoryID
+			for {
+				if _, ok := referenced[id]; ok {
+					break
+				}
+				referenced[id] = struct{}{}
+				pid := parentByID[id]
+				if pid == nil {
+					break
+				}
+				id = *pid
+			}
+		}
+		cats = make([]Category, 0, len(referenced))
+		for _, c := range allCats {
+			if _, ok := referenced[c.ID]; ok {
+				cats = append(cats, c)
+			}
+		}
 	} else {
+		cats = allCats
 		bookmarks, err = s.getAllBookmarks()
 	}
 	if err != nil {
@@ -48,9 +80,35 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	timestamp := time.Now().Format("0102-1504")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=lumen-sr-%s.json", timestamp))
 	writeJSON(w, http.StatusOK, map[string]any{
-		"categories": cats,
+		"categories": exportCategories(cats),
 		"bookmarks":  bookmarks,
 	})
+}
+
+// exportCategory 导出视图：层级用父分类名（跨安装的 id 无意义），顶级 parent 为空
+type exportCategory struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Icon      string `json:"icon"`
+	Color     string `json:"color"`
+	SortOrder int    `json:"sort_order"`
+	Parent    string `json:"parent,omitempty"`
+}
+
+func exportCategories(cats []Category) []exportCategory {
+	nameByID := make(map[int64]string, len(cats))
+	for _, c := range cats {
+		nameByID[c.ID] = c.Name
+	}
+	out := make([]exportCategory, 0, len(cats))
+	for _, c := range cats {
+		ec := exportCategory{ID: c.ID, Name: c.Name, Icon: c.Icon, Color: c.Color, SortOrder: c.SortOrder}
+		if c.ParentID != nil {
+			ec.Parent = nameByID[*c.ParentID]
+		}
+		out = append(out, ec)
+	}
+	return out
 }
 
 // parseIDList 把 "1,2,3" 解析成 []int64，忽略空段。
@@ -254,6 +312,7 @@ type ImportCategory struct {
 	Color     string     `json:"color"`
 	IsDefault bool       `json:"isDefault"`
 	SortOrder *int       `json:"sort_order"`
+	Parent    string     `json:"parent,omitempty"` // 父分类名（固定两级）；空 = 顶级。旧格式无此字段，导入后全为顶级
 }
 
 type ImportBookmark struct {
@@ -369,6 +428,27 @@ func (s *Server) importJSON(categories []ImportCategory, bookmarks []ImportBookm
 		}
 	}
 	rows.Close()
+
+	// 两级层级：按 Parent（父分类名）补齐 parent_id，放在全部分类插入之后（父可能排在文件后面）。
+	// 解析不到父名、或指向的分类自身已是子分类（会超两级）→ 保持顶级；父名重名时取第一个。
+	for _, cat := range categories {
+		if cat.Parent == "" {
+			continue
+		}
+		var parentID int64
+		err := tx.QueryRow(
+			"SELECT id FROM categories WHERE name = ? AND parent_id IS NULL ORDER BY sort_order, id LIMIT 1",
+			cat.Parent,
+		).Scan(&parentID)
+		if err != nil {
+			continue // ErrNoRows（父名不存在）或其他查询错误都不阻断导入，落为顶级
+		}
+		if childID, ok := catIDMap[cat.ID.String()]; ok {
+			if _, err := tx.Exec("UPDATE categories SET parent_id = ? WHERE id = ?", parentID, childID); err != nil {
+				return 0, 0, nil, nil, 0, fmt.Errorf("导入分类层级失败: %w", err)
+			}
+		}
+	}
 
 	// 查询当前库最大 sort_order：导入的书签统一排在已有书签之后（"先来后到"），
 	// 不再沿用导出文件里的原 sort_order（否则会与现有库数值重叠、散落各处）

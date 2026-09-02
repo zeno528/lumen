@@ -21,6 +21,7 @@ export interface Category {
   icon: string // FA 类名 fa-xxx，运行时映射到 Lucide（lib/icon-map）
   color: string
   sort_order: number
+  parent_id: number | null // null = 顶级；固定两级，父分类必须是顶级
 }
 
 export interface BookmarksResponse {
@@ -47,6 +48,7 @@ export interface CategoryInput {
   name: string
   icon?: string
   color?: string
+  parent_id?: number | null // 缺省/null = 顶级
 }
 
 /** API Token 列表项（脱敏，无明文，对齐 tokens.go handleListTokens）*/

@@ -52,9 +52,14 @@ export function CategoryDeleteDialog({
       <p className="text-sm text-(--text-secondary) mb-3 leading-relaxed">
         确定要删除分类 "<span className="text-(--text-primary) font-medium">{category.name}</span>" 吗？
       </p>
-      <p className="text-xs text-(--text-muted)">
+      <p className="text-xs text-(--text-muted) mb-2">
         该分类下有 <span className="text-(--accent) font-semibold">{count}</span> 个书签
       </p>
+      {category.parent_id == null && (
+        <p className="text-xs text-(--text-muted)">
+          它的子分类将<span className="text-(--text-secondary)">升级为顶级分类</span>，不受删除影响
+        </p>
+      )}
     </Dialog>
   )
 }

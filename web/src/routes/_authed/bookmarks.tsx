@@ -30,6 +30,7 @@ import {
 import { refreshBookmarkFavicon, faviconUrl, updateBookmark } from '@/api/bookmarks'
 import { blobToDataUri } from '@/lib/favicon'
 import { getScrollEl } from '@/lib/scroll-container'
+import { buildCategoryTree, categoryPathName, findCategoryByPath } from '@/lib/category-tree'
 import { setFavicon, getFavicon, deleteFavicon, markNoFavicon, unmarkNoFavicon } from '@/lib/favicon-cache'
 import type { Bookmark } from '@/types'
 import { useCategories } from '@/hooks/useCategories'
@@ -193,6 +194,8 @@ function BookmarksPage() {
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
   )
+  // 两级分类树：父分类聚合过滤用
+  const tree = useMemo(() => buildCategoryTree(categories), [categories])
 
   const q = searchQuery.toLowerCase().trim()
   const activeCategory = typeof currentCategory === 'number'
@@ -230,7 +233,11 @@ function BookmarksPage() {
         (b) => b.category_id == null || !catIds.has(b.category_id),
       )
     } else if (currentCategory !== 'all') {
-      bookmarks = bookmarks.filter((bookmark) => bookmark.category_id === currentCategory)
+      // 两级层级：选父分类时聚合显示自身 + 子分类的书签
+      const filterIds = new Set(tree.filterIdsFor(currentCategory))
+      bookmarks = bookmarks.filter(
+        (bookmark) => bookmark.category_id != null && filterIds.has(bookmark.category_id),
+      )
     }
     // 全部 / 收藏视图（非搜索）按 id DESC（创建顺序，最新在前），不按 sort_order：移动书签到新分类时
     // 后端会改 sort_order（目标分类末尾），若这两个视图也按 sort_order 排会导致书签在当前视图换位。
@@ -240,7 +247,7 @@ function BookmarksPage() {
     }
     return bookmarks
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allBookmarks, categories, catMap, q, currentCategory, idSearchMode])
+  }, [allBookmarks, categories, catMap, tree, q, currentCategory, idSearchMode])
 
   // 搜索结果按分类分组：filtered 已按分类排好（同分类必相邻），只需切连续段；未分类最后
   const searchGroups = useMemo(() => {
@@ -259,8 +266,37 @@ function BookmarksPage() {
     return groups
   }, [filtered, categories, q])
 
-  const cardGroups = q ? searchGroups : null
-  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number'
+  // 父分类聚合视图的分组：父分类自身的书签打头且不显示分组标题（页面标题已表达），
+  // 子分类按侧栏顺序带标题分组（空子分类也显示，结构与侧栏一致）。
+  // 组内书签保持 allBookmarks 顺序（与子分类单独视图的排序一致）。
+  const aggregatedGroups = useMemo(() => {
+    if (q || typeof currentCategory !== 'number') return null
+    const childIds = tree.childIds(currentCategory)
+    if (childIds.length === 0) return null
+    const catById = new Map(categories.map((c) => [c.id, c]))
+    const parent = catById.get(currentCategory)
+    if (!parent) return null
+    return [
+      { category: parent, bookmarks: allBookmarks.filter((b) => b.category_id === currentCategory), showTitle: false as const },
+      ...childIds.map((id) => {
+        const child = catById.get(id)
+        return child
+          ? { category: child, bookmarks: allBookmarks.filter((b) => b.category_id === id), showTitle: true as const }
+          : null
+      }).filter((g) => g !== null),
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allBookmarks, categories, tree, q, currentCategory])
+
+  const cardGroups: { category?: Category; bookmarks: Bookmark[]; showTitle: boolean }[] | null = q
+    ? searchGroups
+    : aggregatedGroups
+  // 聚合视图跨子分类混排，网格内重排语义不明 → canReorderBookmarks 关掉（组内视觉移位松手弹回）；
+  // 拖拽移动照常可用：拖到侧栏分类 = 移动；拖到别的子分类卡片上 = 移动到该卡片所属分类。
+  // group 前缀故意用 bookmarks:agg: 绕开 getProjectedSort 的 bookmarks:category: 匹配，
+  // 否则 projectedSort 有值会让跨组 card→card 落到 null 分支变成 no-op
+  const isAggregatedView = cardGroups != null && !q
+  const canReorderBookmarks = !q && !batchMode && typeof currentCategory === 'number' && !isAggregatedView
   const lastDrop = useDragStore((state) => state.lastDrop)
   const handledDropToken = useRef<number | null>(null)
 
@@ -382,7 +418,11 @@ function BookmarksPage() {
     const onScroll = () => {
       window.clearTimeout(t)
       t = window.setTimeout(() => {
-        localStorage.setItem('bookmarks-scroll', String(el.scrollTop))
+        try {
+          localStorage.setItem('bookmarks-scroll', String(el.scrollTop))
+        } catch {
+          /* 配额满 / 隐私模式：静默 */
+        }
       }, 200)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -550,7 +590,8 @@ function BookmarksPage() {
     try {
       const meta = await fetchAIMeta(
         bookmark.url,
-        categories.map((c) => c.name),
+        // 子分类传「父/子」路径名区分重名（后端 categoryProfiles 按同规则解析取样）
+        categories.map((c) => categoryPathName(c, categories)),
         ac.signal,
         {
           title: bookmark.title,
@@ -559,7 +600,7 @@ function BookmarksPage() {
         },
       )
       const suggestedCategory = bookmark.category_id == null && meta.category
-        ? categories.find((c) => c.name.trim().toLowerCase() === meta.category?.trim().toLowerCase())
+        ? findCategoryByPath(meta.category, categories)
         : undefined
       const categoryNames = new Set(categories.map((c) => c.name.trim().toLowerCase()))
       await updateMut.mutateAsync({
@@ -781,7 +822,7 @@ function BookmarksPage() {
                       exiting={isBookmarkExiting(b.id)}
                       dragEnabled={!q && !batchMode}
                       index={index}
-                      group={`bookmarks:category:${groupKey}`}
+                      group={`bookmarks:agg:${groupKey}`}
                     />
                   )),
                 ]
@@ -798,7 +839,7 @@ function BookmarksPage() {
                   highlighted={b.id === recentlyMovedId}
                   refreshing={refreshingFavId === b.id}
                   exiting={isBookmarkExiting(b.id)}
-                  dragEnabled={!q && !batchMode}
+                  dragEnabled={!q && !batchMode && !isAggregatedView}
                   index={index}
                   group={`bookmarks:category:${currentCategory}`}
                 />

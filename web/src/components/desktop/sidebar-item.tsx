@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useDroppable } from '@dnd-kit/react'
 import { useSortable, type UseSortableInput } from '@dnd-kit/react/sortable'
+import { ChevronRight } from 'lucide-react'
 import { useLongPress } from '@/hooks/use-long-press'
 import { cn } from '@/lib/utils'
 import type { Category } from '@/types'
@@ -14,8 +15,10 @@ const detectAdjacentCategoryCollision: CollisionDetector = ({ dragOperation, dro
   const pointer = dragOperation.position.current
 
   if (
-    source?.group !== 'categories' ||
-    target.group !== 'categories' ||
+    typeof source?.group !== 'string' ||
+    !source.group.startsWith('categories') ||
+    typeof target.group !== 'string' ||
+    !target.group.startsWith('categories') ||
     typeof source.index !== 'number' ||
     typeof target.index !== 'number' ||
     !rectangle ||
@@ -41,6 +44,7 @@ export function SidebarItem({
   onClick,
   onContext,
   category,
+  parentId = null,
   isNew = false,
   style,
   variant = 'default',
@@ -50,6 +54,10 @@ export function SidebarItem({
   dragEnabled = false,
   index = 0,
   group = 'categories:root',
+  nested = false,
+  hasChildren = false,
+  expanded = false,
+  onToggleExpand,
 }: {
   icon: React.ReactNode
   label: string
@@ -58,16 +66,26 @@ export function SidebarItem({
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void
   onContext?: (e: React.MouseEvent) => void
   category?: Category
+  /** 所属父分类 id（顶级为 null）；拖拽排序只接受同组（同父）来源 */
+  parentId?: number | null
   isNew?: boolean
   style?: React.CSSProperties
   variant?: 'default' | 'pill'
   iconColor?: string
   selected?: boolean
   onSelect?: (e: React.MouseEvent, id: number) => void
-  /** 顶级分类排序开关；批量选择时关闭。 */
+  /** 分类排序开关；批量选择时关闭。 */
   dragEnabled?: boolean
+  /** 兄弟组内下标（非全量扁平下标），供相邻碰撞检测 */
   index?: number
+  /** 排序组：顶级 'categories:root'，子分类 'categories:child:{parentId}' */
   group?: string
+  /** 子分类缩进行 */
+  nested?: boolean
+  /** 父分类且有子分类：显示展开/折叠 chevron（在 sortable 元素子树内，随拖拽 transform 一起位移） */
+  hasChildren?: boolean
+  expanded?: boolean
+  onToggleExpand?: () => void
 }) {
   const [showPopIn, setShowPopIn] = useState(isNew)
 
@@ -87,11 +105,18 @@ export function SidebarItem({
     index,
     group,
     type: 'category',
-    accept: (source) => Boolean(category && source.data.kind === 'category' && source.data.id !== category.id),
+    // 只接受同组（同父）来源：跨级拖拽排序不在本次范围内（改父级走编辑对话框）
+    accept: (source) =>
+      Boolean(
+        category &&
+          source.data.kind === 'category' &&
+          source.data.id !== category.id &&
+          source.data.parentId === parentId,
+      ),
     disabled: !category || !dragEnabled,
     transition: { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
-    collisionDetector: group === 'categories' ? detectAdjacentCategoryCollision : undefined,
-    data: category ? { kind: 'category', id: category.id } : undefined,
+    collisionDetector: group.startsWith('categories') ? detectAdjacentCategoryCollision : undefined,
+    data: category ? { kind: 'category', id: category.id, parentId } : undefined,
   })
   const categoryZone = useDroppable({
     id: category ? `category-zone:${category.id}` : `virtual-category-zone:${label}`,
@@ -111,6 +136,7 @@ export function SidebarItem({
       style={style}
       className={cn(
         'sidebar-item',
+        nested && 'sidebar-item-nested',
         active && 'active',
         showPopIn && 'pop-in',
         selected && 'selected',
@@ -130,6 +156,20 @@ export function SidebarItem({
         if (showPopIn && e.animationName === 'popIn') setShowPopIn(false)
       }}
     >
+      {hasChildren && (
+        <button
+          type="button"
+          className="sidebar-expand-btn"
+          aria-expanded={expanded}
+          aria-label={expanded ? '折叠子分类' : '展开子分类'}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleExpand?.()
+          }}
+        >
+          <ChevronRight size={13} strokeWidth={2.5} className={cn('transition-transform duration-200', expanded && 'rotate-90')} />
+        </button>
+      )}
       <div
         className={cn(
           'sidebar-icon',

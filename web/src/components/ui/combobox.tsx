@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { ChevronDown, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from './input'
 
@@ -40,6 +40,8 @@ export interface ComboboxProps {
   listMaxHeight?: number
   /** 禁用（readOnly 触发器置灰不可点） */
   disabled?: boolean
+  /** readOnly 模式下显示 × 清除按钮（回调由调用方决定清成什么值，如父分类→顶级） */
+  onClear?: () => void
 }
 
 export function Combobox({
@@ -55,6 +57,7 @@ export function Combobox({
   onEnter,
   listMaxHeight = 240,
   disabled = false,
+  onClear,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLDivElement>(null)
@@ -137,7 +140,7 @@ export function Combobox({
       {filtered.map((o) => (
         <div
           key={o.value}
-          className="dropdown-option"
+          className={cn('dropdown-option', o.label === value && 'active')}
           onMouseDown={(e) => {
             // mousedown 比 click 早，且不会丢 input 焦点
             e.preventDefault()
@@ -146,11 +149,6 @@ export function Combobox({
           role="option"
           aria-selected={o.label === value}
         >
-          {o.label === value ? (
-            <Check size={16} className="text-(--accent) shrink-0" />
-          ) : (
-            <span className="w-4 h-4 shrink-0" aria-hidden />
-          )}
           {o.icon && (
             <span className="dropdown-option-prefix">
               <span className="w-5 h-5 inline-flex items-center justify-center shrink-0">
@@ -159,12 +157,22 @@ export function Combobox({
             </span>
           )}
           <span className="dropdown-option-label">{o.label}</span>
-          {o.color && (
+          {(o.label === value || o.color) && (
             <span className="dropdown-option-suffix">
-              <span
-                className="w-2 h-2 rounded-full shrink-0 inline-block"
-                style={{ background: o.color }}
-              />
+              {o.label === value && (
+                <Check
+                  size={14}
+                  strokeWidth={3}
+                  className="shrink-0 text-(--accent)"
+                  aria-hidden="true"
+                />
+              )}
+              {o.color && (
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 inline-block"
+                  style={{ background: o.color }}
+                />
+              )}
             </span>
           )}
         </div>
@@ -192,6 +200,20 @@ export function Combobox({
             aria-expanded={open}
           >
             <span className="dropdown-trigger-label">{value || placeholder}</span>
+            {onClear && value && !disabled && (
+              // 与 trigger 按钮同框：stopPropagation 阻止冒泡到 button.onClick 打开下拉
+              <X
+                size={14}
+                strokeWidth={2.5}
+                aria-label="清除选择"
+                className="dropdown-trigger-clear shrink-0 cursor-pointer text-(--text-muted) hover:text-(--text-primary) transition-colors outline-none focus:outline-none"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onClear()
+                }}
+              />
+            )}
             <ChevronDown size={14} className="dropdown-trigger-chevron" />
           </button>
         ) : (

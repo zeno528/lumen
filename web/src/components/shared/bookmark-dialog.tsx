@@ -11,6 +11,7 @@ import { PasteButton, pasteClipboardText } from './clipboard-paste'
 import { useBookmarks, useCreateBookmark, useUpdateBookmark } from '@/hooks/useBookmarks'
 import { useCategories, useCreateCategory } from '@/hooks/useCategories'
 import { fetchPageTitle, fetchAIMeta } from '@/api/utils'
+import { categoryPathName, findCategoryByPath } from '@/lib/category-tree'
 import { fetchFaviconDataUri } from '@/lib/favicon'
 import { setFavicon } from '@/lib/favicon-cache'
 import { getAISettings } from '@/api/settings'
@@ -242,11 +243,10 @@ export function BookmarkDialog({
   ) => {
     const category = selectedCategory || suggestedCategory
     let categoryId: number | null = null
-    // 分类只由用户掌控：AI 建议的 category 仅命中已有分类才用，不命中则留空（未分类），绝不新建
+    // 分类只由用户掌控：AI 建议的 category 仅命中已有分类才用（「父/子」路径或顶级裸名），
+    // 不命中则留空（未分类），绝不新建
     if (category) {
-      const existing = categories.find(
-        (c) => c.name.trim().toLowerCase() === category.toLowerCase(),
-      )
+      const existing = findCategoryByPath(category, categories)
       if (existing) categoryId = existing.id
     }
 
@@ -325,7 +325,8 @@ export function BookmarkDialog({
     try {
       const meta = await fetchAIMeta(
         normalized,
-        categories.map((c) => c.name),
+        // 子分类传「父/子」路径名区分重名（后端 categoryProfiles 按同规则解析取样）
+        categories.map((c) => categoryPathName(c, categories)),
         ac.signal,
         { title, description: desc, tags },
       )
@@ -561,13 +562,13 @@ export function BookmarkDialog({
     submitRef.current()
   }, [open, bookmarkDialogSubmitToken])
 
+  // 图标样式与 category-dialog 父分类下拉一致（lucide icon + 分类色），不再额外 color 点
   const categoryOptions = categories.map((c) => {
     const Icon = resolveCategoryIcon(c.icon)
     return {
       value: String(c.id),
-                  label: c.name,
-      icon: <Icon size={12} />,
-      color: c.color,
+      label: categoryPathName(c, categories),
+      icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
     }
   })
 

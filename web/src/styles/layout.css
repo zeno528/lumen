@@ -490,8 +490,8 @@ select,
   padding: 0;
   gap: 0;
   background: transparent;
-  /* 供批量操作栏等 fixed 元素计算主内容区中心用 */
-  --sidebar-width: 260px;
+  /* 供批量操作栏等 fixed 元素计算主内容区中心用；.sidebar 宽度同源 */
+  --sidebar-width: 280px;
 }
 /* 设置页/帮助页（新窗口独立打开）：无侧边栏、无顶栏，main 全宽。
    顶栏（搜索/批量/头像）是主应用导航，独立帮助页不需要，CSS 隐藏。 */
@@ -520,11 +520,11 @@ select,
   border-top: 1px solid var(--border);
 }
 
-/* 侧边栏：260px 直角贴满，背景用 var(--sidebar-panel)（比 body 略深，
+/* 侧边栏：280px 直角贴满，背景用 var(--sidebar-panel)（比 body 略深，
    让 main 卡片化"亮起来"形成明显层次，配套见 .layout 跟 .main）。
    不再用 inline theme 规则（变量随主题自动切换，避免色板双写）。*/
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   padding: 8px;
   margin: 0;
@@ -654,6 +654,49 @@ select,
      修这一处 + name 那处 = 链路两端都能缩。 */
   min-width: 0;
 }
+/* 分类列表所有行统一 25px 起始（= 原 11 缩进 + 14 chevron 槽位）：无箭头的行留空槽，
+   父分类/叶子分类/全部/收藏的图标列才在同一竖线上（VSCode/Notion 同款树形 gutter）。
+   只作用于侧栏分类列表；设置页 pill 变体不在 .sidebar-categories 内，沿用基础 11px */
+.sidebar-categories .sidebar-item {
+  padding-left: 25px;
+}
+/* 子分类行：整体缩进表达层级
+   对齐算法：父文字起点 = padding 25 + icon 26 + gap 10 = 61；要让子文字起点 ≈ 父文字起点 + 19，
+   子 padding + icon 26 + gap 10 = 61 + 19 = 80 → 子 padding = 44。
+   子项字号小一号 + 缩进 = 双重层级信号 */
+.sidebar-item.sidebar-item-nested {
+  padding-left: 44px;
+  font-size: 0.88rem;
+}
+/* 父分类展开/折叠 chevron：行内流式首列（在 sidebar-item 子树内，拖拽排序时随 dnd-kit transform
+   一起位移——wrapper + absolute 方案在拖拽时会脱钩错位）。18×18 盒 margin -22 + 右 4px：
+   占 3..21，与 25 起的图标列留 4px 间隙（20×20 margin -22 会 0px 贴死图标盒）。
+   position+z-index 必须保留：压到 .sidebar-item-inner::before 全行热区（absolute 覆盖 left0→right0）
+   之上，否则箭头的 click 全被热区截走变成选中分类（b3cc911 "要点多次才展开"的真因） */
+.sidebar-expand-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-left: -22px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-expand-btn:hover {
+  /* 低对比薄层而非 --bg-card：active 行上白底药丸贴边贴图标显得"挤死"，主题自适应 overlay 才不突兀 */
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  color: var(--text-primary);
+}
 /* 边界热区：覆盖分类项之间 .sidebar-categories 的 2px gap。
    与书签视图同款「before 伪元素扩热区」做法（星标 before:-inset-3 / 箭头 ::before inset:-4px）：
    伪元素只参与命中测试、不绘制，hover 视觉不变；上下各扩 1px 正好铺满 2px 间隙，
@@ -715,13 +758,34 @@ select,
 .category-batch-bar .batch-count {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  padding: 2px 8px;
+  /* 高度/padding 对齐 .batch-btn（h=26 + px-8）—— 数量胶囊与左右按钮同一高度 */
+  height: 26px;
+  padding: 0 8px;
+  /* 数字位数变（9→10→100）也不让外层宽度跳：
+     tabular-nums 0-9 等宽 + min-width 容纳 3 位数（"999"） */
+  min-width: 36px;
+  font-variant-numeric: tabular-nums;
   border-radius: 50px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
+}
+/* 数量胶囊变可点击：承担「取消选中」功能（视觉与文本与原 span 一致） */
+.category-batch-bar .batch-count-clickable {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.category-batch-bar .batch-count-clickable:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.category-batch-bar .batch-count-clickable:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .category-batch-bar .batch-btn {
   display: inline-flex;
@@ -1045,7 +1109,8 @@ select,
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-secondary);
+  /* 与父级视图标题 .bookmarks-view-title 同色（用户要求一致，不用次级灰） */
+  color: var(--text-primary);
 }
 .search-group-count {
   font-size: 12px;
@@ -1084,11 +1149,11 @@ select,
    语义类 selected 由 bookmark-card.tsx 在 selected 时挂载。
    边框变 accent + 双层阴影（1px 实色描边 + 16px 柔和外发光）。*/
 .bookmark-card.selected {
-  box-shadow: 0 0 0 1px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 /* hover 时重申选中样式，防止 .bookmark-card:hover 覆盖选中态*/
 .bookmark-card.selected:hover {
-  box-shadow: 0 0 0 1px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 /* 批量模式：禁用文本选中 + 取消 hover 上浮 / 背景变化
    */
@@ -1254,15 +1319,16 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     overflow: visible;
   }
 
-  /* 侧边栏抽屉：贴边左 0，默认 -100% 隐藏，open 时滑入*/
+  /* 侧边栏抽屉：贴边左 0，默认 -100% 隐藏，open 时滑入。
+     宽度固定 280px（与 .layout 的 --sidebar-width 一致），不再 fit-content：
+     展开/收起子分类时内容行宽会变（嵌套 padding 44px vs 25px），fit-content 会让抽屉
+     跟着内容跳——固定宽度消除跳动。 */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
-    width: fit-content;
-    min-width: 255px;
-    max-width: 280px;
+    width: 280px;
     z-index: 300;
     border-radius: 0 16px 16px 0;
     margin: 0;
@@ -1408,10 +1474,12 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
      与卡片左右缘对齐。形状语言：容器是大 pill，按钮 height:100% 撑满 grid cell + 999px 圆角 =
      「胶囊里嵌胶囊」，按钮圆角 = 容器圆角 - padding = 同心缩比 ~6px，
      容器 padding 提供四周间距让两者不贴合内壁。*/
-  /* 用户契约（2026-08-29）：Dock 常驻后卡片持续从底下穿过，要求**不透明、无阴影**；
-     1px var(--border) 描边勾出容器形状（纯色底与页面底色太近，无描边看不出轮廓）。
-     旧毛玻璃（渐变 + blur + 5 层阴影，theSVG 复刻）已删，反悔从 git 历史（141efed）捞。
-     safe-area：env() 常规浏览器为 0（= 原 14px），PWA standalone 抬离 home indicator。*/
+  /* 用户契约：Dock 常驻后卡片持续从底下穿过 → **保持不透明**（旧毛玻璃已删，
+     反悔从 git 历史 141efed 捞）。2026-09-02 用户嫌扁平，改「实底材质立体」：
+     纵向微渐变模拟顶光 + 紧贴双层接触阴影。阴影 blur ≤14px 不外扩成光晕
+     （大光晕曾两度被当成低透明度容器点名撤掉）；不用 inset 顶高光（曾只在顶部
+     画 1px 亮线被当成上边框）。safe-area：env() 常规浏览器为 0（= 原 14px），
+     PWA standalone 抬离 home indicator。*/
   :root {
     --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -1427,14 +1495,25 @@ body:has(.sidebar-item.bookmark-drop-target) .bookmark-card[data-dnd-dragging='t
     padding: 6px 6px;
     align-items: stretch;
     border-radius: 999px;
-    /* 样式契约（用户 2026-08-29）：不透明实底、无描边、无内高光、无外投影
-       （深色 inset 高光曾只在顶部画 1px 亮线被当成上边框；外投影光晕在全屏化后
-       会被当成低透明度容器，用户多次点名） */
+    /* 不透明实底 + 纵向微渐变（顶部抬 ~7% 亮度模拟顶光，读作材质而非半透明）。
+       深色 theme 同一渐变公式复用（color-mix 走 token，两份色值零重复），
+       仅阴影 alpha 按深浅色分档。*/
     border: none;
-    background: var(--bg-secondary);
-    box-shadow: none;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-secondary) 93%, white 7%),
+      var(--bg-secondary) 60%
+    );
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.07),
+      0 6px 14px rgba(0, 0, 0, 0.1);
     touch-action: manipulation;
     transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  [data-theme='notion-dark'] .mobile-fab-menu {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      0 6px 14px rgba(0, 0, 0, 0.4);
   }
   /* 按钮：垂直堆叠（图标 + 标签）+ height:100% 撑满 cell 让胶囊形状跟容器同心缩比。
      容器 padding 6px 让按钮四周保留 ~6px 间隙，避免和大胶囊内壁重合。*/

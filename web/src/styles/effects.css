@@ -532,11 +532,18 @@ body:hover,
   font: inherit;
   display: inline-flex;
   align-items: center;
+  /* min-width：数字位数变（1→10→100）时胶囊宽度不变，工具栏整体不跳。
+     120px ≈ 3 位数「已选 999 项」的自然宽度；tabular-nums 保证数字等宽。
+     与 .category-batch-bar .batch-count 同一手法（layout.css:758）；
+     单页书签过千（4 位）会再跳一次，届时上调此值。 */
+  justify-content: center;
   gap: 6px;
   font-weight: 700;
   font-size: 13px;
   color: #fff;
   padding: 4px 14px;
+  min-width: 120px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   border: none;
   cursor: pointer;

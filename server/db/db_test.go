@@ -8,7 +8,7 @@ import (
 	"lumen/server/db"
 )
 
-func TestMigrateRemovesLegacyCategoryParentColumn(t *testing.T) {
+func TestMigrateClearsLegacyCategoryHierarchy(t *testing.T) {
 	database, err := db.Connect(filepath.Join(t.TempDir(), "legacy.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -43,24 +43,14 @@ func TestMigrateRemovesLegacyCategoryParentColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := database.Query("PRAGMA table_info(categories)")
-	if err != nil {
+	// 迁移历史：015 清空层级数据、016 删除 parent_id 列；019 为两级分类重新加回该列。
+	// 关键不变量：旧层级数据必须已被清空——迁移后所有分类的 parent_id 都应是 NULL。
+	var linkedCount int
+	if err := database.QueryRow("SELECT COUNT(*) FROM categories WHERE parent_id IS NOT NULL").Scan(&linkedCount); err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid, notNull, primaryKey int
-		var name, columnType string
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
-			t.Fatal(err)
-		}
-		if name == "parent_id" {
-			t.Fatal("legacy parent_id column should be removed")
-		}
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
+	if linkedCount != 0 {
+		t.Fatalf("categories with parent_id = %d, want 0（旧层级数据必须被清空）", linkedCount)
 	}
 
 	var categoryCount int

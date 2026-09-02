@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { QueryClient } from '@tanstack/react-query'
 import { configureApiClient } from '@/api/client'
+import { safeLocalStorage } from '@/lib/safe-storage'
 
 // queryClient 运行时注入（main.tsx 创建后调 setAuthQueryClient）。
 // logout 时清 auth 相关 query cache：这些缓存持久化到 localStorage + staleTime 5min，
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'lumen-auth',
       // 仅持久化 token（setToken/logout 是函数，序列化无意义；未来加非 JSON 字段也安全）
       partialize: (s) => ({ token: s.token }),
+      storage: createJSONStorage(() => safeLocalStorage),
     },
   ),
 )

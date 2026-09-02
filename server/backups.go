@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -674,9 +675,15 @@ func quoteIdentifiers(columns []string) []string {
 	return quoted
 }
 
-func restoreTableRows(tx *sql.Tx, snapshot *sql.DB, table string, columns []string) (int, error) {
+func restoreTableRows(tx *sql.Tx, snapshot *sql.DB, table string, columns []string, orderBy string) (int, error) {
 	quoted := quoteIdentifiers(columns)
-	selectSQL := "SELECT " + strings.Join(quoted, ", ") + ` FROM "` + table + `" ORDER BY id`
+	// categories 恢复传父行先行的排序（自引用外键立即校验，子分类 id 可能小于父分类）；
+	// 其余表按 id 序
+	order := "id"
+	if orderBy != "" {
+		order = orderBy
+	}
+	selectSQL := "SELECT " + strings.Join(quoted, ", ") + ` FROM "` + table + `" ORDER BY ` + order
 	insertSQL := `INSERT INTO "` + table + `" (` + strings.Join(quoted, ", ") + `) VALUES (` +
 		strings.TrimSuffix(strings.Repeat("?, ", len(columns)), ", ") + `)`
 
@@ -747,7 +754,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 	defer closeSnapshot()
 
 	categoryAllowed := map[string]bool{
-		"id": true, "name": true, "icon": true, "color": true, "sort_order": true,
+		"id": true, "name": true, "icon": true, "color": true, "sort_order": true, "parent_id": true,
 	}
 	bookmarkAllowed := map[string]bool{
 		"id": true, "url": true, "title": true, "description": true, "category_id": true,
@@ -775,7 +782,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "读取主表结构失败"})
 		return
 	}
-	categoryColumns, err := commonColumns(snapshotCategories, liveCategories, []string{"id", "name", "icon", "color", "sort_order"})
+	categoryColumns, err := commonColumns(snapshotCategories, liveCategories, []string{"id", "name", "icon", "color", "sort_order", "parent_id"})
 	if err = errors.Join(err, requireColumns(categoryColumns, "id", "name")); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
@@ -800,11 +807,16 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "恢复分类失败"})
 		return
 	}
-	if _, err := restoreTableRows(tx, snapshot, "categories", categoryColumns); err != nil {
+	// 父行必须先于子行插入（parent_id 自引用外键立即校验）；旧快照无 parent_id 列则按默认 id 序
+	categoryOrder := ""
+	if slices.Contains(categoryColumns, "parent_id") {
+		categoryOrder = "COALESCE(parent_id, 0), id"
+	}
+	if _, err := restoreTableRows(tx, snapshot, "categories", categoryColumns, categoryOrder); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "恢复分类数据失败: " + err.Error()})
 		return
 	}
-	count, err := restoreTableRows(tx, snapshot, "bookmarks", bookmarkColumns)
+	count, err := restoreTableRows(tx, snapshot, "bookmarks", bookmarkColumns, "")
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "恢复书签数据失败: " + err.Error()})
 		return
