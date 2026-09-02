@@ -15,9 +15,14 @@ func (s *Server) registerAuthedRoutes(r chi.Router) {
 
 	// 认证验证
 	r.Get("/api/auth/verify", s.handleVerify)
-	r.Get("/api/auth/password-verified", s.handlePasswordVerifiedStatus)
-	r.Post("/api/auth/verify-password", s.handleVerifyPassword)
-	r.Put("/api/auth/password", s.handleChangePassword)
+	// 十分钟免密（密码验证时效）是人类浏览器会话专属：API Token 无"会话"概念，
+	// 三个相关端点仅限 JWT，杜绝 token 通道读取/触发免密状态。
+	r.Group(func(r chi.Router) {
+		r.Use(RequireJWT)
+		r.Get("/api/auth/password-verified", s.handlePasswordVerifiedStatus)
+		r.Post("/api/auth/verify-password", s.handleVerifyPassword)
+		r.Put("/api/auth/password", s.handleChangePassword)
+	})
 	// 踢其他设备下线：仅 JWT 通道（账号特权，API Token 无"当前会话"概念）
 	r.With(RequireJWT).Post("/api/auth/revoke-sessions", s.handleRevokeSessions)
 	r.Get("/api/auth/nickname", s.handleGetNickname)
@@ -29,19 +34,24 @@ func (s *Server) registerAuthedRoutes(r chi.Router) {
 	// WebSocket 票据：用主 JWT 换 5s 一次性 ticket（WS 握手不能带 Authorization header）
 	r.Get("/api/ws/ticket", s.handleWSTicket)
 
-	// AI 设置
-	r.Get("/api/ai-settings", s.handleGetAISettings)
-	r.Put("/api/ai-settings", s.handleUpdateAISettings)
-	r.With(s.rateLimit(10, time.Minute)).Post("/api/ai-test", s.handleAITest)
-	r.Put("/api/ai-settings/switch", s.handleSwitchAIProvider)
-	r.Delete("/api/ai-settings/config/{id}", s.handleDeleteAIProviderConfig)
-	r.Post("/api/ai-settings/copy", s.handleCopyConfig)
+	// AI 设置与付费 AI 端点：仅账号本人（JWT）。凭证即权限——msk_ Token（agent 日常对象
+	// 操作）物理隔离付费额度与账号级配置，防 agent 误触烧额度；agent 生成元数据用自身能力。
+	r.Group(func(r chi.Router) {
+		r.Use(RequireJWT)
+		r.Get("/api/ai-settings", s.handleGetAISettings)
+		r.Put("/api/ai-settings", s.handleUpdateAISettings)
+		r.With(s.rateLimit(10, time.Minute)).Post("/api/ai-test", s.handleAITest)
+		r.Put("/api/ai-settings/switch", s.handleSwitchAIProvider)
+		r.Delete("/api/ai-settings/config/{id}", s.handleDeleteAIProviderConfig)
+		r.Post("/api/ai-settings/copy", s.handleCopyConfig)
+		r.Post("/api/ai-meta", s.handleAIMeta)
 
-	// Serper 搜索 key（AI 助手反爬站兜底用）
-	r.Get("/api/serper-key", s.handleGetSerperKey)
-	r.Post("/api/serper-key", s.handleSaveSerperKey)
-	r.Post("/api/serper-key/test", s.handleTestSerperKey)
-	r.Delete("/api/serper-key", s.handleDeleteSerperKey)
+		// Serper 搜索 key（AI 助手反爬站兜底用，测试消耗 Serper 额度）
+		r.Get("/api/serper-key", s.handleGetSerperKey)
+		r.Post("/api/serper-key", s.handleSaveSerperKey)
+		r.Post("/api/serper-key/test", s.handleTestSerperKey)
+		r.Delete("/api/serper-key", s.handleDeleteSerperKey)
+	})
 
 	// 用户偏好设置（跨设备同步）
 	r.Get("/api/settings/id-search-mode", s.handleGetIdSearchMode)
@@ -93,7 +103,6 @@ func (s *Server) registerAuthedRoutes(r chi.Router) {
 
 	// 工具
 	r.Get("/api/fetch-title", s.handleFetchTitle)
-	r.Post("/api/ai-meta", s.handleAIMeta)
 	r.Get("/api/favicon", s.handleFavicon)
 	r.Get("/api/stats", s.handleStats)
 
