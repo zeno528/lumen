@@ -800,7 +800,7 @@ function BookmarksPage() {
                       className="search-group-title"
                     >
                       <Icon
-                        size={14}
+                        size={18}
                         style={{ color: group.category?.color || 'var(--text-muted)' }}
                         aria-hidden="true"
                       />

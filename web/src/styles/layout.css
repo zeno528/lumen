@@ -1073,9 +1073,11 @@ select,
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: -6px 0 8px;
+  /* 底部 18px 对齐 .bookmarks-grid 的 gap：标题与卡片间距全场景（父级标题 /
+     聚合子分类标题 / 搜索分组标题）统一为同一值，实测见 2026-09-02 */
+  margin: -6px 0 18px;
   color: var(--text-primary);
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.35;
   letter-spacing: -0.015em;
@@ -1098,8 +1100,10 @@ select,
   max-width: 1680px;
   margin: 0 auto;
 }
-/* ===== 搜索结果分组标题 =====
-   搜索时在单个 .bookmarks-grid 内按分类分段，标题作为跨列网格项插入卡片之间。 */
+/* ===== 书签网格分组标题（搜索结果分组 + 聚合视图子分类分组共用）=====
+   字号/字重/行高/字距与父级视图标题 .bookmarks-view-title 一致（搜索态头部
+   消失时标题不跳变）；边距一律 0——标题与卡片的间距只由网格 gap 提供，
+   不另带一套 margin。两处分组必须共用本类，禁止一方另设度量。 */
 .search-group-title {
   /* 作为网格项跨全部列：左缘自动对齐第一列卡片（等价搜索框的 useGridInset 对齐） */
   grid-column: 1 / -1;
@@ -1107,15 +1111,21 @@ select,
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  /* 与父级视图标题 .bookmarks-view-title 同色（用户要求一致，不用次级灰） */
   color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
 }
 .search-group-count {
   font-size: 12px;
   font-weight: 400;
   color: var(--text-muted);
+}
+/* 搜索态首枚分组标题：与父级视图标题同起始位（h1 margin-top:-6px），
+   输入关键词瞬间标题位置不位移；后续分组标题不受影响（保持 18px 网格节奏） */
+.bookmarks-grid.searching > .search-group-title:first-child {
+  margin-top: -6px;
 }
 /* ===== 书签卡片 =====
    覆盖 bookmark-card.tsx 里的内联 Tailwind 样式，让描述/URL 显示更宽。
