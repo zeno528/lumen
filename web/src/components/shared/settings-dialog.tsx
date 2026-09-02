@@ -30,7 +30,7 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: 'account', title: '账号', icon: User, Component: AccountSection },
   { id: 'appearance', title: '外观', icon: Palette, Component: AppearanceSection },
-  { id: 'ai', title: 'AI 设置', icon: Bot, Component: AiSection },
+  { id: 'ai', title: '模型管理', icon: Bot, Component: AiSection },
   { id: 'token', title: 'API Token', icon: KeyRound, Component: TokenSection },
   { id: 'backup', title: '备份', icon: Database, Component: BackupSection },
 ]

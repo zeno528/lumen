@@ -212,7 +212,7 @@ function HelpPage() {
         </Section>
 
         <Section id="settings" index={2} icon={SlidersHorizontal} title="设置中心" registerRef={registerSection}>
-          <p>设置中心分四个 tab：<strong>账号</strong> / <strong>外观</strong> / <strong>AI 设置</strong> / <strong>API Token</strong>。</p>
+          <p>设置中心分四个 tab：<strong>账号</strong> / <strong>外观</strong> / <strong>模型管理</strong> / <strong>API Token</strong>。</p>
           <H3>账号</H3>
           <p>可修改：</p>
           <ul className="list-disc pl-5 space-y-1">
@@ -228,7 +228,7 @@ function HelpPage() {
             琥珀橙 / 靛蓝 / 海洋蓝）都在本 tab 选择，偏好存 <Code>localStorage</Code>；
             深浅主题同样可在顶栏头像下拉切换，双向同步。
           </p>
-          <H3>AI 设置</H3>
+          <H3>模型管理</H3>
           <p>配置 AI Provider 与 Serper 搜索，详见下方「AI 功能」章节。</p>
           <H3>API Token</H3>
           <p>创建第三方访问令牌，用于 AI 工具（如 Claude Code）直接管理书签。在请求头中携带：</p>
@@ -327,7 +327,7 @@ function HelpPage() {
         <Section id="ai" index={9} icon={Wand2} title="AI 功能" registerRef={registerSection}>
           <H3>入口</H3>
           <p>
-            设置中心 -&gt; AI 设置。该区域独立 tab，包含两部分：<strong>AI Provider</strong>与<strong>Serper 搜索</strong>。
+            设置中心 -&gt; 模型管理。该区域独立 tab，包含两部分：<strong>AI Provider</strong>与<strong>Serper 搜索</strong>。
           </p>
           <H3>AI 智能填充</H3>
           <p>
@@ -336,13 +336,13 @@ function HelpPage() {
           </p>
           <H3>配置 AI Provider</H3>
           <p>
-            设置中心 -&gt; AI 设置 -&gt; 新增配置，在 Provider 网格里点选服务商（DeepSeek / 智谱 GLM / MiniMax / 硅基流动 /
+            设置中心 -&gt; 模型管理 -&gt; 新增配置，在 Provider 网格里点选服务商（DeepSeek / 智谱 GLM / MiniMax / 硅基流动 /
             Anthropic / 自定义），填入 API Key -&gt; 点击「测试连接」验证 -&gt; 保存。
             密钥使用 AES-256-GCM 加密存储；多个 Provider 可同时配置并随时切换。
           </p>
           <H3>Serper 搜索（反爬站兜底）</H3>
           <p>
-            部分网站启用反爬，直接抓取会失败。<strong>设置中心 -&gt; AI 设置 -&gt; 「Serper 搜索」区域</strong>填写
+            部分网站启用反爬，直接抓取会失败。<strong>设置中心 -&gt; 模型管理 -&gt; 「Serper 搜索」区域</strong>填写
             Serper API Key 保存即可，系统会用搜索结果作为兜底方案。Serper Key 与 AI Provider Key
             独立存储，互不影响。
           </p>

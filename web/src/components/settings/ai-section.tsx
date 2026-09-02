@@ -41,7 +41,7 @@ const getProviderDisplayName = (provider: string) =>
   (provider === 'custom' ? CUSTOM_PROVIDER_PRESET : AI_PRESETS[provider])?.label ?? provider
 
 /**
- * AI 设置 section -- 一个厂商可存多份配置（如 DeepSeek flash + pro 各一份），平铺展示。
+ * 模型管理 section -- 一个厂商可存多份配置（如 DeepSeek flash + pro 各一份），平铺展示。
  * 每份配置独立编辑/启用/删除；激活全局唯一（activeConfigId）。
  *
  * subView='ai-add-provider'：二级界面新增配置。
@@ -604,7 +604,7 @@ export function AiSection({
         <div>
           <h3 className="text-base font-semibold text-(--text-primary) inline-flex items-center gap-2">
             <Bot size={16} />
-            AI 设置
+            模型管理
           </h3>
           <p className="text-xs text-(--text-muted) mt-0.5">
             多 Provider 配置，一个厂商可存多份模型配置；激活的配置用于书签 AI 元数据填充
