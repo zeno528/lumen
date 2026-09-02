@@ -14,9 +14,10 @@ import (
 )
 
 // handleExport GET /api/export?format=json[&ids=1,2,3]
-// 不传 ids 导出全部；传 ids 只导出选中的书签（批量导出选中）。
+// 不传 ids 导出全部；传 ids 只导出选中的书签（批量导出选中），
+// 同时只返回这些书签实际引用的分类（含其父分类），而非全部分类。
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
-	cats, err := s.getAllCategories()
+	allCats, err := s.getAllCategories()
 	if err != nil {
 		log.Printf("操作失败: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
@@ -24,6 +25,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var bookmarks []Bookmark
+	var cats []Category
 	idsParam := r.URL.Query().Get("ids")
 	if idsParam != "" {
 		ids, parseErr := parseIDList(idsParam)
@@ -36,7 +38,37 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		} else {
 			bookmarks = []Bookmark{}
 		}
+		// 选中书签导出的分类 = 这些书签引用的分类 + 它们的父分类（保树形）
+		parentByID := make(map[int64]*int64, len(allCats))
+		for i := range allCats {
+			parentByID[allCats[i].ID] = allCats[i].ParentID
+		}
+		referenced := make(map[int64]struct{})
+		for _, b := range bookmarks {
+			if b.CategoryID == nil {
+				continue
+			}
+			id := *b.CategoryID
+			for {
+				if _, ok := referenced[id]; ok {
+					break
+				}
+				referenced[id] = struct{}{}
+				pid := parentByID[id]
+				if pid == nil {
+					break
+				}
+				id = *pid
+			}
+		}
+		cats = make([]Category, 0, len(referenced))
+		for _, c := range allCats {
+			if _, ok := referenced[c.ID]; ok {
+				cats = append(cats, c)
+			}
+		}
 	} else {
+		cats = allCats
 		bookmarks, err = s.getAllBookmarks()
 	}
 	if err != nil {
