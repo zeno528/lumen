@@ -10,10 +10,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
 import { getNickname } from '@/api/settings'
 import { cn, openInNewTab } from '@/lib/utils'
+// 真值源 = 仓库根目录 VERSION（pnpm version:patch 递增）。
+// ?raw 直读让 Vite 把它纳进模块图：dev 下 bump 触发 HMR 即时生效，构建时内联。
+import appVersion from '../../../../VERSION?raw'
 
 const AVATAR_MENU_WIDTH = 184
 
-// 版本号来源：vite.config define 注入的 __APP_VERSION__（真值源 = web/package.json version）
+// 版本号来源：vite.config define 注入的 __APP_VERSION__（真值源 = 仓库根目录 VERSION）
 const GITHUB_REPO_URL = 'https://github.com/zeno528/lumen'
 
 // lucide v1 已移除品牌图标，内联 GitHub 官方 octicon mark-github（MIT）fill 图标
@@ -151,7 +154,7 @@ export function TopbarAvatar({
       onClick: () => openInNewTab('/help'),
     },
     {
-      label: `v${__APP_VERSION__}`,
+      label: `v${appVersion.trim()}`,
       icon: <GithubIcon size={14} />,
       onClick: () => openInNewTab(GITHUB_REPO_URL),
     },
