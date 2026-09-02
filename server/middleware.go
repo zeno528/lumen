@@ -102,6 +102,18 @@ func validateJWT(tokenStr, secret string, srv *Server) (*JWTClaims, bool) {
 	return claims, true
 }
 
+// authFailureLog 401 落一行日志：路径 + 来源 + 失败原因 + token 指纹。
+// 指纹 = 前 12 + 后 4 字符，与 api_tokens 表存的 prefix/suffix 对得上，
+// agent 报 401 时能直接查到它拿的是哪个 token、为什么被拒（此前 401 完全不可见，
+// 只能盲猜换 token，见 2026-09-02 生产排查）。
+func authFailureLog(r *http.Request, reason string, tokenStr string) {
+	fp := tokenStr
+	if len(fp) > 16 {
+		fp = fp[:12] + "…" + fp[len(fp)-4:]
+	}
+	log.Printf("auth-fail: %s %s from %s (%s, token=%s)", r.Method, r.URL.Path, r.RemoteAddr, reason, fp)
+}
+
 // AuthMiddleware 认证中间件，同时支持 JWT 和 API Token
 func AuthMiddleware(secret string, srv *Server) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -122,18 +134,26 @@ func AuthMiddleware(secret string, srv *Server) func(http.Handler) http.Handler 
 			}
 
 			if tokenStr == "" {
+				authFailureLog(r, "no credential", "")
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "未登录"})
 				return
 			}
 
 			// API Token 通道：msk_ 前缀
 			if strings.HasPrefix(tokenStr, "msk_") {
-				if srv.verifyAPIToken(tokenStr) {
+				ok, err := srv.verifyAPIToken(tokenStr)
+				if err != nil {
+					log.Printf("auth-error: %s %s from %s: db: %v", r.Method, r.URL.Path, r.RemoteAddr, err)
+					writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "认证查询失败，请重试"})
+					return
+				}
+				if ok {
 					// 标记走 API Token 通道，RequireJWT 据此拦截 token 管理端点
 					ctx := context.WithValue(r.Context(), apiTokenCtxKey{}, true)
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
+				authFailureLog(r, "unknown api token", tokenStr)
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token 无效或已过期"})
 				return
 			}
@@ -145,6 +165,7 @@ func AuthMiddleware(secret string, srv *Server) func(http.Handler) http.Handler 
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
+			authFailureLog(r, "invalid jwt", tokenStr)
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "token 无效或已过期"})
 		})
 	}

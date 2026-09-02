@@ -35,7 +35,9 @@ var apiEndpoints = []endpointMeta{
 	{"GET", "/api/auth/github", "发起 GitHub OAuth 登录", "auth", "public"},
 	{"GET", "/api/auth/github/callback", "GitHub OAuth 回调", "auth", "public"},
 	{"GET", "/api/health", "健康检查", "system", "public"},
-	{"GET", "/api/bookmarks/{id}/favicon", "书签 favicon（img 标签直连，无认证）", "bookmarks", "public"},
+	// 注意：favicon 实际注册在 AuthMiddleware 之后（routes.go，防未认证枚举书签集合），
+	// 浏览器同源 <img> 靠 cookie 过认证；agent 调用必须带 Authorization，否则 401。
+	{"GET", "/api/bookmarks/{id}/favicon", "书签 favicon（需认证；浏览器同源 img 走 cookie）", "bookmarks", "api-token-or-jwt"},
 
 	// ===== 认证（JWT 或 API Token 均可）=====
 	// 账户

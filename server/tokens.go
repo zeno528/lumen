@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -164,13 +166,18 @@ func (s *Server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// verifyAPIToken 验证 API Token 并更新 last_used_at
-func (s *Server) verifyAPIToken(tokenStr string) bool {
+// verifyAPIToken 验证 API Token 并更新 last_used_at。
+// 返回 (found, err)：err 非 nil 是数据库故障（调用方应回 500 而非 401，
+// 否则 DB 抖动会被 agent 误读成 token 失效去换 token，越换越乱）。
+func (s *Server) verifyAPIToken(tokenStr string) (bool, error) {
 	tokenHash := hashTokenSHA256(tokenStr)
 	var id int
 	err := s.db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash = ?`, tokenHash).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
 	if err != nil {
-		return false
+		return false, err
 	}
 	// 异步更新 last_used_at
 	go func() {
@@ -182,5 +189,5 @@ func (s *Server) verifyAPIToken(tokenStr string) bool {
 	suffix := tokenStr[len(tokenStr)-4:]
 	s.db.Exec(`UPDATE api_tokens SET token_prefix = ?, token_suffix = ? WHERE id = ? AND token_prefix = ''`,
 		prefix, suffix, id)
-	return true
+	return true, nil
 }
