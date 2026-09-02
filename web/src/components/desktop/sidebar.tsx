@@ -558,20 +558,20 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
               <ChevronsDownUp size={13} strokeWidth={2.4} />
             )}
           </button>
-          <button
-            type="button"
-            className="sidebar-category-batch-btn"
-            disabled={emptyCategoryIds.length === 0 || categoryBatchMode}
-            onClick={() => setConfirmDeleteEmptyCats(true)}
-            aria-label="删除空分类"
-            title={
-              emptyCategoryIds.length > 0
-                ? `删除 ${emptyCategoryIds.length} 个空分类`
-                : '没有空分类'
-            }
-          >
-            <Trash2 size={13} strokeWidth={2.4} />
-          </button>
+          {/* 删除空分类：仅在真的存在空分类时渲染（无事可做的按钮不占位），
+              批量选择分类期间仍禁用（沿用原有约束） */}
+          {emptyCategoryIds.length > 0 && (
+            <button
+              type="button"
+              className="sidebar-category-batch-btn"
+              disabled={categoryBatchMode}
+              onClick={() => setConfirmDeleteEmptyCats(true)}
+              aria-label="删除空分类"
+              title={`删除 ${emptyCategoryIds.length} 个空分类`}
+            >
+              <Trash2 size={13} strokeWidth={2.4} />
+            </button>
+          )}
         </div>
       </div>
       {bmLoading && (

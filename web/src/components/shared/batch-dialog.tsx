@@ -4,7 +4,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { DEFAULT_COLOR } from '@/components/shared/category-dialog'
 import { useCategories, useCreateCategory } from '@/hooks/useCategories'
 import {
@@ -14,13 +14,15 @@ import {
 } from '@/hooks/useBookmarks'
 import { useUIStore } from '@/stores/ui'
 import { parseTags } from '@/lib/bookmark-utils'
+import type { Category } from '@/types'
 import { buildCategoryTree, getAggregatedCount, getCategoryCount } from '@/lib/category-tree'
+import { resolveCategoryIcon } from '@/lib/icon-map'
 
 /**
  * 批量操作对话框 —— 移动分类 / 加标签 / 移除已有标签。
  *
  * 产品契约：批量移动 / 加标签 / 移除标签；已有标签 = 选中书签交集。
- * 实现走新架构：Dialog + Label + Select + Input + Button 统一组件。
+ * 实现走新架构：Dialog + Label + Combobox + Input + Button 统一组件。
  */
 export function BatchDialog({
   open,
@@ -138,22 +140,40 @@ export function BatchDialog({
     submitRef.current()
   }, [open, batchDialogSubmitToken])
 
-  // 树形选项：子分类缩进挂在父分类下（前缀标层级），父分类计数聚合（自身 + 子分类）
+  // 树形选项：子分类缩进挂在父分类下（前缀标层级），父分类计数聚合（自身 + 子分类）。
+  // 图标 / 颜色与 sidebar / category-dialog 父分类下拉一致（lucide icon + 分类色）
   const bookmarks = bmData?.bookmarks ?? []
   const tree = buildCategoryTree(categories)
+  const withIcon = (c: Category) => {
+    const Icon = resolveCategoryIcon(c.icon)
+    return {
+      icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
+    }
+  }
   const moveOptions = [
     { value: '', label: '移除分类（不归类）' },
     ...tree.roots.flatMap((parent) => [
       {
         value: String(parent.id),
         label: `${parent.name}（${getAggregatedCount(bookmarks, parent.id, tree.childIds(parent.id))}）`,
+        ...withIcon(parent),
       },
       ...tree.childrenOf(parent.id).map((child) => ({
         value: String(child.id),
         label: `　└ ${child.name}（${getCategoryCount(bookmarks, child.id)}）`,
+        ...withIcon(child),
       })),
     ]),
   ]
+
+  // 选中书签的来源分类分布（category_id=null 归「未分类」）：让用户看清这批书签
+  // 现在都在哪些分类，避免又移回原分类
+  const selectedIdSet = new Set(ids)
+  const sourceCounts = new Map<number | null, number>()
+  for (const b of bookmarks) {
+    if (!selectedIdSet.has(b.id)) continue
+    sourceCounts.set(b.category_id, (sourceCounts.get(b.category_id) ?? 0) + 1)
+  }
 
   return (
     <Dialog
@@ -186,11 +206,43 @@ export function BatchDialog({
     >
       {mode === 'move' ? (
         <div className="flex flex-col gap-1.5">
+          {/* 来源分类分布：中性胶囊（图标带分类色，计数弱化）。
+              不复用 .bookmark-tag：其 unlayered display:inline-block 会压掉 utility 的
+              inline-flex，图标+文字的多子元素胶囊必须真 flex 才不叠字。 */}
+          <Label>当前所在分类</Label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[...sourceCounts.entries()].map(([catId, count]) => {
+              const cat = catId != null ? categories.find((c) => c.id === catId) : undefined
+              const Icon = cat ? resolveCategoryIcon(cat.icon) : null
+              return (
+                <span
+                  key={catId ?? 'none'}
+                  className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-(--bg-secondary) border border-(--border) text-[0.72rem] font-medium text-(--text-secondary)"
+                >
+                  {Icon && (
+                    <Icon
+                      size={12}
+                      style={{ color: cat?.color || 'var(--default-category-color)' }}
+                    />
+                  )}
+                  {cat?.name ?? '未分类'}
+                  <span className="text-(--text-muted)">× {count}</span>
+                </span>
+              )
+            })}
+          </div>
           <Label>目标分类（共 {ids.length} 个书签）</Label>
-          <Select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
+          {/* 全局 Combobox（readOnly，与分类父分类框/备份间隔同一套下拉视觉）。
+              Combobox 以 label 为值：显示用 moveOptions 里按 id 反查的 label，
+              选回后按 label 反查 option 拿回 id（moveOptions 含「移除分类」哨兵，映射总成立）。 */}
+          <Combobox
+            readOnly
+            value={moveOptions.find((o) => o.value === categoryId)?.label ?? ''}
+            onChange={(label) =>
+              setCategoryId(moveOptions.find((o) => o.label === label)?.value ?? '')
+            }
             options={moveOptions}
+            listMaxHeight={360}
           />
           {newCatInline && (
             <div className="flex flex-col gap-1.5 p-2.5 rounded-md border border-(--border) bg-(--bg-secondary)">
