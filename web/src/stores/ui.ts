@@ -88,11 +88,15 @@ interface UIState {
   openEditCategory: (id: number) => void
   closeCategoryDialog: () => void
 
-  /** 侧边栏折叠的父分类 id（持久化；数组便于 JSON 序列化）*/
-  collapsedCategoryIds: number[]
-  toggleCategoryCollapsed: (id: number) => void
-  /** 一键收起/展开：整体替换折叠集合 */
-  setCollapsedCategoryIds: (ids: number[]) => void
+  /** 侧边栏展开的父分类 id（持久化；数组便于 JSON 序列化）。
+   *  存「展开集合」而非「折叠集合」：空数组 = 全部收起，正是新用户首登与每次
+   *  重新登录的期望默认态，登录重置无需等分类树加载。 */
+  expandedCategoryIds: number[]
+  toggleCategoryExpanded: (id: number) => void
+  /** 一键展开/收起：整体替换展开集合 */
+  setExpandedCategoryIds: (ids: number[]) => void
+  /** 登录成功重置视图：跳全部视图 + 全部分类收起（账号密码登录与 OAuth 回调共用）*/
+  resetForLogin: () => void
 
   /** 快捷键 Ctrl+Enter 触发 dialog 保存的信号（token 自增，消费端 effect 监听）*/
   bookmarkDialogSubmitToken: number
@@ -231,15 +235,18 @@ export const useUIStore = create<UIState>()(
       openEditCategory: (id: number) => set({ categoryDialog: id, categoryDialogParentId: null }),
       closeCategoryDialog: () => set({ categoryDialog: null, categoryDialogParentId: null }),
 
-      /** 侧边栏折叠的父分类 id（持久化）*/
-      collapsedCategoryIds: [] as number[],
-      toggleCategoryCollapsed: (id) =>
+      /** 侧边栏展开的父分类 id（持久化；语义见接口注释）*/
+      expandedCategoryIds: [] as number[],
+      toggleCategoryExpanded: (id) =>
         set((s) => ({
-          collapsedCategoryIds: s.collapsedCategoryIds.includes(id)
-            ? s.collapsedCategoryIds.filter((x) => x !== id)
-            : [...s.collapsedCategoryIds, id],
+          expandedCategoryIds: s.expandedCategoryIds.includes(id)
+            ? s.expandedCategoryIds.filter((x) => x !== id)
+            : [...s.expandedCategoryIds, id],
         })),
-      setCollapsedCategoryIds: (ids) => set({ collapsedCategoryIds: ids }),
+      setExpandedCategoryIds: (ids) => set({ expandedCategoryIds: ids }),
+
+      /** 登录成功后重置视图（每次登录统一回「全部视图 + 全部收起」，刷新页面不触发）*/
+      resetForLogin: () => set({ currentCategory: 'all', expandedCategoryIds: [] }),
 
       bookmarkDialogSubmitToken: 0,
       submitBookmarkDialog: () =>
@@ -289,7 +296,7 @@ export const useUIStore = create<UIState>()(
       partialize: (s) => ({
         currentCategory: s.currentCategory,
         idSearchMode: s.idSearchMode,
-        collapsedCategoryIds: s.collapsedCategoryIds,
+        expandedCategoryIds: s.expandedCategoryIds,
       }),
       storage: createJSONStorage(() => safeLocalStorage),
     },

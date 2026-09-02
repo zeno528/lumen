@@ -8,6 +8,7 @@ import { getCategories } from '@/api/categories'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/stores/auth'
+import { useUIStore } from '@/stores/ui'
 import '@/styles/auth.css'
 
 export const Route = createLazyFileRoute('/login')({
@@ -65,6 +66,8 @@ function LoginPage() {
         body: JSON.stringify({ username, password }),
       })
       setToken(data.token)
+      // 每次登录统一回「全部视图 + 分类全收起」（刷新页面不触发，见 ui store resetForLogin）
+      useUIStore.getState().resetForLogin()
       toast.success('登录成功，欢迎回来！', <span style={{ fontSize: 16 }}>👋</span>)
       flashMood('happy')
       const prefetch = Promise.all([

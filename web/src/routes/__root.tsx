@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { createRootRoute, HeadContent, Outlet, redirect } from '@tanstack/react-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUIStore } from '@/stores/ui'
 import { ToastContainer, toast } from '@/components/ui/toast'
 
 /**
@@ -15,6 +16,8 @@ export const Route = createRootRoute({
     const token = params.get('token')
     if (token) {
       useAuthStore.getState().setToken(token)
+      // OAuth 登录与账号密码登录同一契约：回「全部视图 + 分类全收起」
+      useUIStore.getState().resetForLogin()
       window.history.replaceState({}, '', window.location.pathname)
       throw redirect({ to: '/bookmarks' })
     }

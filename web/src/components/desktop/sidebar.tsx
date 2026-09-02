@@ -79,9 +79,9 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
     setCategoryAnchor,
     selectCategoryRange,
     clearCategorySelection,
-    collapsedCategoryIds,
-    toggleCategoryCollapsed,
-    setCollapsedCategoryIds,
+    expandedCategoryIds,
+    toggleCategoryExpanded,
+    setExpandedCategoryIds,
   } = useUIStore()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -93,19 +93,19 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const bookmarks = bmData?.bookmarks ?? []
   // 两级分类树：roots + 每个分类的子分类（子分类顺序沿用后端 sort_order 序）
   const tree = useMemo(() => buildCategoryTree(categories), [categories])
-  const collapsedSet = useMemo(() => new Set(collapsedCategoryIds), [collapsedCategoryIds])
+  const expandedSet = useMemo(() => new Set(expandedCategoryIds), [expandedCategoryIds])
   // 一键收起/展开的目标：有子分类的父分类
   const collapsibleParentIds = useMemo(
     () => tree.roots.filter((c) => tree.childIds(c.id).length > 0).map((c) => c.id),
     [tree],
   )
   const allCollapsed =
-    collapsibleParentIds.length > 0 && collapsibleParentIds.every((id) => collapsedSet.has(id))
+    collapsibleParentIds.length > 0 && !collapsibleParentIds.some((id) => expandedSet.has(id))
   // 展开状态下的可见扁平顺序（Shift 范围批量选择用）
   const visibleCategoryIds = useMemo(
     () =>
-      tree.roots.flatMap((c) => [c.id, ...(collapsedSet.has(c.id) ? [] : tree.childIds(c.id))]),
-    [tree, collapsedSet],
+      tree.roots.flatMap((c) => [c.id, ...(expandedSet.has(c.id) ? tree.childIds(c.id) : [])]),
+    [tree, expandedSet],
   )
   // 分类列表过渡动画只在首次加载（刷新页面）播放，之后增删分类等任何情况都不触发
   // 一次 render 把所有项（含虚拟分类）一起挂上
@@ -470,7 +470,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
   const renderCategory = (c: Category, index: number, parentId: number | null): React.ReactNode => {
     const Icon = resolveCategoryIcon(c.icon)
     const children = tree.childrenOf(c.id)
-    const expanded = !collapsedSet.has(c.id)
+    const expanded = expandedSet.has(c.id)
     return (
       <Fragment key={c.id}>
         <SidebarItem
@@ -495,7 +495,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
           nested={parentId != null}
           hasChildren={children.length > 0}
           expanded={expanded}
-          onToggleExpand={() => toggleCategoryCollapsed(c.id)}
+          onToggleExpand={() => toggleCategoryExpanded(c.id)}
         />
         {children.length > 0 && expanded && (
           children.map((child, i) => renderCategory(child, i, c.id))
@@ -548,7 +548,7 @@ export function Sidebar({ open, onCategoryClick }: { open?: boolean; onCategoryC
             type="button"
             className="sidebar-category-batch-btn"
             disabled={collapsibleParentIds.length === 0}
-            onClick={() => setCollapsedCategoryIds(allCollapsed ? [] : collapsibleParentIds)}
+            onClick={() => setExpandedCategoryIds(allCollapsed ? collapsibleParentIds : [])}
             aria-label={allCollapsed ? '一键展开分类' : '一键收起分类'}
             title={allCollapsed ? '一键展开分类' : '一键收起分类'}
           >
