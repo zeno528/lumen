@@ -102,6 +102,15 @@ func validateJWT(tokenStr, secret string, srv *Server) (*JWTClaims, bool) {
 	return claims, true
 }
 
+// clientIP 真实客户端 IP。生产经 nginx 反代，RemoteAddr 恒为 127.0.0.1；
+// X-Real-IP 由 nginx 设为 $remote_addr（不可伪造），本地直连时无此头回落 RemoteAddr。
+func clientIP(r *http.Request) string {
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
 // authFailureLog 401 落一行日志：路径 + 来源 + 失败原因 + token 指纹。
 // 指纹 = 前 12 + 后 4 字符，与 api_tokens 表存的 prefix/suffix 对得上，
 // agent 报 401 时能直接查到它拿的是哪个 token、为什么被拒（此前 401 完全不可见，
@@ -111,7 +120,7 @@ func authFailureLog(r *http.Request, reason string, tokenStr string) {
 	if len(fp) > 16 {
 		fp = fp[:12] + "…" + fp[len(fp)-4:]
 	}
-	log.Printf("auth-fail: %s %s from %s (%s, token=%s)", r.Method, r.URL.Path, r.RemoteAddr, reason, fp)
+	log.Printf("auth-fail: %s %s from %s (%s, token=%s)", r.Method, r.URL.Path, clientIP(r), reason, fp)
 }
 
 // AuthMiddleware 认证中间件，同时支持 JWT 和 API Token
@@ -143,7 +152,7 @@ func AuthMiddleware(secret string, srv *Server) func(http.Handler) http.Handler 
 			if strings.HasPrefix(tokenStr, "msk_") {
 				ok, err := srv.verifyAPIToken(tokenStr)
 				if err != nil {
-					log.Printf("auth-error: %s %s from %s: db: %v", r.Method, r.URL.Path, r.RemoteAddr, err)
+					log.Printf("auth-error: %s %s from %s: db: %v", r.Method, r.URL.Path, clientIP(r), err)
 					writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "认证查询失败，请重试"})
 					return
 				}
