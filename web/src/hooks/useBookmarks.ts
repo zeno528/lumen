@@ -8,6 +8,7 @@ import {
   batchDeleteBookmarks,
   batchMoveBookmarks,
   batchAddTags,
+  batchRemoveTags,
   reorderBookmarks,
 } from '@/api/bookmarks'
 import { moveBookmarkToIndex } from '@/lib/bookmark-order'
@@ -256,6 +257,34 @@ export function useBatchAddTags() {
               bookmarks: old.bookmarks.map((b: Bookmark) =>
                 idSet.has(b.id)
                   ? { ...b, tags: Array.from(new Set([...b.tags, ...tags])) }
+                  : b,
+              ),
+            }
+          },
+        },
+      ],
+    }),
+  )
+}
+
+/** 批量移除标签 —— 乐观更新：立即从 ids 各书签的 tags 删掉目标标签，失败回滚。 */
+export function useBatchRemoveTags() {
+  const qc = useQueryClient()
+  return useMutation(
+    createOptimisticMutation<{ ids: number[]; tags: string[] }>(qc, {
+      mutationFn: ({ ids, tags }) => batchRemoveTags(ids, tags),
+      targets: [
+        {
+          queryKey: BOOKMARKS_KEY,
+          apply: (old, { ids, tags }) => {
+            if (!old) return old
+            const idSet = new Set(ids)
+            const removeSet = new Set(tags)
+            return {
+              ...old,
+              bookmarks: old.bookmarks.map((b: Bookmark) =>
+                idSet.has(b.id)
+                  ? { ...b, tags: b.tags.filter((t) => !removeSet.has(t)) }
                   : b,
               ),
             }

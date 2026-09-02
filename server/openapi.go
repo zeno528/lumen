@@ -62,6 +62,7 @@ var apiEndpoints = []endpointMeta{
 	{"PUT", "/api/bookmarks/batch-move", "批量移动书签到指定分类", "bookmarks", "api-token-or-jwt"},
 	{"PUT", "/api/bookmarks/batch-update", "批量更新书签字段", "bookmarks", "api-token-or-jwt"},
 	{"PUT", "/api/bookmarks/batch-tags", "批量加标签", "bookmarks", "api-token-or-jwt"},
+	{"DELETE", "/api/bookmarks/batch-tags", "批量移除标签", "bookmarks", "api-token-or-jwt"},
 
 	// 分类 CRUD（固定两级：parent_id 指向顶级分类）
 	{"GET", "/api/categories", "分类列表（含 parent_id）", "categories", "api-token-or-jwt"},

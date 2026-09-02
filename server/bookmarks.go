@@ -822,6 +822,96 @@ func (s *Server) handleBatchAddTags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updated": updated})
 }
 
+// handleBatchRemoveTags DELETE /api/bookmarks/batch-tags
+// 与 handleBatchAddTags 对称：从 ids 每个书签的 tags 中移除 input.Tags 里出现的标签
+//（书签本来就没有的标签静默跳过）。校验/事务结构与加标签版一致。
+func (s *Server) handleBatchRemoveTags(w http.ResponseWriter, r *http.Request) {
+	var input BatchTagsInput
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
+		return
+	}
+	if len(input.IDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请选择要移除标签的书签"})
+		return
+	}
+	if len(input.Tags) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请输入要移除的标签"})
+		return
+	}
+	if len(input.IDs) > 500 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "单次最多处理 500 个书签"})
+		return
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Printf("操作失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+		return
+	}
+	defer tx.Rollback()
+
+	removeSet := make(map[string]bool, len(input.Tags))
+	for _, t := range input.Tags {
+		removeSet[t] = true
+	}
+
+	updated := 0
+	for _, id := range input.IDs {
+		var tagsJSON string
+		err := tx.QueryRow("SELECT tags FROM bookmarks WHERE id = ?", id).Scan(&tagsJSON)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				continue
+			}
+			log.Printf("操作失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+
+		var existingTags []string
+		if err := json.Unmarshal([]byte(tagsJSON), &existingTags); err != nil {
+			existingTags = []string{}
+		}
+
+		var newTags []string
+		for _, t := range existingTags {
+			if !removeSet[t] {
+				newTags = append(newTags, t)
+			}
+		}
+		// 本来就没有这些标签 → 无变化跳过写库
+		if len(newTags) == len(existingTags) {
+			continue
+		}
+		if newTags == nil {
+			newTags = []string{} // 全部移除时写 [] 而非 null，前端 tags 类型约定为 string[]
+		}
+		newTagsJSON, _ := json.Marshal(newTags)
+
+		result, err := tx.Exec("UPDATE bookmarks SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", string(newTagsJSON), id)
+		if err != nil {
+			log.Printf("操作失败: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+			return
+		}
+		if n, _ := result.RowsAffected(); n > 0 {
+			updated++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("操作失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "操作失败"})
+		return
+	}
+
+	s.broadcastInvalidated("bookmarks")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updated": updated})
+}
+
 // handleToggleFavorite PATCH /api/bookmarks/{id}/favorite
 func (s *Server) handleToggleFavorite(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

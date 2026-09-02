@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FolderPlus } from 'lucide-react'
+import { FolderPlus, X } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { useCategories, useCreateCategory } from '@/hooks/useCategories'
 import {
   useBatchMove,
   useBatchAddTags,
+  useBatchRemoveTags,
   useBookmarks,
 } from '@/hooks/useBookmarks'
 import { useUIStore } from '@/stores/ui'
@@ -43,6 +44,7 @@ export function BatchDialog({
   const createCat = useCreateCategory()
   const clearSelection = useUIStore((s) => s.clearSelection)
   const batchTags = useBatchAddTags()
+  const batchRemoveTags = useBatchRemoveTags()
   const categories = catData?.categories ?? []
   const [categoryId, setCategoryId] = useState<string>('')
   const [tagsStr, setTagsStr] = useState('')
@@ -88,9 +90,10 @@ export function BatchDialog({
     }
     // 批量加标签：useBatchAddTags 已乐观（onMutate 给 ids 并集加标签，UI 秒变）。
     // 立即关 + 立即弹，后台 POST；失败 hook onError 回滚 + 这里补错误通知。
+    // 没输入新标签时点确定 = 直接关闭（可能只是来删标签/查看的），不拦不报错。
     const tags = parseTags(tagsStr)
     if (tags.length === 0) {
-      onToast('请输入标签', 'warning')
+      onClose()
       return
     }
     onClose()
@@ -167,13 +170,29 @@ export function BatchDialog({
   ]
 
   // 选中书签的来源分类分布（category_id=null 归「未分类」）：让用户看清这批书签
-  // 现在都在哪些分类，避免又移回原分类
+  // 现在都在哪些分类，避免又移回原分类；顺带统计现有标签分布（标签模式用）
   const selectedIdSet = new Set(ids)
   const sourceCounts = new Map<number | null, number>()
+  const selectedTagCounts = new Map<string, number>()
   for (const b of bookmarks) {
     if (!selectedIdSet.has(b.id)) continue
     sourceCounts.set(b.category_id, (sourceCounts.get(b.category_id) ?? 0) + 1)
+    for (const t of b.tags) selectedTagCounts.set(t, (selectedTagCounts.get(t) ?? 0) + 1)
   }
+
+  // 移除单个标签：乐观更新即时生效，计数归零后胶囊自动消失；弹窗不关，可连续移除多个
+  const removeTag = async (tag: string) => {
+    try {
+      await batchRemoveTags.mutateAsync({ ids, tags: [tag] })
+      onToast(`已从选中书签移除标签「${tag}」`, 'success')
+    } catch (e) {
+      onToast('操作失败: ' + (e as Error).message, 'error')
+    }
+  }
+
+  // 来源/标签两处共用的胶囊样式（中性底 + 分类色图标 + 弱化计数）
+  const chipClass =
+    'inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-(--bg-secondary) border border-(--border) text-[0.72rem] font-medium text-(--text-secondary)'
 
   return (
     <Dialog
@@ -215,10 +234,7 @@ export function BatchDialog({
               const cat = catId != null ? categories.find((c) => c.id === catId) : undefined
               const Icon = cat ? resolveCategoryIcon(cat.icon) : null
               return (
-                <span
-                  key={catId ?? 'none'}
-                  className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-(--bg-secondary) border border-(--border) text-[0.72rem] font-medium text-(--text-secondary)"
-                >
+                <span key={catId ?? 'none'} className={chipClass}>
                   {Icon && (
                     <Icon
                       size={12}
@@ -274,6 +290,30 @@ export function BatchDialog({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          {/* 现有标签分布：每枚胶囊带 × 按钮，一键从所有选中书签移除该标签。
+              计数随乐观更新实时减少，归零后胶囊自动消失 */}
+          {selectedTagCounts.size > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label>现有标签（点 × 批量移除）</Label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[...selectedTagCounts.entries()].map(([tag, count]) => (
+                  <span key={tag} className={chipClass}>
+                    {tag}
+                    <span className="text-(--text-muted)">× {count}</span>
+                    <button
+                      type="button"
+                      aria-label={`批量移除标签 ${tag}`}
+                      disabled={batchRemoveTags.isPending}
+                      onClick={() => void removeTag(tag)}
+                      className="inline-flex items-center justify-center size-4 rounded-full text-(--text-muted) hover:text-(--text-primary) hover:bg-(--badge-neutral-bg) transition-colors disabled:opacity-40 cursor-pointer"
+                    >
+                      <X size={10} strokeWidth={2.5} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="batch-tags">添加新标签（Tab 追加逗号）</Label>
             <Input

@@ -88,6 +88,13 @@ export function batchAddTags(ids: number[], tags: string[]): Promise<BatchResult
   })
 }
 
+/** 批量移除标签：ids 各书签 tags 里出现的目标标签被删掉（没有的静默跳过）*/
+export function batchRemoveTags(ids: number[], tags: string[]): Promise<BatchResult> {
+  return api('/bookmarks/batch-tags', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids, tags }),
+  })
+}
 
 /** 重排书签顺序（PUT /api/bookmarks/reorder，body {order:[ids]}，bookmarks.go:417）*/
 export function reorderBookmarks(order: number[]): Promise<{ ok: boolean }> {

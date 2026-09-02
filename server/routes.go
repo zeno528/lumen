@@ -77,6 +77,7 @@ func (s *Server) registerAuthedRoutes(r chi.Router) {
 	r.Put("/api/bookmarks/batch-move", s.handleBatchMoveBookmarks)
 	r.Put("/api/bookmarks/batch-update", s.handleBatchUpdateBookmarks)
 	r.Put("/api/bookmarks/batch-tags", s.handleBatchAddTags)
+	r.Delete("/api/bookmarks/batch-tags", s.handleBatchRemoveTags)
 	r.Put("/api/bookmarks/{id}", s.handleUpdateBookmark)
 	r.Delete("/api/bookmarks/{id}", s.handleDeleteBookmark)
 
