@@ -1175,6 +1175,16 @@ select,
   transform: none;
   background: var(--bg-card);
 }
+/* 拖拽进行中（根元素 .dnd-active，app-shell onDragStart/End 挂卸）：
+   挂起卡片过渡与 hover 缩放——dnd-kit 每帧写 transform，250ms 过渡反复重启
+   + hover 翻转会让 style/layout 每帧膨胀到 ~1s（LoAF 实测），平时观感不受影响 */
+.dnd-active .bookmark-card,
+.dnd-active .sidebar-item {
+  transition: none !important;
+}
+.dnd-active .bookmark-card:hover {
+  transform: none !important;
+}
 .bookmark-card.dnd-drop-target {
   box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0, 0, 0, 0.15);
 }

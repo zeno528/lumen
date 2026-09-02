@@ -161,7 +161,9 @@ export function BookmarkCard({
         showPopIn && 'pop-in',
         exiting && 'pop-out',
         refreshing && 'favicon-refreshing',
-        sortable.isDropTarget && 'dnd-drop-target',
+        // 悬停的是被拖卡片自己时不画放置环（dnd-kit 会把源自己报为 dropTarget，
+        // 否则金环全程套在被拖卡片上，看起来像渲染错位）
+        sortable.isDropTarget && !sortable.isDragSource && 'dnd-drop-target',
       )}
       onAnimationEnd={(e) => {
         // 只在 pop-out 动画结束时触发，避免与 fadeInUp 冲突

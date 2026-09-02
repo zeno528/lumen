@@ -84,6 +84,9 @@ function getTargetAtPointer(source: DragSource, operation: DragOperation) {
 }
 
 function handleDragStart() {
+  // 挂起卡片过渡/hover 效果（见 layout.css .dnd-active）：dnd-kit 每帧写 transform，
+  // 250ms 过渡反复重启 + hover 翻转会让 style/layout 每帧膨胀到 ~1s（LoAF 实测）
+  document.documentElement.classList.add('dnd-active')
   useDragStore.getState().clearTarget()
 }
 
@@ -103,6 +106,7 @@ function rememberDragTarget({ operation }: DragMoveEvent) {
 }
 
 function handleDragEnd({ operation, canceled }: Parameters<NonNullable<React.ComponentProps<typeof DragDropProvider>['onDragEnd']>>[0]) {
+  document.documentElement.classList.remove('dnd-active')
   if (canceled || !operation.source) {
     useDragStore.getState().clearTarget()
     return

@@ -333,13 +333,13 @@ function BookmarksPage() {
         }
         if (source.id === target.id) return
         if (source.categoryId === target.categoryId) return
+        // 卡片已随乐观更新即时跳组，结果自明，不再弹通知（用户反馈拖拽噪音大）
         await batchMoveMut.mutateAsync({
           ids: [source.id],
           categoryId: target.categoryId,
           targetBookmarkId: target.id,
           position: target.position,
         })
-        toast.success('书签已移动')
       } catch (error) {
         toast.error('书签拖拽失败: ' + (error as Error).message)
       }
