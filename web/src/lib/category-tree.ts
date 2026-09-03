@@ -24,6 +24,28 @@ export interface CategoryTree {
   filterIdsFor(categoryId: number): number[]
 }
 
+/** 父分类选择器的树形列表：子分类仅作归属说明，不能再被选为父级。 */
+export function getParentCategoryOptions(categories: Category[]) {
+  const tree = buildCategoryTree(categories)
+  return tree.roots.flatMap((category) => [
+    { category, selectable: true },
+    ...tree.childrenOf(category.id).map((category) => ({ category, selectable: false })),
+  ])
+}
+
+/** 书签分类选择器：子分类可选，视觉缩进不改变用于匹配的完整路径。 */
+export function getBookmarkCategoryOptions(categories: Category[]) {
+  const tree = buildCategoryTree(categories)
+  return tree.roots.flatMap((category) => [
+    { category, label: category.name, displayLabel: category.name },
+    ...tree.childrenOf(category.id).map((category) => ({
+      category,
+      label: categoryPathName(category, categories),
+      displayLabel: `　└ ${category.name}`,
+    })),
+  ])
+}
+
 export function buildCategoryTree(categories: Category[]): CategoryTree {
   const childrenMap = new Map<number, Category[]>()
   const roots: Category[] = []

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { useCategories, useCreateCategory, useUpdateCategory } from '@/hooks/useCategories'
-import { buildCategoryTree } from '@/lib/category-tree'
+import { buildCategoryTree, getParentCategoryOptions } from '@/lib/category-tree'
 import { ICON_GROUPS, PRESET_COLORS, resolveCategoryIcon } from '@/lib/icon-map'
 import { toast } from '@/components/ui/toast'
 import { useUIStore } from '@/stores/ui'
@@ -50,16 +50,16 @@ export function CategoryDialog({
 
   const editingChildIds = editingCategory ? tree.childIds(editingCategory.id) : []
   const editingHasChildren = editingChildIds.length > 0
-  // 父分类候选：全部顶级分类；编辑时排除自己。
-  // 图标 / 颜色与 mobile-category-select / sidebar 一致（lucide icon + 分类色）
-  const parentOptions = tree.roots
-    .filter((c) => c.id !== editingCategory?.id)
-    .map((c) => {
-      const Icon = resolveCategoryIcon(c.icon)
+  // 父分类候选按树形展示；子分类仅用于说明归属，仍不可作为父级。
+  const parentOptions = getParentCategoryOptions(categories)
+    .filter(({ category }) => category.id !== editingCategory?.id)
+    .map(({ category, selectable }) => {
+      const Icon = resolveCategoryIcon(category.icon)
       return {
-        value: String(c.id),
-        label: c.name,
-        icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
+        value: String(category.id),
+        label: selectable ? category.name : `　└ ${category.name}（子分类）`,
+        icon: <Icon size={14} style={{ color: category.color || 'var(--default-category-color)' }} />,
+        disabled: !selectable,
       }
     })
 

@@ -11,7 +11,7 @@ import { PasteButton, pasteClipboardText } from './clipboard-paste'
 import { useBookmarks, useCreateBookmark, useUpdateBookmark } from '@/hooks/useBookmarks'
 import { useCategories, useCreateCategory } from '@/hooks/useCategories'
 import { fetchPageTitle, fetchAIMeta } from '@/api/utils'
-import { categoryPathName, findCategoryByPath } from '@/lib/category-tree'
+import { categoryPathName, findCategoryByPath, getBookmarkCategoryOptions } from '@/lib/category-tree'
 import { fetchFaviconDataUri } from '@/lib/favicon'
 import { setFavicon } from '@/lib/favicon-cache'
 import { getAISettings } from '@/api/settings'
@@ -563,12 +563,13 @@ export function BookmarkDialog({
   }, [open, bookmarkDialogSubmitToken])
 
   // 图标样式与 category-dialog 父分类下拉一致（lucide icon + 分类色），不再额外 color 点
-  const categoryOptions = categories.map((c) => {
-    const Icon = resolveCategoryIcon(c.icon)
+  const categoryOptions = getBookmarkCategoryOptions(categories).map(({ category, label, displayLabel }) => {
+    const Icon = resolveCategoryIcon(category.icon)
     return {
-      value: String(c.id),
-      label: categoryPathName(c, categories),
-      icon: <Icon size={14} style={{ color: c.color || 'var(--default-category-color)' }} />,
+      value: String(category.id),
+      label,
+      displayLabel,
+      icon: <Icon size={14} style={{ color: category.color || 'var(--default-category-color)' }} />,
     }
   })
 
@@ -807,7 +808,8 @@ export function BookmarkDialog({
           placeholder="选择或新建分类"
           emptyText="无匹配分类"
           onEnter={() => submitRef.current()}
-          listMaxHeight={168}
+          listMaxHeight={352}
+          autoFlipOnOverflow
         />
       </div>
 

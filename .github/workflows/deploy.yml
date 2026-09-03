@@ -85,6 +85,7 @@ jobs:
           #    DEPLOY_SERVERS secret（JSON，name -> {host, domain}），部署公钥加到
           #    该服务器 ~/.ssh/authorized_keys 即可。IP/域名只存 secret，不进仓库 ──
           - jp-1
+          - jp-2
           - sj
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -97,6 +98,8 @@ jobs:
         run: |
           SERVER_HOST=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].host')
           SERVER_DOMAIN=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].domain')
+          # 可选 port：HTTPS 站点不在 443 的服务器（如 443 被 3X-UI/Xray 占用的节点机）走备用端口
+          SERVER_PORT=$(echo "$DEPLOY_SERVERS" | jq -r --arg name '${{ matrix.server }}' '.[$name].port // empty')
           if [ -z "$SERVER_HOST" ] || [ "$SERVER_HOST" = "null" ] || [ -z "$SERVER_DOMAIN" ] || [ "$SERVER_DOMAIN" = "null" ]; then
             echo "Deployment target is incomplete" >&2
             exit 1
@@ -105,6 +108,7 @@ jobs:
           echo "::add-mask::$SERVER_DOMAIN"
           echo "SERVER_HOST=$SERVER_HOST" >> "$GITHUB_ENV"
           echo "SERVER_DOMAIN=$SERVER_DOMAIN" >> "$GITHUB_ENV"
+          echo "SERVER_PORT=$SERVER_PORT" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -169,10 +173,12 @@ jobs:
       # 401/101 = nginx 正确转发 upgrade；其他 = 可能漏配，见 lumen-deploy skill 常见问题
       - name: WebSocket upgrade check
         run: |
+          WS_URL="https://$SERVER_DOMAIN/api/ws"
+          [ -n "$SERVER_PORT" ] && WS_URL="https://$SERVER_DOMAIN:$SERVER_PORT/api/ws"
           WS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --http1.1 \
             -H "Connection: Upgrade" -H "Upgrade: websocket" \
             -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
-            "https://$SERVER_DOMAIN/api/ws")
+            "$WS_URL")
           case "$WS_CODE" in
             401|101) echo "✅ ${{ matrix.server }} /api/ws upgrade 正常 ($WS_CODE)";;
             *) echo "⚠️ ${{ matrix.server }} /api/ws 异常 ($WS_CODE) — nginx 可能漏配 WS upgrade，见 lumen-deploy skill";;

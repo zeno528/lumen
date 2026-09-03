@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getDropdownPlacement } from '@/lib/combobox-position'
 import { Input } from './input'
 
 /**
@@ -19,8 +20,11 @@ import { Input } from './input'
 export interface ComboboxOption {
   value: string
   label: string
+  /** 仅影响列表展示；选择和筛选仍使用 label。 */
+  displayLabel?: string
   icon?: React.ReactNode
   color?: string
+  disabled?: boolean
 }
 
 export interface ComboboxProps {
@@ -38,6 +42,8 @@ export interface ComboboxProps {
   onEnter?: () => void
   /** 下拉列表最大高度（px），超出滚动。默认 240，分类框传较小值收窄只露几项 */
   listMaxHeight?: number
+  /** 空间不足时向上展开，并按视口可用空间收缩。 */
+  autoFlipOnOverflow?: boolean
   /** 禁用（readOnly 触发器置灰不可点） */
   disabled?: boolean
   /** readOnly 模式下显示 × 清除按钮（回调由调用方决定清成什么值，如父分类→顶级） */
@@ -56,17 +62,14 @@ export function Combobox({
   readOnly = false,
   onEnter,
   listMaxHeight = 240,
+  autoFlipOnOverflow = false,
   disabled = false,
   onClear,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const [listPos, setListPos] = useState<{
-    left: number
-    top: number
-    width: number
-  } | null>(null)
+  const [listPos, setListPos] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null)
 
   // 打开时按 trigger 位置定位 listbox（commit 后同步算，避免布局抖动）
   useLayoutEffect(() => {
@@ -77,7 +80,10 @@ export function Combobox({
     const update = () => {
       const r = triggerRef.current?.getBoundingClientRect()
       if (!r) return
-      setListPos({ left: r.left, top: r.bottom + 4, width: r.width })
+      const placement = autoFlipOnOverflow
+        ? getDropdownPlacement(r, window.innerHeight, listMaxHeight)
+        : { top: r.bottom + 4, maxHeight: listMaxHeight }
+      setListPos({ left: r.left, width: r.width, ...placement })
     }
     update()
     window.addEventListener('resize', update)
@@ -86,7 +92,7 @@ export function Combobox({
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }
-  }, [open])
+  }, [open, autoFlipOnOverflow, listMaxHeight])
 
   // 全局关闭：点外面 / Esc（仅在 open 时挂载，节省监听）
   useEffect(() => {
@@ -132,7 +138,7 @@ export function Combobox({
         left: listPos.left,
         top: listPos.top,
         width: listPos.width,
-        maxHeight: `${listMaxHeight}px`,
+        maxHeight: `${listPos.maxHeight}px`,
       }}
       role="listbox"
     >
@@ -140,13 +146,18 @@ export function Combobox({
       {filtered.map((o) => (
         <div
           key={o.value}
-          className={cn('dropdown-option', o.label === value && 'active')}
+          className={cn(
+            'dropdown-option',
+            o.label === value && 'active',
+            o.disabled && 'cursor-default opacity-55 hover:bg-transparent',
+          )}
           onMouseDown={(e) => {
             // mousedown 比 click 早，且不会丢 input 焦点
             e.preventDefault()
-            onPick(o.label)
+            if (!o.disabled) onPick(o.label)
           }}
           role="option"
+          aria-disabled={o.disabled || undefined}
           aria-selected={o.label === value}
         >
           {o.icon && (
@@ -156,7 +167,7 @@ export function Combobox({
               </span>
             </span>
           )}
-          <span className="dropdown-option-label">{o.label}</span>
+          <span className="dropdown-option-label">{o.displayLabel ?? o.label}</span>
           {(o.label === value || o.color) && (
             <span className="dropdown-option-suffix">
               {o.label === value && (
