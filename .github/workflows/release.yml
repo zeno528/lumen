@@ -1,0 +1,161 @@
+# ============================================================================
+# Release：VERSION 变更时发布 linux-amd64 tarball 到 GitHub Releases
+# ============================================================================
+# 用途：公开仓库提供可下载产物；tarball 解压进 /opt/lumen 即完整可运行安装
+#       （lumen + static/，与 deploy.yml 的服务器布局一致）。VPS 上升级：
+#         systemctl stop lumen
+#         curl -fsSL https://github.com/zeno528/lumen/releases/latest/download/lumen-linux-amd64.tar.gz | tar -xz -C /opt/lumen
+#         systemctl start lumen
+#       资产文件名不带版本号：让 releases/latest/download 固定链接永久有效
+#       （版本号在 tag 名与 /api/health 的 version 字段里，二进制经 -ldflags -X 注入）
+#
+# 设计要点：
+#   - 触发：push 到 main 且 VERSION 变更；workflow_dispatch 手动兜底（忽略 paths 过滤）
+#   - verify 门禁与 deploy.yml 逐字一致；release 作业重建同一 SHA，
+#     不经 artifact 中转（避开 Actions 存储配额，同 deploy.yml 策略）
+#   - 用 runner 预装 gh CLI 发 Release：零第三方 action，无 SHA 维护负担
+#
+# 注意：bump commit 同时改 web/package.json，同一 push 会触发 deploy.yml（部署 VPS）
+#       和本 workflow（发 Release）。二者并发组不同、目标不同，互不干扰，均为期望行为。
+# ============================================================================
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VERSION'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同一 ref 串行；不取消进行中的发布（半途取消会留下无资产的 tag）
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ─────────── 门禁：与 deploy.yml verify 逐字一致 ───────────
+  verify:
+    name: CI checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm -C web install --frozen-lockfile
+      - name: Frontend typecheck
+        run: pnpm -C web typecheck
+      - name: Frontend production build
+        run: pnpm -C web build
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Go vet
+        run: go vet ./...
+      - name: Go test
+        run: go test -count=1 ./...
+      - name: Build production backend
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen-ci ./server/
+      - name: Backend health smoke test
+        shell: bash
+        run: |
+          # APP_ENV=development：冒烟用全新临时库，dev 模式让空 APP_PASSWORD 回退 admin（生产模式会拒空密码启动）
+          APP_ENV=development PORT=18081 DB_PATH="$RUNNER_TEMP/lumen-ci.db" JWT_SECRET=ci-test-secret ./lumen-ci > "$RUNNER_TEMP/lumen-ci.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          for _ in {1..10}; do
+            if curl -fsS http://127.0.0.1:18081/api/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/lumen-ci.log"
+          exit 1
+
+  # ─────────── 发布：重建同一 SHA → 打包 → gh release create ───────────
+  release:
+    name: Publish release
+    needs: verify
+    # workflow_dispatch 可选任意分支触发：只允许 main，防止误发分支代码
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release create 建 tag + 上传资产
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Read version
+        run: echo "VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
+
+      # 幂等守卫：release 已存在（重跑/重复 dispatch）→ 明确失败并给出清理命令，不静默跳过
+      # （静默跳过会掩盖「上传中断留下残缺 release」这类真实故障；release 罕见，人工清理可接受）
+      - name: Guard against re-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Release v$VERSION 已存在。若为重跑，先清理：gh release delete v$VERSION --yes --cleanup-tag，再重新触发"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Build frontend
+        run: pnpm -C web install --frozen-lockfile && pnpm -C web build
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # modernc.org/sqlite 是纯 Go，CGO_ENABLED=0 出静态二进制，服务器无需 gcc；
+      # -X main.version 注入 VERSION，/api/health 可见（server/main.go var version）
+      - name: Build backend
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=$VERSION" -o lumen ./server/
+
+      # 平铺成员布局（无顶层目录）：解压进 /opt/lumen 即得 lumen + static/，
+      # 与 deploy.yml 的 /opt/lumen/{lumen,static/} 完全一致
+      - name: Assemble tarball
+        run: |
+          mkdir -p dist/static
+          cp lumen dist/lumen
+          cp -a web/dist/. dist/static/
+          chmod +x dist/lumen
+          tar -C dist -czf "lumen-linux-amd64.tar.gz" lumen static
+          sha256sum "lumen-linux-amd64.tar.gz" > SHA256SUMS
+          tar -tzf "lumen-linux-amd64.tar.gz" # 自检：把成员布局打进日志
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --generate-notes \
+            "lumen-linux-amd64.tar.gz" \
+            "SHA256SUMS"

@@ -38,7 +38,20 @@
 
 ## 快速开始
 
-构建需要 Go 1.26、Node.js 24 与 pnpm 11；**运行时只需要一个二进制**，无需 Docker、数据库或其他服务。
+**运行时只需要一个二进制**，无需 Docker、数据库或其他服务。推荐直接下载 Release 预编译包；也可以从源码构建（需要 Go 1.26、Node.js 24 与 pnpm 11）。
+
+### 方式一：下载预编译版本（推荐）
+
+GitHub Releases 提供完整运行包（`lumen` 二进制 + `static/` 前端资源），解压即用：
+
+```bash
+mkdir -p /opt/lumen
+curl -fsSL https://github.com/zeno528/lumen/releases/latest/download/lumen-linux-amd64.tar.gz | tar -xz -C /opt/lumen
+```
+
+在新服务器上完整走一遍首次部署（systemd 常驻、nginx 反向代理与 TLS、逐项验证），按 [docs/deploy.md](docs/deploy.md) 的 runbook 逐步执行。
+
+### 方式二：从源码构建
 
 ```bash
 git clone https://github.com/zeno528/lumen.git
@@ -122,7 +135,7 @@ systemctl enable --now lumen
 
 ## 生产部署
 
-构建产物只有 `lumen` 二进制与 `static/` 目录。推荐用 HTTPS 反向代理（nginx / Caddy）终止 TLS，并确保 WebSocket 升级被正确转发，否则多端实时同步会失效：
+构建产物只有 `lumen` 二进制与 `static/` 目录。推荐用 HTTPS 反向代理（nginx / Caddy）终止 TLS，并确保 WebSocket 升级被正确转发，否则多端实时同步会失效。完整首次部署 runbook（systemd、nginx、TLS、端到端验证）见 [docs/deploy.md](docs/deploy.md)：
 
 ```nginx
 location / {
@@ -140,7 +153,21 @@ location / {
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o lumen ./server
 ```
 
-仓库内置 GitHub Actions 自动部署：推送到 `main` 会依次执行前端类型检查与构建、Go 检查与测试、后端构建与冒烟测试，再经 SSH + rsync 停服部署并健康检查。启用需在仓库 Secrets 中配置 `DEPLOY_SERVERS`（服务器清单 JSON）与 `VPS_SSH_KEY`（SSH 私钥）。
+仓库内置 GitHub Actions 自动部署：推送到 `main` 会依次执行前端类型检查与构建、Go 检查与测试、后端构建与冒烟测试，再经 SSH + rsync 停服部署并健康检查。启用需在仓库 Secrets 中配置 `DEPLOY_SERVERS`（服务器清单 JSON）与 `VPS_SSH_KEY`（SSH 私钥）。`VERSION` 文件变更时走同样的验证门禁，并把预编译包发布到 [GitHub Releases](https://github.com/zeno528/lumen/releases)。
+
+### 升级到新版本
+
+先停服再解压（运行中的二进制被锁，tar 无法原地覆盖）；`rm -rf static` 清掉旧版本带 hash 的残留资源（tar 只覆盖不删除）：
+
+```bash
+systemctl stop lumen
+rm -rf /opt/lumen/static
+curl -fsSL https://github.com/zeno528/lumen/releases/latest/download/lumen-linux-amd64.tar.gz | tar -xz -C /opt/lumen
+systemctl start lumen
+
+# 核对运行版本
+curl -fsS http://127.0.0.1:8080/api/health
+```
 
 ## 开发
 

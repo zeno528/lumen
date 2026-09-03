@@ -22,6 +22,9 @@ import (
 	"lumen/server/ws"
 )
 
+// version 由 CI 构建时注入：-ldflags "-X main.version=$(cat VERSION)"；本地 go build 显示 dev
+var version = "dev"
+
 // Server 应用服务器
 type Server struct {
 	db                  *sql.DB
@@ -249,7 +252,7 @@ func main() {
 		httpServer.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("Lumen 服务启动在 http://localhost:%s", config.Port)
+	log.Printf("Lumen %s 服务启动在 http://localhost:%s", version, config.Port)
 	// 输出局域网地址，方便手机调试移动端
 	if addrs, err := net.InterfaceAddrs(); err == nil {
 		for _, addr := range addrs {

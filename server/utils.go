@@ -1552,5 +1552,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
 		"openapi": "/openapi.json", // 暴露说明书路径给 AI（探测端点）
+		"version": version,         // 构建时注入；VPS 上 curl /api/health 可核验安装版本
 	})
 }
