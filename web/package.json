@@ -1,7 +1,7 @@
 {
   "name": "lumen-web",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n be,fe -c blue,green \"pnpm run dev:be\" \"vite\"",
