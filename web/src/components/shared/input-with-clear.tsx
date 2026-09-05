@@ -15,10 +15,12 @@ const InputWithClear = React.forwardRef<
   { value, onChange, right, hideClear, inputClassName, ...props },
   ref,
 ) {
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  React.useImperativeHandle(ref, () => inputRef.current!)
   return (
     <div className="relative">
       <Input
-        ref={ref}
+        ref={inputRef}
         value={value}
         onChange={onChange}
         className={cn('pr-8', inputClassName)}
@@ -30,7 +32,11 @@ const InputWithClear = React.forwardRef<
           type="button"
           className="input-icon-btn input-clear-btn absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-xs"
           onPointerDown={(event) => event.preventDefault()}
-          onClick={() => onChange?.({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>)}
+          onClick={() => {
+            onChange?.({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>)
+            // 清空后光标回到输入框，不用再点一次
+            inputRef.current?.focus()
+          }}
           title="清空"
         >
           <X size={14} />
